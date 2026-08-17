@@ -39,6 +39,12 @@ export PYTHONUTF8=1
 unset CDPATH GH_REPO GH_HOST GREP_OPTIONS
 IFS=$' \t\n'
 
+# Both bounds below are applied with a here-string rather than a pipe
+# into head. Under pipefail head exits at the limit, the writer feeding
+# it takes SIGPIPE, and the pipeline reports 141, which set -e reads as
+# a failure and the script dies at exactly the size the bound exists
+# for. The skill reads this script through an inline `!` call, so that
+# took the whole review down rather than truncating anything.
 readonly DIFF_LIMIT=${RELEASE_VERSION_DIFF_LIMIT:-200}
 readonly BODY_LIMIT=${RELEASE_VERSION_BODY_LIMIT:-10}
 
@@ -103,7 +109,7 @@ while IFS= read -r sha; do
     "$(command git log -1 --format=%s "$sha")"
 
   body=$(command git log -1 --format=%b "$sha")
-  [ -z "$body" ] || printf '%s\n' "$body" | head -n "$BODY_LIMIT"
+  [ -z "$body" ] || head -n "$BODY_LIMIT" <<<"$body"
 
   total=$(printf '%s\n' "$body" | wc -l | tr -d ' ')
   [ "$total" -gt "$BODY_LIMIT" ] &&
@@ -158,7 +164,7 @@ if [ -n "$published" ]; then
     'renovate.json' 'renovate' 'cmd' 'internal' 'packages')
   lines=$(printf '%s\n' "$diff_out" | wc -l | tr -d ' ')
   if [ "$lines" -gt "$DIFF_LIMIT" ]; then
-    printf '%s\n' "$diff_out" | head -n "$DIFF_LIMIT"
+    head -n "$DIFF_LIMIT" <<<"$diff_out"
     printf '\n[truncated at %s of %s lines. Read the rest with:\n' "$DIFF_LIMIT" "$lines"
     printf '  git -C %s diff %s..HEAD -- <path>]\n' "$clone" "$tag"
   else
