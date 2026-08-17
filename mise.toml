@@ -1020,9 +1020,14 @@ set -eu
 
 # Useful during release prep to see what `cog changelog` will emit before
 # committing the regeneration.
+#
+# --abbrev=0 is what makes the range name a tag. Without it describe
+# answers v0.8.0-4-g6f7fc12 whenever HEAD sits past the last tag, which
+# is every state this task is meant for, and cog renders nothing for a
+# range whose left side names no tag while still exiting 0.
 [tasks.preview-changelog]
 description = "Preview the changelog entries since the last tagged release"
-run = "cog changelog --at $(git describe --tags)..HEAD -t full_hash | rumdl check -d MD041 --fix --stdin"
+run = 'cog changelog --at "$(git describe --tags --abbrev=0)"..HEAD -t full_hash | rumdl check -d MD041 --fix --stdin'
 
 # Pass a version, or omit it for HEAD. Output goes to stdout. MD041 is
 # disabled for the heading-less fragment; without --isolated, MD013 stays
