@@ -1021,10 +1021,14 @@ set -eu
 # Useful during release prep to see what `cog changelog` will emit before
 # committing the regeneration.
 #
-# --abbrev=0 is what makes the range name a tag. Without it describe
-# answers v0.8.0-4-g6f7fc12 whenever HEAD sits past the last tag, which
-# is every state this task is meant for, and cog renders nothing for a
-# range whose left side names no tag while still exiting 0.
+# --abbrev=0 is what makes the range name the last tag. Without it
+# describe names HEAD itself, in a form such as v0.8.0-4-g6f7fc12,
+# whenever HEAD sits past the last tag. That leaves an empty range, and
+# cog answers an empty range with the commit at its boundary alone, so
+# the preview covers the commit HEAD sits on rather than everything
+# since the tag. Where that commit carries a type the changelog omits,
+# chore and test being the two here, the preview comes out empty and
+# cog still exits 0.
 [tasks.preview-changelog]
 description = "Preview the changelog entries since the last tagged release"
 run = 'cog changelog --at "$(git describe --tags --abbrev=0)"..HEAD -t full_hash | rumdl check -d MD041 --fix --stdin'
