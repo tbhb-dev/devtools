@@ -79,4 +79,4 @@ else
 fi
 
 printf 'dispatched. Follow it with: gh run list --workflow=release.yml\n'
-printf 'Then, once the run finishes: mise run verify-repotools-release\n'
+printf 'Then, once the run finishes: mise run verify-devtools-release\n'

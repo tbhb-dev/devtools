@@ -1,7 +1,7 @@
 ---
 name: release
 description: >-
-  Release this repository end to end. Prepare an isolated clone of the release branch, run the readiness preflight against it, settle the version number and confirm it, dispatch the release workflow, wait for the run to land, and verify the tag it produced. Use this whenever the operator asks to release, cut, publish, or tag a version of repotools, with or without naming a number, as in "release 0.5.1," "go cut a release," "publish v0.6.0," or "is this ready to release." It runs from any worktree and never touches the checkout you invoked it from. CI makes and SSH-signs the tag, and nothing local reproduces that, so this dispatches and waits rather than tagging. Called without a version it reports the number the automatic path would derive and confirms it before dispatching anything, because that number comes from the commit types since the last tag and has differed from the version the operator intended.
+  Release this repository end to end. Prepare an isolated clone of the release branch, run the readiness preflight against it, settle the version number and confirm it, dispatch the release workflow, wait for the run to land, and verify the tag it produced. Use this whenever the operator asks to release, cut, publish, or tag a version of devtools, with or without naming a number, as in "release 0.5.1," "go cut a release," "publish v0.6.0," or "is this ready to release." It runs from any worktree and never touches the checkout you invoked it from. CI makes and SSH-signs the tag, and nothing local reproduces that, so this dispatches and waits rather than tagging. Called without a version it reports the number the automatic path would derive and confirms it before dispatching anything, because that number comes from the commit types since the last tag and has differed from the version the operator intended.
 argument-hint: "[X.Y.Z]"
 hooks:
   PreToolUse:
@@ -11,11 +11,11 @@ hooks:
           command: "${CLAUDE_PROJECT_DIR}/.claude/skills/release/scripts/guard-release.sh"
 ---
 
-# Release repotools
+# Release devtools
 
 Drive a release of this repository from readiness to a verified tag, from whatever checkout you happen to be in.
 
-This skill orchestrates three tasks that already exist rather than writing them again. `check-repotools-release-readiness` reports, `release-repotools` dispatches, `verify-repotools-release` checks the result. Finding yourself writing what one of those does is the signal to stop and call it instead.
+This skill orchestrates three tasks that already exist rather than writing them again. `check-devtools-release-readiness` reports, `release-devtools` dispatches, `verify-devtools-release` checks the result. Finding yourself writing what one of those does is the signal to stop and call it instead.
 
 ## The work happens in a clone
 
@@ -56,7 +56,7 @@ Read that `NOTE` out to the operator whenever it appears, before going further. 
 ## Step 2: readiness
 
 ```text
-bash .claude/skills/release/scripts/release-clone.sh run check-repotools-release-readiness
+bash .claude/skills/release/scripts/release-clone.sh run check-devtools-release-readiness
 ```
 
 It prints one `OK` or `FAIL` line per check and an `INFO` line carrying the version `cog bump --auto` would derive. Read both.
@@ -128,7 +128,7 @@ An empty answer means the workflow has never run. Carry `none` through to step 5
 Then dispatch:
 
 ```text
-bash .claude/skills/release/scripts/release-clone.sh run release-repotools <X.Y.Z>
+bash .claude/skills/release/scripts/release-clone.sh run release-devtools <X.Y.Z>
 ```
 
 Omit the version only where the operator chose the derived one in step 3 and wants the automatic path. Passing the number explicitly is the safer form, and it records the intended version in the run's own inputs.
@@ -142,7 +142,7 @@ That task runs readiness again before it dispatches. The repetition is deliberat
 ```text
 Monitor({
   command: "bash .claude/skills/release/scripts/watch-release.sh <baseline-run-id>",
-  description: "the repotools release run",
+  description: "the devtools release run",
   timeout_ms: 1800000,
   persistent: false,
 })
@@ -170,7 +170,7 @@ Throw it away and take a fresh one, then verify:
 
 ```text
 bash .claude/skills/release/scripts/release-clone.sh refresh
-bash .claude/skills/release/scripts/release-clone.sh run verify-repotools-release v<X.Y.Z>
+bash .claude/skills/release/scripts/release-clone.sh run verify-devtools-release v<X.Y.Z>
 ```
 
 Verifying against the stale clone reads a tag it has never seen and version literals naming the previous release, so it reports failures belonging to the clone rather than to the release.

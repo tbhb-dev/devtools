@@ -10,7 +10,7 @@ name: apm-package
 #   under .claude/ and .agents/ match the sources under
 #   packages/agents/*/.apm/. The CLI is a mise pin like every other
 #   tool here, so mise.lock carries its checksum and
-#   repotools:check-toolchain covers it.
+#   devtools:check-toolchain covers it.
 #
 #   scan-skills: runs Cisco's skill-scanner over packages/agents via
 #   the upstream reusable workflow, uploading SARIF to code scanning

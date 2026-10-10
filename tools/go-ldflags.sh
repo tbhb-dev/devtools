@@ -20,7 +20,7 @@ set -euo pipefail
 export LC_ALL=C
 unset CDPATH GREP_OPTIONS
 
-module="github.com/tbhb/repotools"
+module="github.com/tbhb-dev/devtools"
 
 version=$(git describe --tags --abbrev=7 2>/dev/null || git rev-parse --short=7 HEAD 2>/dev/null || echo "DEV")
 commit=$(git rev-parse --short=7 HEAD 2>/dev/null || echo "")

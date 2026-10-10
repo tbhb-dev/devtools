@@ -167,7 +167,7 @@ done
 
 if [ "${conclusion:-}" = "success" ]; then
   printf 'RELEASE RUN SUCCEEDED %s\n' "$run_url"
-  printf 'Next: refresh the release clone, then run verify-repotools-release\n'
+  printf 'Next: refresh the release clone, then run verify-devtools-release\n'
   exit 0
 fi
 

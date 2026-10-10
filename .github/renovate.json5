@@ -15,8 +15,8 @@
   // is also exactly what every consuming repo writes, which keeps one
   // shape to reason about.
   extends: [
-    "github>tbhb/repotools//.github/renovate-config.json5",
-    "github>tbhb/repotools//.github/renovate-go-config.json5",
+    "github>tbhb-dev/devtools//.github/renovate-config.json5",
+    "github>tbhb-dev/devtools//.github/renovate-go-config.json5",
   ],
 
   // Global-only identity, rate limits, and requireConfig. These previously
@@ -26,14 +26,14 @@
   // limit (config-presets-invalid). Inlining the resolved values removes
   // the pre-auth fetch entirely.
   requireConfig: "ignored",
-  username: "tbhb-renovate[bot]",
-  gitAuthor: "tbhb-renovate[bot] <311633125+tbhb-renovate[bot]@users.noreply.github.com>",
+  username: "tbhb-dev-renovate[bot]",
+  gitAuthor: "tbhb-dev-renovate[bot] <289255489+tbhb-dev-renovate[bot]@users.noreply.github.com>",
   prConcurrentLimit: 0,
   prHourlyLimit: 0,
 
   // Single-repo scope. Global-only and different per repo, so it stays here
   // as the only genuinely local setting left.
-  repositories: ["tbhb/repotools"],
+  repositories: ["tbhb-dev/devtools"],
 
   packageRules: [
     // The Renovate engine is pinned twice: the release tag renovate.yaml

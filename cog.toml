@@ -15,7 +15,7 @@ tag_prefix = "v"
 # carry a literal slash, and `s{}{}` spells that without escaping it.
 #
 # uv.lock is the one site a version bump breaks rather than merely
-# leaving stale. It records the version of the editable repotools
+# leaving stale. It records the version of the editable devtools
 # package, `uv lock --check` gates the two against each other, and the
 # release job carries no uv to regenerate it, so the rewrite has to be
 # textual like the rest. It needs two lines of context because every
@@ -26,8 +26,8 @@ tag_prefix = "v"
 # means a line there and a hook here, in that order.
 #
 # The README hook matches both the bare repo ref
-# (tbhb/repotools#vX.Y.Z) and a sub-package ref
-# (tbhb/repotools/packages/agents/claude#vX.Y.Z), keeping the matched
+# (tbhb-dev/devtools#vX.Y.Z) and a sub-package ref
+# (tbhb-dev/devtools/packages/agents/claude#vX.Y.Z), keeping the matched
 # prefix in $1 so the optional sub-path survives the rewrite untouched.
 # The g flag covers a line naming more than one ref.
 pre_bump_hooks = [
@@ -36,19 +36,19 @@ pre_bump_hooks = [
   "perl -pi -e 's/^version: .*/version: {{version}}/' packages/agents/claude/apm.yml",
   "perl -pi -e 's/^version: .*/version: {{version}}/' packages/agents/codex/apm.yml",
   "perl -pi -e 's/^version: .*/version: {{version}}/' packages/agents/agy/apm.yml",
-  "perl -pi -e 's/^version = .*/version = \"{{version}}\"/' packages/repotools/pyproject.toml",
+  "perl -pi -e 's/^version = .*/version = \"{{version}}\"/' packages/devtools/pyproject.toml",
   "perl -pi -e 's{rev: v[0-9.]+}{rev: v{{version}}}' .pre-commit-hooks.yaml",
-  "perl -pi -e 's{(tbhb/repotools(?:/[a-z/-]+)?#v)[0-9.]+}{${1}{{version}}}g' README.md",
+  "perl -pi -e 's{(tbhb-dev/devtools(?:/[a-z/-]+)?#v)[0-9.]+}{${1}{{version}}}g' README.md",
   "perl -pi -e 's{rev: v[0-9.]+}{rev: v{{version}}}' README.md",
-  "perl -0777 -pi -e 's/^name = \"repotools\"\nversion = .*/name = \"repotools\"\nversion = \"{{version}}\"/m' uv.lock",
+  "perl -0777 -pi -e 's/^name = \"devtools\"\nversion = .*/name = \"devtools\"\nversion = \"{{version}}\"/m' uv.lock",
 ]
 
 [changelog]
 path = "CHANGELOG.md"
 template = ".cog/changelog.tera"
 remote = "github.com"
-repository = "repotools"
-owner = "tbhb"
+repository = "devtools"
+owner = "tbhb-dev"
 authors = [{ username = "tbhb", signature = "Tony Burns" }]
 
 [commit_types]

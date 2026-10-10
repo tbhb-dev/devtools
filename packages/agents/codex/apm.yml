@@ -2,10 +2,10 @@
 # APM sub-package: Codex-optimized primitives. Restricted to the
 # codex target. Skill names carry a codex- prefix so they can coexist
 # with another harness's skills in the converged .agents/skills path.
-# Consumers pin it as tbhb/repotools/packages/agents/codex#vX.Y.Z; the
+# Consumers pin it as tbhb-dev/devtools/packages/agents/codex#vX.Y.Z; the
 # repo root manifest depends on it by local path. The cog pre-bump
 # hook keeps `version` in lockstep with the root (see cog.toml).
-name: repotools-agents-codex
+name: devtools-agents-codex
 version: 0.9.0
 description: Codex agent primitives for tbhb repositories
 author: tbhb

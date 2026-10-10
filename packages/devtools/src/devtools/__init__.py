@@ -3,6 +3,6 @@
 
 """Python support library for tbhb agent tooling."""
 
-from repotools.buildmeta import version
+from devtools.buildmeta import version
 
 __all__ = ["version"]

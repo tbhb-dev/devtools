@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/tbhb/repotools/internal/buildmeta"
+	"github.com/tbhb-dev/devtools/internal/buildmeta"
 )
 
 func TestGetReturnsPackageVars(t *testing.T) {

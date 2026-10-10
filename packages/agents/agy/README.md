@@ -1,4 +1,4 @@
-# repotools-agents-agy
+# devtools-agents-agy
 
 This package holds harness-optimized agent primitives for Antigravity, accessed through the `agy` CLI. A primitive belongs here once somebody writes agy-specific tooling for it, rather than in the harness-neutral `common` package.
 

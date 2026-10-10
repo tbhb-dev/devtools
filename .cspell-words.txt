@@ -78,6 +78,7 @@ decr
 dedupe
 depguard
 depscan
+devtools
 difflib
 diffstat
 difftool
@@ -282,7 +283,6 @@ relitigates
 relpath
 renovatebot
 repofile
-repotools
 rerere
 retarget
 retargets

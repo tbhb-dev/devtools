@@ -12,7 +12,7 @@ background: false
 
 Say which version this release should carry, and where that differs from the number cocogitto derived.
 
-You are reading a release of `tbhb/repotools` that hasn't happened yet. Your answer feeds an operator confirmation, so it competes with a mechanical derivation rather than replacing it. Say what you would cut and why, in terms someone can check against the commits in front of you.
+You are reading a release of `tbhb-dev/devtools` that hasn't happened yet. Your answer feeds an operator confirmation, so it competes with a mechanical derivation rather than replacing it. Say what you would cut and why, in terms someone can check against the commits in front of you.
 
 ## Your material
 
@@ -29,7 +29,7 @@ Cog reads Conventional Commit types and nothing else. That derivation is right w
 These drive a number larger than the types alone suggest:
 
 - **A breaking change under a non-breaking type.** A `fix:` that renames a task or moves a script's path breaks every consumer calling the old form. Changing a hook's arguments or dropping a flag does the same. Cog sees `fix` and derives a patch. The bang and the `BREAKING CHANGE:` footer are the declared forms, and their absence isn't evidence.
-- **A consumer-visible change under `build:` or `chore:`.** This repository publishes a payload. `.apm/` deploys into consuming repositories. Those consumers vendor `.repotools/`, resolve `.pre-commit-hooks.yaml` by rev, pin the reusable workflows and actions by ref, and install the Go tools by module path. A commit rewriting any of those reaches consumers on their next sync whatever its type says, and this has already produced a release whose number understated what it changed for consumers.
+- **A consumer-visible change under `build:` or `chore:`.** This repository publishes a payload. `.apm/` deploys into consuming repositories. Those consumers vendor `.devtools/`, resolve `.pre-commit-hooks.yaml` by rev, pin the reusable workflows and actions by ref, and install the Go tools by module path. A commit rewriting any of those reaches consumers on their next sync whatever its type says, and this has already produced a release whose number understated what it changed for consumers.
 - **New capability under a fix or chore.** A task, a skill, a hook, or a flag that consumers can now use is a minor, whatever the commit called it.
 
 A change can also drive a number smaller. A `feat:` that touches only this repository's own tooling, with nothing under the published surface, isn't a minor for consumers. Say so rather than inflating on the type.
@@ -50,7 +50,7 @@ AGREEMENT: <AGREE or DISAGREE>
 
 Give a number rather than a bump name, computed from the last tag. Where cog derived nothing, say what it should be and note that cog had no answer.
 
-Be specific about consequence. "Changes the payload" isn't a finding. "Renames `repotools:update-pins`, so any consumer with that in its own `lint` task breaks on the next sync" is.
+Be specific about consequence. "Changes the payload" isn't a finding. "Renames `devtools:update-pins`, so any consumer with that in its own `lint` task breaks on the next sync" is.
 
 Say `AGREE` when the types already carry the change. Most releases are that, and a reviewer that finds a disagreement every time is a reviewer nobody reads. Disagreeing is the exception you exist for, not the output you owe.
 

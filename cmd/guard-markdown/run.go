@@ -11,9 +11,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/tbhb/repotools/internal/buildmeta"
-	"github.com/tbhb/repotools/internal/hookio"
-	"github.com/tbhb/repotools/internal/markdown"
+	"github.com/tbhb-dev/devtools/internal/buildmeta"
+	"github.com/tbhb-dev/devtools/internal/hookio"
+	"github.com/tbhb-dev/devtools/internal/markdown"
 )
 
 // Exit statuses. A linter that found something isn't a program that

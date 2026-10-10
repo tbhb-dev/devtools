@@ -18,18 +18,18 @@ formatters:
       sections:
         - standard
         - default
-        - prefix(github.com/tbhb/repotools)
+        - prefix(github.com/tbhb-dev/devtools)
         - blank
         - dot
         - alias
         - localmodule
       custom-order: true
     gofumpt:
-      module-path: github.com/tbhb/repotools
+      module-path: github.com/tbhb-dev/devtools
       extra-rules: true
     goimports:
       local-prefixes:
-        - github.com/tbhb/repotools
+        - github.com/tbhb-dev/devtools
     golines:
       max-len: 120
 

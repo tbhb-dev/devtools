@@ -199,6 +199,7 @@ depscan
 devFallback
 devel
 devs
+devtools
 diffstat
 disable_tools
 embedpg
@@ -271,7 +272,6 @@ quoteValue
 realMain
 recurse
 regexes
-repotools
 rerere
 resolveVersion
 reviewdog

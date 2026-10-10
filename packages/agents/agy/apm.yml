@@ -6,10 +6,10 @@
 # manifest. Empty until a later program fills it in; the layout, CI,
 # versioning, and gitignores are already correct so the first
 # primitive can land without further setup. Consumers pin it as
-# tbhb/repotools/packages/agents/agy#vX.Y.Z; the repo root manifest
+# tbhb-dev/devtools/packages/agents/agy#vX.Y.Z; the repo root manifest
 # depends on it by local path. The cog pre-bump hook keeps `version`
 # in lockstep with the root (see cog.toml).
-name: repotools-agents-agy
+name: devtools-agents-agy
 version: 0.9.0
 description: Antigravity (agy) agent primitives for tbhb repositories (scaffold)
 author: tbhb

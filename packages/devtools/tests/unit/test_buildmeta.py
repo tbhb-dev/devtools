@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from repotools import buildmeta
+from devtools import buildmeta
 
 
 def test_installed_distribution_reports_its_version() -> None:

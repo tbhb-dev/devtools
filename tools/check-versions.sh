@@ -102,13 +102,13 @@ check_site() {
 
 # uv.lock needs its preceding line for context, because every package in
 # the lockfile carries a `version =` line and only one of them belongs to
-# the editable repotools package.
+# the editable devtools package.
 check_uv_lock() {
   local want=$1 hits
 
-  hits=$(awk '/^name = "repotools"$/ { getline; print NR ":" $0 }' uv.lock)
+  hits=$(awk '/^name = "devtools"$/ { getline; print NR ":" $0 }' uv.lock)
   if [ -z "$hits" ]; then
-    report uv.lock 1 "no package entry named repotools; the lockfile shape changed and the cog.toml hook that rewrites it is now inert"
+    report uv.lock 1 "no package entry named devtools; the lockfile shape changed and the cog.toml hook that rewrites it is now inert"
     return
   fi
 
@@ -120,10 +120,10 @@ check_site packages/agents/common/apm.yml '^version: ' "version: $version"
 check_site packages/agents/claude/apm.yml '^version: ' "version: $version"
 check_site packages/agents/codex/apm.yml '^version: ' "version: $version"
 check_site packages/agents/agy/apm.yml '^version: ' "version: $version"
-check_site packages/repotools/pyproject.toml '^version = ' "version = \"$version\""
+check_site packages/devtools/pyproject.toml '^version = ' "version = \"$version\""
 check_site .pre-commit-hooks.yaml 'rev: v[0-9]' "rev: v$version"
-check_site README.md 'tbhb/repotools#v[0-9]' "tbhb/repotools#v$version"
-check_site README.md 'tbhb/repotools/packages' "#v$version"
+check_site README.md 'tbhb-dev/devtools#v[0-9]' "tbhb-dev/devtools#v$version"
+check_site README.md 'tbhb-dev/devtools/packages' "#v$version"
 check_site README.md 'rev: v[0-9]' "rev: v$version"
 check_uv_lock "version = \"$version\""
 

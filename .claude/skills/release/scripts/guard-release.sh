@@ -68,12 +68,12 @@ exactly like one that does.
 
 Dispatch the workflow instead, and let it tag:
 
-  mise run release-repotools [X.Y.Z]
+  mise run release-devtools [X.Y.Z]
 
 Then, once the run finishes:
 
   git fetch origin --tags
-  mise run verify-repotools-release [vX.Y.Z]
+  mise run verify-devtools-release [vX.Y.Z]
 
 Reading tags stays open: git tag with -l, -n, --points-at, --contains,
 --sort, --merged, or --format, and git cat-file on the tag object, all
@@ -122,7 +122,7 @@ while IFS= read -r segment; do
 and tags. It belongs to release.yml, which runs it against a clean
 checkout and then signs what it produced.
 
-  mise run release-repotools [X.Y.Z]
+  mise run release-devtools [X.Y.Z]
 
 \`cog bump --auto --dry-run\` reads only, and stays open. Readiness
 already runs it and prints the version it derives."
@@ -135,7 +135,7 @@ already runs it and prints the version it derives."
     deny "Dispatching directly skips the two gates that stand in front of a
 release:
 
-  mise run release-repotools [X.Y.Z]
+  mise run release-devtools [X.Y.Z]
 
 That task runs the readiness preflight first and refuses on a failure,
 then passes the version through. Without a version the workflow derives
@@ -152,7 +152,7 @@ skill confirms it with the operator before anything is dispatched.
     deny "That is the dispatch endpoint release.yml runs from, reached around the
 task that gates it:
 
-  bash .claude/skills/release/scripts/release-clone.sh run release-repotools [X.Y.Z]"
+  bash .claude/skills/release/scripts/release-clone.sh run release-devtools [X.Y.Z]"
   fi
 
   # --- Release tasks outside the clone --------------------------------
@@ -168,7 +168,7 @@ task that gates it:
   # release branch, which is the thing under discussion.
 
   if [[ $segment =~ ^[[:space:]]*mise[[:space:]] ]] &&
-    [[ $segment =~ (check-repotools-release-readiness|release-repotools|verify-repotools-release) ]]; then
+    [[ $segment =~ (check-devtools-release-readiness|release-devtools|verify-devtools-release) ]]; then
     deny "A release task run here reads this checkout, and this checkout is not
 what gets released. The workflow builds the release branch fresh on the
 runner, so a verdict about the tree in front of you describes something

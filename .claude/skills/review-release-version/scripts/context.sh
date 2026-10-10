@@ -126,7 +126,7 @@ done < <(command git rev-list --reverse "$tag..HEAD")
 printf '== changed paths on the published surface ==\n'
 published=$(
   command git diff --name-only "$tag..HEAD" -- \
-    '.apm' '.repotools' '.pre-commit-hooks.yaml' \
+    '.apm' '.devtools' '.pre-commit-hooks.yaml' \
     '.github/workflows' '.github/actions' \
     'renovate.json' 'renovate' 'cmd' 'internal' 'packages' |
     sort -u
@@ -153,7 +153,7 @@ printf '\n'
 printf '== diff on the published surface ==\n'
 if [ -n "$published" ]; then
   diff_out=$(command git diff "$tag..HEAD" -- \
-    '.apm' '.repotools' '.pre-commit-hooks.yaml' \
+    '.apm' '.devtools' '.pre-commit-hooks.yaml' \
     '.github/workflows' '.github/actions' \
     'renovate.json' 'renovate' 'cmd' 'internal' 'packages')
   lines=$(printf '%s\n' "$diff_out" | wc -l | tr -d ' ')

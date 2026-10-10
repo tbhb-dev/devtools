@@ -3,7 +3,7 @@
 # .pre-commit-config.yaml with:
 #
 #   repos:
-#     - repo: https://github.com/tbhb/repotools
+#     - repo: https://github.com/tbhb-dev/devtools
 #       rev: v0.9.0
 #       hooks:
 #         - id: guard-markdown
@@ -22,7 +22,7 @@
 # repo's own verification stack via `guard-markdown <paths>`. Note that the
 # two paths install separately: prek builds its own copy, while the Claude
 # hook resolves `guard-markdown` on PATH from
-# `go install github.com/tbhb/repotools/cmd/guard-markdown@vX.Y.Z`.
+# `go install github.com/tbhb-dev/devtools/cmd/guard-markdown@vX.Y.Z`.
 #
 # The five commit-message hooks arrived here from tbhb/pre-commit-hooks, which
 # this repository replaces. Their ids are unchanged, so a consumer edits the

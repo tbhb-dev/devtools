@@ -140,7 +140,7 @@ fi
 #
 # Informational rather than a gate. Cog reads the commit types since the
 # last tag, and the operator may well want a different number; passing
-# one to release-repotools is how they say so.
+# one to release-devtools is how they say so.
 
 # Cog refuses a dirty tree, so this reports its own reason rather than a
 # bare nothing. The clean-tree check above already covers the usual

@@ -112,7 +112,7 @@ cmd_prepare() {
     # mktemp -d rather than a fixed path, so two releases running at
     # once never share a tree, and so nothing here can collide with a
     # directory the operator meant to keep.
-    clone=$(mktemp -d "${TMPDIR:-/tmp}/repotools-release.XXXXXX")
+    clone=$(mktemp -d "${TMPDIR:-/tmp}/devtools-release.XXXXXX")
 
     # --reference makes hard links against the local object store,
     # which is what makes this take under a second. --dissociate is deliberately
@@ -136,7 +136,7 @@ cmd_prepare() {
     # `install-toolchain` rather than `bootstrap`, which composes it with
     # two more steps this never needs. `install-tools` syncs vale styles
     # and builds a Python virtual environment, and no release gate runs
-    # prose lint or touches `packages/`. `repotools:prek-install` writes
+    # prose lint or touches `packages/`. `devtools:prek-install` writes
     # git hooks, and nothing commits in here. Both would spend real time
     # per release on work the release cannot use.
     MISE_TRUSTED_CONFIG_PATHS=$clone mise -C "$clone" run install-toolchain >/dev/null 2>&1 ||

@@ -5,8 +5,8 @@
 # tools from the pins.
 #
 # The split: the conf.d drop-ins hold the inert half of the shared
-# payload (baseline pins, the REPOTOOLS_DIR anchor), the task files
-# under .repotools/tasks hold the live half (the repotools:-namespaced
+# payload (baseline pins, the DEVTOOLS_DIR anchor), the task files
+# under .devtools/tasks hold the live half (the devtools:-namespaced
 # tasks, selected below through [task_config] includes), and this file
 # holds what is specific to this repository. Root pins override drop-in
 # pins, which is the consumer-override mechanism working at home.
@@ -61,11 +61,11 @@ python.uv_venv_auto = "source"
 # [[ ]], while the ubuntu runners' /bin/sh is dash and does not.
 
 # The platform list this repository's two lockfiles cover. The shared
-# repotools:check-toolchain task reads it for its failure hint, so the
+# devtools:check-toolchain task reads it for its failure hint, so the
 # hint prints a runnable `mise lock` command without the shared body
 # carrying a repo-specific literal.
 [env]
-REPOTOOLS_LOCK_PLATFORMS = "linux-x64,linux-arm64,macos-arm64,windows-x64"
+DEVTOOLS_LOCK_PLATFORMS = "linux-x64,linux-arm64,macos-arm64,windows-x64"
 
 # Finish the arrangement the [settings] block above sets up: mise leaves
 # the interpreter to uv, and this makes uv provision it rather than
@@ -88,17 +88,17 @@ UV_PYTHON_PREFERENCE = "only-managed"
 # table names the ones this repository actually takes. vendir.toml and
 # pins.toml are deliberately absent -- one carries the drift gate for
 # vendored consumers and the other the tasks that move and read a
-# consumer's repotools pins, and this repository is the publisher, with
+# consumer's devtools pins, and this repository is the publisher, with
 # no vendir.yml, nothing vendored to check, and no pin of its own.
 [task_config]
 includes = [
-  ".repotools/tasks/fix.toml",
-  ".repotools/tasks/format.toml",
-  ".repotools/tasks/git-hooks.toml",
-  ".repotools/tasks/lint.toml",
-  ".repotools/tasks/preapproval.toml",
-  ".repotools/tasks/security.toml",
-  ".repotools/tasks/toolchain.toml",
+  ".devtools/tasks/fix.toml",
+  ".devtools/tasks/format.toml",
+  ".devtools/tasks/git-hooks.toml",
+  ".devtools/tasks/lint.toml",
+  ".devtools/tasks/preapproval.toml",
+  ".devtools/tasks/security.toml",
+  ".devtools/tasks/toolchain.toml",
 ]
 
 # The shared baseline pins live in .config/mise/conf.d/. The pins below
@@ -112,7 +112,7 @@ includes = [
 # `apm audit --ci` reported it as drift on a tree install had just
 # produced. The apm-package workflow used to carry this pin as a curl
 # plus sha256sum step, which covered linux-x86_64 alone and sat outside
-# both mise.lock and repotools:check-toolchain. Here the lockfile holds
+# both mise.lock and devtools:check-toolchain. Here the lockfile holds
 # a checksum per platform, so a development box and the runner install
 # the same binary, and the local lint-apm and apm-sync tasks stop
 # resolving whatever apm PATH happens to offer.
@@ -142,7 +142,7 @@ description = "Set up the dev environment, refresh Vale styles, and install git 
 run = [
   "mise run install-toolchain",
   "mise run install-tools",
-  "mise run repotools:prek-install",
+  "mise run devtools:prek-install",
 ]
 
 [tasks.install-toolchain]
@@ -157,9 +157,9 @@ description = "Refresh non-mise tooling (Vale style packages, Python dependencie
 run = ["vale sync", "uv sync"]
 
 # The lockfile gate moved to the shared payload as
-# repotools:check-toolchain -- its body was byte-identical across the
+# devtools:check-toolchain -- its body was byte-identical across the
 # repos, and the one repo-specific piece, the platform list in the
-# failure hint, travels through REPOTOOLS_LOCK_PLATFORMS above.
+# failure hint, travels through DEVTOOLS_LOCK_PLATFORMS above.
 
 # --- Build ---
 # CGO_ENABLED=0 removes the host C toolchain as a build input.
@@ -278,7 +278,7 @@ run = "go-arch-lint check"
 # format-shell: those scripts are byte copies that `apm install`
 # deploys. The emptiness guard matters because shellcheck with no path
 # arguments reads stdin and blocks. This is a distinct gate from the
-# shellcheck repotools:lint-workflows provides through actionlint: that
+# shellcheck devtools:lint-workflows provides through actionlint: that
 # one only ever sees `run:` blocks embedded in workflow YAML, and never
 # opens the standalone scripts this gate covers.
 [tasks.lint-shell]
@@ -297,20 +297,20 @@ if [ -n "$files" ]; then shellcheck $files; fi
 # interleaves several linters' findings into one unreadable stream --
 # the agent output template exists to make a finding self-contained.
 [tasks.lint]
-extends = "repotools:lint"
+extends = "devtools:lint"
 run = [
   "mise run lint-go-all",
   "mise run lint-py-all",
   "mise run lint-prose",
-  "mise run repotools:lint-spelling",
-  "mise run repotools:lint-markdown",
+  "mise run devtools:lint-spelling",
+  "mise run devtools:lint-markdown",
   "mise run lint-markdown-wrap",
-  "mise run repotools:lint-config",
-  "mise run repotools:lint-yaml",
-  "mise run repotools:lint-toml",
+  "mise run devtools:lint-config",
+  "mise run devtools:lint-yaml",
+  "mise run devtools:lint-toml",
   "mise run lint-shell",
   "mise run lint-shell-fmt",
-  "mise run repotools:lint-mise",
+  "mise run devtools:lint-mise",
   "mise run lint-editorconfig",
   "mise run lint-skills",
   "mise run lint-script-hygiene",
@@ -325,7 +325,7 @@ run = [
   "mise run lint-go-modernize",
   "mise run lint-go-deadcode",
   "mise run lint-go-arch",
-  "mise run repotools:lint-workflows",
+  "mise run devtools:lint-workflows",
 ]
 
 # The Python counterpart to lint-go-all, covering the source under
@@ -406,7 +406,7 @@ run = "uv run bandit -r packages/*/src -q"
 # from the skill-contract template; the glob is why the body stays
 # repo-specific.
 [tasks.lint-prose]
-extends = "repotools:lint-prose"
+extends = "devtools:lint-prose"
 run = "vale --output=ai-tells-agent.tmpl --glob='!{LICENSE,CHANGELOG.md,.vale/*,tmp/*,vendor/*,.venv/*,.claude/worktrees/*,.pytest_cache/*,.complexipy_cache/*,COMMIT_AGENTMSG,PR_AGENTDESC.md,SQUASH_AGENTMSG}' $usage_paths"
 
 # This repository's own check, applied to itself. `go run` rather than an
@@ -489,10 +489,10 @@ run = "bash tools/skill-tokens.sh"
 # The two draft gates whose bodies are byte-identical across repos come
 # whole from the skill-contract templates: name, interface, and body.
 [tasks.lint-commit-msg]
-extends = "repotools:lint-commit-msg"
+extends = "devtools:lint-commit-msg"
 
 [tasks.lint-squash-msg]
-extends = "repotools:lint-squash-msg"
+extends = "devtools:lint-squash-msg"
 
 # Every other prose task runs one checker over many files. This runs
 # every checker over one drafted document, and reports all of them in a
@@ -501,7 +501,7 @@ extends = "repotools:lint-squash-msg"
 # section names loads no styles, reads the file, prints nothing, and
 # exits 0 -- byte for byte what a clean document produces.
 [tasks.lint-draft]
-extends = "repotools:lint-draft"
+extends = "devtools:lint-draft"
 run = "bash tools/lint-draft.sh $usage_file"
 
 # About a third of a typical vale run needs no judgment: the rule's own
@@ -510,7 +510,7 @@ run = "bash tools/lint-draft.sh $usage_file"
 # rest, refusing any finding whose span no longer holds the text the
 # report quoted.
 [tasks.fix-prose-replacements]
-extends = "repotools:fix-prose-replacements"
+extends = "devtools:fix-prose-replacements"
 run = "uv run --script tools/fix_prose_replacements.py $usage_file"
 
 # The pull request counterpart. The validator is mechanical and offline;
@@ -518,7 +518,7 @@ run = "uv run --script tools/fix_prose_replacements.py $usage_file"
 # rest of the tree answers to. The draft is gitignored, so the tree-wide
 # tasks skip it and this one owns it.
 [tasks.lint-pr-description]
-extends = "repotools:lint-pr-description"
+extends = "devtools:lint-pr-description"
 run = [
   "bash .claude/skills/pr/scripts/validate-description.sh",
   "vale --output=ai-tells-agent.tmpl PR_AGENTDESC.md",
@@ -832,7 +832,7 @@ description = "Security-only sub-aggregator"
 run = [
   "mise run vuln",
   "mise run gomodscan",
-  "mise run repotools:gitleaks",
+  "mise run devtools:gitleaks",
   "mise run audit",
 ]
 
@@ -919,7 +919,7 @@ run = [
   "mise run check",
   "mise run test-go-race",
   "mise run fuzz",
-  "mise run repotools:gitleaks",
+  "mise run devtools:gitleaks",
 ]
 
 # --- APM ---
@@ -992,7 +992,7 @@ description = "Sync Vale styles and dictionaries"
 run = "vale sync"
 
 # The prek entry points (prek, prek-all, prek-install) moved to the
-# shared payload under .repotools/tasks/git-hooks.toml.
+# shared payload under .devtools/tasks/git-hooks.toml.
 
 # --- Changelog ---
 
@@ -1050,27 +1050,27 @@ cog changelog --at "$v" -t full_hash | rumdl check -d MD041 --fix --stdin
 # fixes nothing. Reporting is the whole job, because a primitive that
 # mutates on the way to an answer cannot be run to ask a question.
 #
-# They carry the repotools qualifier because they release this product
+# They carry the devtools qualifier because they release this product
 # rather than whatever repository they run in, which is the opposite of
-# the repotools: prefix on the shared payload. check-versions stays
+# the devtools: prefix on the shared payload. check-versions stays
 # unprefixed for the same reason: it gates a tree rather than releasing
 # a product.
 
-[tasks.check-repotools-release-readiness]
-description = "Report whether repotools is ready to release, and the version cog would derive"
+[tasks.check-devtools-release-readiness]
+description = "Report whether devtools is ready to release, and the version cog would derive"
 run = "bash tools/release-readiness.sh"
 
 # Dispatches release.yml rather than releasing. The workflow SSH-signs
 # the tag with a repository secret under an identity GitHub verifies
 # server-side, so nothing local reproduces it, and a local bump would be
 # a second source for one number.
-[tasks.release-repotools]
+[tasks.release-devtools]
 description = "Dispatch the release workflow, optionally with an explicit X.Y.Z"
 run = "bash tools/release-dispatch.sh"
 
 # Run after the workflow lands. The bump goes out under --skip-ci, so no
 # CI run ever reads the release commit and this is what stands between a
 # bad one and every consumer pinning the tag.
-[tasks.verify-repotools-release]
+[tasks.verify-devtools-release]
 description = "Check that a release tag is annotated, signed, reachable, and matched by the version literals"
 run = "bash tools/release-verify.sh"

@@ -9,12 +9,12 @@
 # one) and lint-reuse (REUSE compliance is tree-wide rather than
 # Python-specific, so adopting it belongs in its own change).
 [project]
-name = "repotools-workspace"
+name = "devtools-workspace"
 # Inert. Nothing builds or publishes from this table, so it does not
 # track the vX.Y.Z tags — cog's pre-bump hook rewrites apm.yml alone
 # (see cog.toml), and Go consumers read the tag directly.
 version = "0"
-description = "Workspace root for the tbhb repotools Python packages"
+description = "Workspace root for the tbhb devtools Python packages"
 requires-python = ">=3.14"
 dependencies = []
 
@@ -34,7 +34,7 @@ dependencies = []
 # in mise.toml would need it too. Adding a member here is the one
 # manual step, and it announces itself -- testpaths covers packages/, so
 # an undeclared member fails collection on the import.
-members = ["repotools"]
+members = ["devtools"]
 dev = [
   { include-group = "test" },
   "bandit>=1.9.4",
@@ -43,7 +43,7 @@ dev = [
   "diff-cover>=10.3.0",
   # hypofuzz is AGPL-3.0. It drives the hypothesis property tests under
   # coverage-guided search in the nightly fuzz sweep; it is never
-  # imported by repotools and never ships anywhere, so the
+  # imported by devtools and never ships anywhere, so the
   # Apache-2.0 distribution stays clear of the copyleft terms.
   "hypofuzz>=25.11.1",
   "pip-audit>=2.10.1",
@@ -99,7 +99,7 @@ exclude = ["packages/agents"]
 # above: the group decides what gets installed, this decides where it
 # comes from, and a new member needs an entry in both.
 [tool.uv.sources]
-repotools = { workspace = true }
+devtools = { workspace = true }
 
 [tool.complexipy]
 # Scope lives here rather than in the mise task so a bare `complexipy`

@@ -1,4 +1,4 @@
-module github.com/tbhb/repotools
+module github.com/tbhb-dev/devtools
 
 go 1.26
 

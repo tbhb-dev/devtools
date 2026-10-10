@@ -22,7 +22,7 @@ setup() {
   export GIT_AUTHOR_NAME='Test' GIT_AUTHOR_EMAIL='test@example.com'
   export GIT_COMMITTER_NAME='Test' GIT_COMMITTER_EMAIL='test@example.com'
 
-  mkdir -p "$REPO/packages/repotools" "$REPO/packages/agents/common" \
+  mkdir -p "$REPO/packages/devtools" "$REPO/packages/agents/common" \
     "$REPO/packages/agents/claude" "$REPO/packages/agents/codex" \
     "$REPO/packages/agents/agy"
   cd "$REPO"
@@ -38,15 +38,15 @@ setup() {
 # the check from matching the first `version =` it finds.
 write_sites() {
   local v=$1
-  printf 'name: repotools\nversion: %s\n' "$v" > apm.yml
-  printf 'name: repotools-agents-common\nversion: %s\n' "$v" > packages/agents/common/apm.yml
-  printf 'name: repotools-agents-claude\nversion: %s\n' "$v" > packages/agents/claude/apm.yml
-  printf 'name: repotools-agents-codex\nversion: %s\n' "$v" > packages/agents/codex/apm.yml
-  printf 'name: repotools-agents-agy\nversion: %s\n' "$v" > packages/agents/agy/apm.yml
-  printf '[project]\nname = "repotools"\nversion = "%s"\n' "$v" > packages/repotools/pyproject.toml
+  printf 'name: devtools\nversion: %s\n' "$v" > apm.yml
+  printf 'name: devtools-agents-common\nversion: %s\n' "$v" > packages/agents/common/apm.yml
+  printf 'name: devtools-agents-claude\nversion: %s\n' "$v" > packages/agents/claude/apm.yml
+  printf 'name: devtools-agents-codex\nversion: %s\n' "$v" > packages/agents/codex/apm.yml
+  printf 'name: devtools-agents-agy\nversion: %s\n' "$v" > packages/agents/agy/apm.yml
+  printf '[project]\nname = "devtools"\nversion = "%s"\n' "$v" > packages/devtools/pyproject.toml
   printf '# Reference it with:\n#\n#     rev: v%s\n' "$v" > .pre-commit-hooks.yaml
-  printf '# repotools\n\n    apm install tbhb/repotools#v%s\n\n    apm install tbhb/repotools/packages/agents/claude#v%s\n\nAnd:\n\n    rev: v%s\n' "$v" "$v" "$v" > README.md
-  printf '[[package]]\nname = "pytest"\nversion = "9.9.9"\n\n[[package]]\nname = "repotools"\nversion = "%s"\nsource = { editable = "packages/repotools" }\n' "$v" > uv.lock
+  printf '# devtools\n\n    apm install tbhb-dev/devtools#v%s\n\n    apm install tbhb-dev/devtools/packages/agents/claude#v%s\n\nAnd:\n\n    rev: v%s\n' "$v" "$v" "$v" > README.md
+  printf '[[package]]\nname = "pytest"\nversion = "9.9.9"\n\n[[package]]\nname = "devtools"\nversion = "%s"\nsource = { editable = "packages/devtools" }\n' "$v" > uv.lock
 }
 
 commit_at() {
@@ -67,11 +67,11 @@ commit_at() {
 @test "fails naming the one literal left behind" {
   commit_at 1.2.3
   # The shape a half-applied bump leaves: four sites rewritten, one not.
-  printf '[project]\nname = "repotools"\nversion = "1.2.2"\n' > packages/repotools/pyproject.toml
+  printf '[project]\nname = "devtools"\nversion = "1.2.2"\n' > packages/devtools/pyproject.toml
 
   run "$SCRIPT"
   [ "$status" -eq 1 ]
-  [[ $output == *"packages/repotools/pyproject.toml:3"* ]]
+  [[ $output == *"packages/devtools/pyproject.toml:3"* ]]
   [[ $output == *'expected `version = "1.2.3"`'* ]]
   [[ $output == *'found `version = "1.2.2"`'* ]]
   [[ $output == *"TOTAL: 1 finding(s)"* ]]
@@ -79,7 +79,7 @@ commit_at() {
 
 @test "fails naming a stale sub-package apm.yml literal" {
   commit_at 1.2.3
-  printf 'name: repotools-agents-claude\nversion: 1.2.2\n' > packages/agents/claude/apm.yml
+  printf 'name: devtools-agents-claude\nversion: 1.2.2\n' > packages/agents/claude/apm.yml
 
   run "$SCRIPT"
   [ "$status" -eq 1 ]
@@ -91,7 +91,7 @@ commit_at() {
 
 @test "reports each README site independently" {
   commit_at 1.2.3
-  printf '# repotools\n\n    apm install tbhb/repotools#v1.2.3\n\n    apm install tbhb/repotools/packages/agents/claude#v1.2.3\n\nAnd:\n\n    rev: v0.9.0\n' > README.md
+  printf '# devtools\n\n    apm install tbhb-dev/devtools#v1.2.3\n\n    apm install tbhb-dev/devtools/packages/agents/claude#v1.2.3\n\nAnd:\n\n    rev: v0.9.0\n' > README.md
 
   run "$SCRIPT"
   [ "$status" -eq 1 ]
@@ -113,12 +113,12 @@ commit_at() {
   [[ $output == *"no line matching"* ]]
 }
 
-@test "reads the lockfile version under the repotools package alone" {
+@test "reads the lockfile version under the devtools package alone" {
   commit_at 1.2.3
-  # The decoy still names 9.9.9 and the repotools entry falls behind. A
+  # The decoy still names 9.9.9 and the devtools entry falls behind. A
   # check reading the first version line in the file would report the
   # decoy instead, or miss this entirely.
-  printf '[[package]]\nname = "pytest"\nversion = "9.9.9"\n\n[[package]]\nname = "repotools"\nversion = "1.2.2"\nsource = { editable = "packages/repotools" }\n' > uv.lock
+  printf '[[package]]\nname = "pytest"\nversion = "9.9.9"\n\n[[package]]\nname = "devtools"\nversion = "1.2.2"\nsource = { editable = "packages/devtools" }\n' > uv.lock
 
   run "$SCRIPT"
   [ "$status" -eq 1 ]
@@ -127,14 +127,14 @@ commit_at() {
   [[ $output == *"TOTAL: 1 finding(s)"* ]]
 }
 
-@test "fails when the lockfile drops the repotools package" {
+@test "fails when the lockfile drops the devtools package" {
   commit_at 1.2.3
   printf '[[package]]\nname = "pytest"\nversion = "9.9.9"\n' > uv.lock
 
   run "$SCRIPT"
   [ "$status" -eq 1 ]
   [[ $output == *"uv.lock:1"* ]]
-  [[ $output == *"no package entry named repotools"* ]]
+  [[ $output == *"no package entry named devtools"* ]]
 }
 
 @test "an explicit version overrides the tag" {

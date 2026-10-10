@@ -20,10 +20,10 @@
   ],
   "dictionaryDefinitions": [
     {
-      "name": "repotools",
+      "name": "devtools",
       "path": "./.cspell-words.txt",
       "addWords": true
     }
   ],
-  "dictionaries": ["repotools", "golang"]
+  "dictionaries": ["devtools", "golang"]
 }

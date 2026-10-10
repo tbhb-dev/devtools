@@ -9,7 +9,7 @@ name: release
 # workflow then replays cog's commit through the API so GitHub
 # creates and signs it, and replaces cog's tag with an SSH-signed
 # annotated one. One tag serves both consumer paths (APM installs
-# pin tbhb/repotools#vX.Y.Z and Go installs pin @vX.Y.Z), so no
+# pin tbhb-dev/devtools#vX.Y.Z and Go installs pin @vX.Y.Z), so no
 # artifact build runs here.
 #
 # Two credentials, and neither one signs what the other does. The

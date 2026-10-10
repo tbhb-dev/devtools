@@ -1,7 +1,7 @@
 #:schema https://mise.jdx.dev/schema/mise.json
 # Baseline tool pins shared across the tbhb repos. This drop-in is both
 # this repository's configuration and the source vendir syncs into every
-# consumer's .config/mise/conf.d: repotools dogfoods what it publishes,
+# consumer's .config/mise/conf.d: devtools dogfoods what it publishes,
 # so the shared pins live here rather than in the root mise.toml, which
 # holds only repo-specific pins.
 #
@@ -13,7 +13,7 @@
 # generates and commits that lockfile itself, because the platform lists
 # differ per repo.
 #
-# These pins are also what the shared tasks under .repotools/tasks run
+# These pins are also what the shared tasks under .devtools/tasks run
 # against. A task file cannot carry [tools], and a version literal
 # inside one would sit outside Renovate's view, so the tasks declare no
 # tools of their own and resolve every binary through this table -- or
@@ -42,7 +42,7 @@ cspell = "10.2.0"
 # subpackage path, so the custom manager in .github/renovate.json5 strips
 # the suffix for it.
 "go:github.com/editorconfig-checker/editorconfig-checker/v3/cmd/editorconfig-checker" = "v3.11.2"
-# The secret scanner behind repotools:gitleaks. It reached this drop-in
+# The secret scanner behind devtools:gitleaks. It reached this drop-in
 # a release after its four siblings above: the de-containerization pass
 # pinned it in the root mise.toml, which is repo-local, so consumers kept
 # running it from ghcr.io/gitleaks/gitleaks until the pin moved here.

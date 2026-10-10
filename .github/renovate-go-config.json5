@@ -5,7 +5,7 @@
   // repositories. Every Go repo extends this through its own
   // `.github/renovate.json5`, alongside the general repo-level preset:
   //
-  //   extends: ["github>tbhb/repotools//.github/renovate-go-config.json5"]
+  //   extends: ["github>tbhb-dev/devtools//.github/renovate-go-config.json5"]
   //
   // This preset deliberately does not itself extend renovate-config.json5.
   // Consumers list both presets explicitly, so preset resolution stays one

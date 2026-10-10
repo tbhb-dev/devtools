@@ -123,7 +123,7 @@ MJS
 # Declare that $1 exists at ref $2, where an empty $2 is the default
 # branch.
 serves() {
-  printf '/repos/%s/contents/%s@%s\n' "tbhb/repotools" "$1" "${2-}" >> "$POLICY"
+  printf '/repos/%s/contents/%s@%s\n' "tbhb-dev/devtools" "$1" "${2-}" >> "$POLICY"
 }
 
 # A config extending everything passed to it.
@@ -143,54 +143,54 @@ PRESET=".github/renovate-config.json5"
 SHA="0123456789abcdef0123456789abcdef01234567"
 
 @test "an unpinned reference resolves against the default branch" {
-  config_extending "github>tbhb/repotools//${PRESET}"
+  config_extending "github>tbhb-dev/devtools//${PRESET}"
   serves "$PRESET" ""
 
   check
   [ "$status" -eq 0 ]
-  [[ $output == *"ok    tbhb/repotools//${PRESET} (default branch)"* ]]
+  [[ $output == *"ok    tbhb-dev/devtools//${PRESET} (default branch)"* ]]
   # No ref went out with it, so the answer really was the default branch.
   [[ $(cat "$REQUESTS") != *"ref="* ]]
 }
 
 @test "a reference pinned to a commit is checked at that commit" {
-  config_extending "github>tbhb/repotools//${PRESET}#${SHA}"
+  config_extending "github>tbhb-dev/devtools//${PRESET}#${SHA}"
   serves "$PRESET" "$SHA"
 
   check
   [ "$status" -eq 0 ]
-  [[ $output == *"ok    tbhb/repotools//${PRESET} (ref ${SHA})"* ]]
+  [[ $output == *"ok    tbhb-dev/devtools//${PRESET} (ref ${SHA})"* ]]
   [[ $(cat "$REQUESTS") == *"ref=${SHA}"* ]]
 }
 
 @test "a reference pinned to a tag is checked at that tag" {
-  config_extending "github>tbhb/repotools//${PRESET}#v0.5.0"
+  config_extending "github>tbhb-dev/devtools//${PRESET}#v0.5.0"
   serves "$PRESET" "v0.5.0"
 
   check
   [ "$status" -eq 0 ]
-  [[ $output == *"ok    tbhb/repotools//${PRESET} (ref v0.5.0)"* ]]
+  [[ $output == *"ok    tbhb-dev/devtools//${PRESET} (ref v0.5.0)"* ]]
 }
 
 @test "a preset absent at the pinned ref fails though the default branch carries it" {
-  config_extending "github>tbhb/repotools//${PRESET}#${SHA}"
+  config_extending "github>tbhb-dev/devtools//${PRESET}#${SHA}"
   serves "$PRESET" ""
 
   check
   [ "$status" -eq 1 ]
-  [[ $output == *"FAIL  tbhb/repotools//${PRESET} (ref ${SHA}, HTTP 404)"* ]]
+  [[ $output == *"FAIL  tbhb-dev/devtools//${PRESET} (ref ${SHA}, HTTP 404)"* ]]
 }
 
 @test "a ref that does not exist fails" {
-  config_extending "github>tbhb/repotools//${PRESET}#v9.9.9"
+  config_extending "github>tbhb-dev/devtools//${PRESET}#v9.9.9"
 
   check
   [ "$status" -eq 1 ]
-  [[ $output == *"FAIL  tbhb/repotools//${PRESET} (ref v9.9.9, HTTP 404)"* ]]
+  [[ $output == *"FAIL  tbhb-dev/devtools//${PRESET} (ref v9.9.9, HTTP 404)"* ]]
 }
 
 @test "an unrecognized shape fails rather than being skipped" {
-  config_extending "github>tbhb/repotools:some-preset"
+  config_extending "github>tbhb-dev/devtools:some-preset"
 
   check
   [ "$status" -eq 1 ]
@@ -198,8 +198,8 @@ SHA="0123456789abcdef0123456789abcdef01234567"
 }
 
 @test "an unpinned self-reference is checked against the PR tree" {
-  export GITHUB_REPOSITORY="tbhb/repotools"
-  config_extending "github>tbhb/repotools//${PRESET}"
+  export GITHUB_REPOSITORY="tbhb-dev/devtools"
+  config_extending "github>tbhb-dev/devtools//${PRESET}"
   printf '{}\n' > "$PRESET"
 
   check
@@ -209,8 +209,8 @@ SHA="0123456789abcdef0123456789abcdef01234567"
 }
 
 @test "an unpinned self-reference missing from the PR tree fails" {
-  export GITHUB_REPOSITORY="tbhb/repotools"
-  config_extending "github>tbhb/repotools//${PRESET}"
+  export GITHUB_REPOSITORY="tbhb-dev/devtools"
+  config_extending "github>tbhb-dev/devtools//${PRESET}"
 
   check
   [ "$status" -eq 1 ]
@@ -218,23 +218,23 @@ SHA="0123456789abcdef0123456789abcdef01234567"
 }
 
 @test "a pinned self-reference is checked at its ref rather than in the PR tree" {
-  export GITHUB_REPOSITORY="tbhb/repotools"
-  config_extending "github>tbhb/repotools//${PRESET}#${SHA}"
+  export GITHUB_REPOSITORY="tbhb-dev/devtools"
+  config_extending "github>tbhb-dev/devtools//${PRESET}#${SHA}"
   # Present in the tree and absent at the ref: the PR-tree branch would
   # report this green.
   printf '{}\n' > "$PRESET"
 
   check
   [ "$status" -eq 1 ]
-  [[ $output == *"FAIL  tbhb/repotools//${PRESET} (ref ${SHA}, HTTP 404)"* ]]
+  [[ $output == *"FAIL  tbhb-dev/devtools//${PRESET} (ref ${SHA}, HTTP 404)"* ]]
 }
 
 @test "a pinned self-reference resolves where the ref carries the preset" {
-  export GITHUB_REPOSITORY="tbhb/repotools"
-  config_extending "github>tbhb/repotools//${PRESET}#${SHA}"
+  export GITHUB_REPOSITORY="tbhb-dev/devtools"
+  config_extending "github>tbhb-dev/devtools//${PRESET}#${SHA}"
   serves "$PRESET" "$SHA"
 
   check
   [ "$status" -eq 0 ]
-  [[ $output == *"ok    tbhb/repotools//${PRESET} (ref ${SHA})"* ]]
+  [[ $output == *"ok    tbhb-dev/devtools//${PRESET} (ref ${SHA})"* ]]
 }

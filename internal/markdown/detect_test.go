@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/tbhb/repotools/internal/markdown"
+	"github.com/tbhb-dev/devtools/internal/markdown"
 )
 
 // wrapped is five lines, so its four breaks clear MinEvidence and the report

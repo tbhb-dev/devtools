@@ -1,4 +1,4 @@
-# repotools
+# devtools
 
 Shared agent tooling for tbhb repositories. The repo provides Go command-line tools for agent harnesses, plus the shared [APM](https://microsoft.github.io/apm) package of agent primitives.
 
@@ -7,20 +7,20 @@ Shared agent tooling for tbhb repositories. The repo provides Go command-line to
 Repositories across tbhb install the shared primitives with the [APM CLI](https://microsoft.github.io/apm/quickstart/):
 
 ```bash
-apm install tbhb/repotools/packages/agents/claude#v0.9.0
-apm install tbhb/repotools/packages/agents/common#v0.9.0
+apm install tbhb-dev/devtools/packages/agents/claude#v0.9.0
+apm install tbhb-dev/devtools/packages/agents/common#v0.9.0
 ```
 
 The package deploys these primitives from sub-packages under [`packages/agents/`](packages/agents/): `claude` carries the skills below plus the `guard-markdown` hook declaration, and `common` carries the harness-neutral `worktree-wip` instructions.
 
 | Primitive | Type | Purpose |
 | --- | --- | --- |
-| `commit` | skill | Group changes into one atomic commit, draft the message in `COMMIT_AGENTMSG`, review and lint it, confirm it, then commit and rebase. |
+| `commit` | skill | Group changes into one atomic commit, draft the message in `COMMIT_AGENTMSG`, review it, lint it, confirm it, then commit and rebase. |
 | `review-commit-message` | skill | Review a drafted message against the staged diff as an independent agent, for what linting can't see. |
 | `worktree-wip` | instructions | Stash and work-in-progress rules for repos that run more than one agent worktree session. |
 | `guard-markdown` | hook | `PreToolUse` gate on `Write` and `Edit` that refuses Markdown whose paragraphs span more than one line. |
 
-Pinning the bare repo (`apm install tbhb/repotools#v0.9.0`) resolves the root workspace manifest, whose dependencies on the four sub-packages under `packages/agents/` are local paths. A remote consumer's `apm` resolves those transitively, with each sub-package gated by its own targets, so the bare pin gives a claude-only consumer exactly what the `claude` and `common` pins deliver while the codex and agy scaffolds skip on target intersection. This repo installs its own package the way a consumer does: `apm install` deploys the primitives into the local harness layout, and CI rejects drift between the `packages/agents/*/.apm/` sources and the deployed copies.
+Pinning the bare repo (`apm install tbhb-dev/devtools#v0.9.0`) resolves the root workspace manifest, whose dependencies on the four sub-packages under `packages/agents/` are local paths. A remote consumer's `apm` resolves those transitively, with each sub-package gated by its own targets, so the bare pin gives a claude-only consumer exactly what the `claude` and `common` pins deliver while the codex and agy scaffolds skip on target intersection. This repo installs its own package the way a consumer does: `apm install` deploys the primitives into the local harness layout, and CI rejects drift between the `packages/agents/*/.apm/` sources and the deployed copies.
 
 ## Checks
 
@@ -36,7 +36,7 @@ A check is one rule enforced everywhere it matters. The same binary answers to a
 
 ```yaml
 repos:
-  - repo: https://github.com/tbhb/repotools
+  - repo: https://github.com/tbhb-dev/devtools
     rev: v0.9.0
     hooks:
       - id: guard-markdown
@@ -58,7 +58,7 @@ Each tool under [`cmd/`](cmd/) builds as a standalone binary:
 Install one directly:
 
 ```bash
-go install github.com/tbhb/repotools/cmd/agenthooks@latest
+go install github.com/tbhb-dev/devtools/cmd/agenthooks@latest
 ```
 
 Or build everything from a checkout:
@@ -73,11 +73,11 @@ mise run build
 
 ## Releases
 
-[cocogitto](https://github.com/cocogitto/cocogitto) cuts `vX.Y.Z` tags from the Conventional Commit history. One tag serves both consumer paths, with APM installs pinning `tbhb/repotools#vX.Y.Z` and Go installs pinning `@vX.Y.Z`.
+[cocogitto](https://github.com/cocogitto/cocogitto) cuts `vX.Y.Z` tags from the Conventional Commit history. One tag serves both consumer paths, with APM installs pinning `tbhb-dev/devtools#vX.Y.Z` and Go installs pinning `@vX.Y.Z`.
 
 ## Python
 
-[`packages/repotools`](packages/repotools) holds the Python side, kept deliberately small for now. Its gates run through `mise run lint-py-all` and `mise run cover-py`, which enforce ruff at its full ruleset, pyrefly's strict preset, and 100% branch coverage. `uv sync` provisions everything from `uv.lock`.
+[`packages/devtools`](packages/devtools) holds the Python side, kept deliberately small for now. Its gates run through `mise run lint-py-all` and `mise run cover-py`, which enforce ruff at its full ruleset, pyrefly's strict preset, and 100% branch coverage. `uv sync` provisions everything from `uv.lock`.
 
 ## License
 

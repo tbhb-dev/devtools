@@ -100,19 +100,19 @@ repos:
 
       - id: ryl
         name: Check YAML files with ryl
-        entry: tools/mise-bootstrap run repotools:lint-yaml
+        entry: tools/mise-bootstrap run devtools:lint-yaml
         language: system
         types: [yaml]
 
       - id: rumdl-fmt
         name: rumdl fmt
-        entry: tools/mise-bootstrap run repotools:format-markdown
+        entry: tools/mise-bootstrap run devtools:format-markdown
         language: system
         types: [markdown]
 
       - id: rumdl
         name: rumdl check
-        entry: tools/mise-bootstrap run repotools:lint-markdown
+        entry: tools/mise-bootstrap run devtools:lint-markdown
         language: system
         types: [markdown]
 
@@ -169,7 +169,7 @@ repos:
       # rather than fixes; run `mise fmt` to apply.
       - id: mise-fmt
         name: mise fmt --check
-        entry: tools/mise-bootstrap run repotools:lint-mise
+        entry: tools/mise-bootstrap run devtools:lint-mise
         language: system
         files: ^(mise\.toml|\.config/mise/conf\.d/.*\.toml)$
         pass_filenames: false
@@ -179,7 +179,7 @@ repos:
       # lockfile entry.
       - id: check-toolchain
         name: mise check-toolchain
-        entry: tools/mise-bootstrap run repotools:check-toolchain
+        entry: tools/mise-bootstrap run devtools:check-toolchain
         language: system
         files: ^(mise\.(toml|lock)|\.config/mise/(conf\.d/.*\.toml|mise\.lock))$
         pass_filenames: false
@@ -207,14 +207,14 @@ repos:
       # the commit buffer with worktree-safe config resolution.
       - id: cspell
         name: cspell
-        entry: tools/mise-bootstrap run repotools:lint-spelling
+        entry: tools/mise-bootstrap run devtools:lint-spelling
         language: system
         stages: [pre-commit, pre-push]
         types: [text]
 
       - id: tombi
         name: tombi (TOML lint + format-check)
-        entry: tools/mise-bootstrap run repotools:lint-toml
+        entry: tools/mise-bootstrap run devtools:lint-toml
         language: system
         types: [toml]
         pass_filenames: false

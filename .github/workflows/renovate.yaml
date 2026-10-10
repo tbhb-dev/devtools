@@ -1,5 +1,5 @@
 ---
-# Self-hosted Renovate. Authenticates as the tbhb-renovate[bot]
+# Self-hosted Renovate. Authenticates as the tbhb-dev-renovate[bot]
 # GitHub App so commits carry a DCO sign-off matching the committer (the
 # stock Mend hosted App commits as renovate[bot], which can't match this
 # repo's gitAuthor + gitSignOff pair).
@@ -12,7 +12,7 @@
 # caller's tree, so the job needs no local action or task to stay
 # self-contained.
 #
-# Execution depends on the tbhb-renovate App credentials reaching the run:
+# Execution depends on the tbhb-dev-renovate App credentials reaching the run:
 # every repository that uses this workflow carries RENOVATE_CLIENT_ID and
 # RENOVATE_PRIVATE_KEY as its own Actions secrets.
 name: Renovate
@@ -55,7 +55,7 @@ jobs:
     steps:
       # GITHUB_TOKEN can't satisfy this repo's Renovate scope (Issues +
       # Pull requests + Workflows R/W) and can't push workflow files. Mint
-      # a short-lived installation token from the tbhb-renovate App
+      # a short-lived installation token from the tbhb-dev-renovate App
       # credentials instead. Output is `token` (the older Cilium fork
       # cilium/actions-app-token exposed `app_token`).
       - name: Get token
@@ -74,7 +74,7 @@ jobs:
           persist-credentials: false
 
       # GITHUB_COM_TOKEN authenticates Renovate's reads of github.com:
-      # preset lookups against the public tbhb/repotools repo
+      # preset lookups against the public tbhb-dev/devtools repo
       # and changelog fetches. Without it those reads are anonymous and
       # share the 60/hr per-IP limit, which intermittently fails preset
       # resolution with config-presets-invalid. The minted installation

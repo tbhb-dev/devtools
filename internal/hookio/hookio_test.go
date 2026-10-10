@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/tbhb/repotools/internal/hookio"
+	"github.com/tbhb-dev/devtools/internal/hookio"
 )
 
 // errUnreadable represents whatever the filesystem returns when the Edit

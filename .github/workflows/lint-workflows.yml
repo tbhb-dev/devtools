@@ -9,7 +9,7 @@
 # carrying its own actionlint setup. A reusable workflow has to be
 # self-contained: in a called workflow a `uses: ./...` local action and
 # any task or recipe reference resolve against the *caller's* checkout,
-# not this repo, so the job can't lean on the `repotools:lint-workflows`
+# not this repo, so the job can't lean on the `devtools:lint-workflows`
 # task the local entrypoint runs.
 # It invokes the pinned Docker image directly against whatever tree
 # `actions/checkout` lays down — this repo's on push/PR, the caller's on

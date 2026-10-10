@@ -6,9 +6,9 @@
 # harnesses are active, so a harness-neutral primitive deploys into
 # every one of them and a targeted package reaches only its own.
 # Consumers pin a sub-package by tag instead, as
-# tbhb/repotools/packages/agents/claude#vX.Y.Z. The cog pre-bump hook
+# tbhb-dev/devtools/packages/agents/claude#vX.Y.Z. The cog pre-bump hook
 # keeps `version` in lockstep with the vX.Y.Z git tags (see cog.toml).
-name: repotools
+name: devtools
 version: 0.9.0
 description: Shared agent packages for tbhb repositories
 author: tbhb
