@@ -1,7 +1,7 @@
 ---
 description: >-
-  Stash and work-in-progress rules for repos that run multiple agent
-  worktree sessions against one shared git stash stack.
+  Stash and work-in-progress rules for repos that run more than one agent
+  worktree session against one shared git stash stack.
 applyTo: "**"
 ---
 
