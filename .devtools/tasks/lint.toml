@@ -50,10 +50,13 @@ run = "biome check --files-ignore-unknown=true $usage_paths"
 # rather than the working directory. Both land on the repository root
 # here, since the config sits there and mise runs tasks from the project
 # root, so .gitignore and .yamllintignore resolve identically.
+#
+# The `check` subcommand is the explicit form of bare `ryl <paths>`,
+# which ryl 0.24.0 deprecates with a warning on every run.
 ["devtools:lint-yaml"]
 description = "Lint YAML via ryl (--strict; config in .yamllint.yaml)"
 usage = 'arg "<paths>..." default="."'
-run = "ryl --strict -c .yamllint.yaml -f auto -o - $usage_paths"
+run = "ryl check --strict -c .yamllint.yaml -f auto -o - $usage_paths"
 
 # The COMMIT_AGENTMSG exclusions keep a work-in-progress commit-message
 # draft out of the tree-wide check; the commit-msg stage owns those under

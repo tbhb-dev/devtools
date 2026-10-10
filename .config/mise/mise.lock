@@ -72,10 +72,6 @@ url = "https://github.com/biomejs/biome/releases/download/%40biomejs/biome%402.5
 url_api = "https://api.github.com/repos/biomejs/biome/releases/assets/492555468"
 provenance = "github-attestations"
 
-[[tools."cargo:ryl"]]
-version = "0.24.0"
-backend = "cargo:ryl"
-
 [[tools.cocogitto]]
 version = "7.0.0"
 backend = "aqua:cocogitto/cocogitto"
@@ -103,6 +99,34 @@ url_api = "https://api.github.com/repos/cocogitto/cocogitto/releases/assets/3666
 [[tools.cspell]]
 version = "10.3.6"
 backend = "npm:cspell"
+
+[[tools."github:owenlamont/ryl"]]
+version = "0.24.0"
+backend = "github:owenlamont/ryl"
+
+[tools."github:owenlamont/ryl"."platforms.linux-arm64"]
+checksum = "sha256:184a727fabbec5a2d2de11fd64483f9c3040f1822d9b4e142d75c2046fef8d6f"
+url = "https://github.com/owenlamont/ryl/releases/download/v0.24.0/ryl-aarch64-unknown-linux-gnu.tar.gz"
+url_api = "https://api.github.com/repos/owenlamont/ryl/releases/assets/611310931"
+provenance = "github-attestations"
+
+[tools."github:owenlamont/ryl"."platforms.linux-x64"]
+checksum = "sha256:ee496e9d246352abd40bb19b932dda36f5dc23a561ac51d5c56218ba3f25d8a8"
+url = "https://github.com/owenlamont/ryl/releases/download/v0.24.0/ryl-x86_64-unknown-linux-gnu.tar.gz"
+url_api = "https://api.github.com/repos/owenlamont/ryl/releases/assets/611310977"
+provenance = "github-attestations"
+
+[tools."github:owenlamont/ryl"."platforms.macos-arm64"]
+checksum = "sha256:55ae4a170ece424c5a9ac939fc2fadeeddaea62dc3f4303b24d33ad4def3126f"
+url = "https://github.com/owenlamont/ryl/releases/download/v0.24.0/ryl-aarch64-apple-darwin.tar.gz"
+url_api = "https://api.github.com/repos/owenlamont/ryl/releases/assets/611310936"
+provenance = "github-attestations"
+
+[tools."github:owenlamont/ryl"."platforms.windows-x64"]
+checksum = "sha256:e86231ca8ef367f309fe0e49038c220426fca9ebc51d3f806972a015da3d42b0"
+url = "https://github.com/owenlamont/ryl/releases/download/v0.24.0/ryl-x86_64-pc-windows-msvc.zip"
+url_api = "https://api.github.com/repos/owenlamont/ryl/releases/assets/611310978"
+provenance = "github-attestations"
 
 [[tools.gitleaks]]
 version = "8.30.1"
