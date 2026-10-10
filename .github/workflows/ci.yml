@@ -65,7 +65,7 @@ jobs:
           fetch-depth: 0
 
       - name: Set up mise
-        uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+        uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
         with:
           # renovate: datasource=github-releases depName=jdx/mise
           version: 2026.9.0
@@ -103,7 +103,7 @@ jobs:
       # named in .python-version and restores the locked dependency
       # closure from uv.lock.
       - name: Set up mise
-        uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+        uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
         with:
           # renovate: datasource=github-releases depName=jdx/mise
           version: 2026.9.0
@@ -161,7 +161,7 @@ jobs:
       # Turning the auto-install off leaves install_args as the single
       # place naming what this job needs.
       - name: Set up mise
-        uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+        uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
         with:
           # renovate: datasource=github-releases depName=jdx/mise
           version: 2026.9.0
@@ -218,7 +218,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up mise
-        uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+        uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
         with:
           # renovate: datasource=github-releases depName=jdx/mise
           version: 2026.9.0
@@ -258,7 +258,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up mise
-        uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+        uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
         with:
           # renovate: datasource=github-releases depName=jdx/mise
           version: 2026.9.0
@@ -282,7 +282,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up mise
-        uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+        uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
         with:
           # renovate: datasource=github-releases depName=jdx/mise
           version: 2026.9.0
