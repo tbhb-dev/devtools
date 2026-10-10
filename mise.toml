@@ -116,7 +116,7 @@ includes = [
 # a checksum per platform, so a development box and the runner install
 # the same binary, and the local lint-apm and apm-sync tasks stop
 # resolving whatever apm PATH happens to offer.
-apm = "0.29.0"
+apm = "0.33.0"
 # ast-grep matches shell structurally for check-script-hygiene.sh. The
 # rules it replaced were grep patterns, which cannot tell a command from
 # the same words inside a string: the bare-git-output rule's only match
