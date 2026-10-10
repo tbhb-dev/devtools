@@ -3,8 +3,8 @@
 
 // Package hookio decodes Claude Code hook payloads and writes decisions.
 //
-// This package doesn't define a rule of its own. Every check binary gating a
-// tool call needs the same two pieces: recovering the file content that call
+// This package doesn't define a rule of its own. Every check binary that
+// allows or refuses a tool call needs the same two pieces: recovering the file content that call
 // would produce, then answering with an allow or a deny.
 //
 // Both live here, so a new cmd/check-* binary supplies only its rule.
@@ -63,9 +63,9 @@ func Decode(r io.Reader) (Payload, error) {
 //
 // Edit supplies only a fragment, which may begin mid-paragraph and tells
 // you nothing on its own. The edit replays against the file on disk instead.
-// What comes out of that replay is the thing worth judging.
+// The check judges the document that replay produces.
 //
-// A false third result means the call produced nothing worth checking.
+// A false third result means the call didn't produce content to check.
 // Callers must read that as an allow, because a hook that failed to read its
 // own input has no business blocking the tool.
 func (p Payload) Resolve(read ReadFileFunc) (string, string, bool) {
@@ -106,7 +106,7 @@ type decision struct {
 	HookSpecificOutput hookSpecificOutput `json:"hookSpecificOutput"`
 }
 
-// Deny refuses the tool call, giving the agent a reason it can act on.
+// Deny refuses the tool call and gives the agent a reason it can act on.
 func Deny(w io.Writer, reason string) error {
 	if strings.TrimSpace(reason) == "" {
 		return ErrNoReason

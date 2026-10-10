@@ -26,7 +26,7 @@ const (
 
 var (
 	// errFindings signals that the check reported violations. Run maps it to
-	// exitFindings without printing it, so the findings themselves are the
+	// exitFindings without printing it. The findings themselves are then the
 	// only output a caller has to read.
 	errFindings = errors.New("findings")
 
@@ -98,15 +98,15 @@ func newRootCmd(s streams) *cobra.Command {
 	return root
 }
 
-// runHook answers a PreToolUse payload. Every path that can't reach a
+// runHook answers a PreToolUse payload. Every path that ends without a
 // verdict returns nil. A hook must never block a call it failed to parse,
 // and it must never block one it doesn't have an opinion about.
 func runHook(s streams) error {
 	payload, err := hookio.Decode(s.in)
 	if err != nil {
 		// Deliberate: a payload it failed to read isn't grounds to block a tool
-		// call. Failing open is the only safe direction for a gate that sits
-		// in front of every Write and Edit.
+		// call. Failing open is the only safe direction for a check that runs
+		// before every Write and Edit.
 		return nil //nolint:nilerr // fail open, as the comment explains
 	}
 	path, content, ok := payload.Resolve(nil)
@@ -159,9 +159,10 @@ func runCheck(paths []string, fix bool, s streams) error {
 // rewrite replaces a file's contents, preserving its existing mode rather
 // than imposing one.
 //
-// The path is attacker-controlled only in the sense that it comes from the
-// caller's own argv or from pre-commit's staged-file list, which is the whole
-// point of a file checker. No boundary exists here for traversal to cross.
+// Traversal here doesn't cross any trust boundary. The path is
+// attacker-controlled only in the sense that it comes from the caller's own
+// argv or from pre-commit's staged-file list, and reading those paths is
+// what a file checker is for.
 func rewrite(path, content string) error {
 	info, err := os.Stat(path)
 	if err != nil {
