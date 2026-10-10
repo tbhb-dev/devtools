@@ -68,12 +68,14 @@ rumdl = "v0.2.78"
 # The YAML gate, replacing yamllint and the last Python-implemented
 # linter that checks non-Python files. ryl reimplements all 23 yamllint
 # rules in Rust and reads the same .yamllint.yaml, so the config is
-# unchanged. It is absent from the mise registry, so the cargo: backend
-# is the route and it compiles from source: integrity comes from
-# crates.io rather than a mise.lock digest, the same trade the go:
-# backends above already accept. Renovate's built-in mise manager
-# derives the crate datasource from the backend.
-"cargo:ryl" = "0.24.0"
+# unchanged. It is absent from the mise registry, so the github: backend
+# installs the prebuilt release archives upstream attaches to each tag,
+# and mise.lock pins their digests. The cargo: backend it replaced
+# compiled from source on every runner and needed whatever rustc the
+# crate demanded. Upstream builds no Intel macOS archive, which the lock
+# platforms leave out anyway. Renovate's built-in mise manager derives
+# the github-releases datasource from the backend.
+"github:owenlamont/ryl" = "0.24.0"
 shellcheck = "0.11.0"
 tombi = "1.7.2"
 vale = "3.24.0"
