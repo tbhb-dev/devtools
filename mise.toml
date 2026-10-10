@@ -1024,9 +1024,10 @@ set -eu
 # --abbrev=0 is what makes the range name the last tag. Without it
 # describe names HEAD itself, in a form such as v0.8.0-4-g6f7fc12,
 # whenever HEAD sits past the last tag. That leaves an empty range, and
-# cog answers an empty range with the commit at its boundary alone, so
-# the preview covers the commit HEAD sits on rather than everything
-# since the tag. Where that commit carries a type the changelog omits,
+# cog reads that form as a plain commit and answers an empty range
+# between two commits with the commit at its boundary alone, so the
+# preview covers the commit HEAD sits on rather than everything since
+# the tag. Where that commit carries a type the changelog omits,
 # chore and test being the two here, the preview comes out empty and
 # cog still exits 0.
 [tasks.preview-changelog]
