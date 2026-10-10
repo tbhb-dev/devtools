@@ -99,6 +99,6 @@ jobs:
           RENOVATE_ALLOWED_UNSAFE_EXECUTIONS: mise
         with:
           # renovate: datasource=github-releases depName=renovatebot/renovate
-          renovate-version: 44.57.3
+          renovate-version: 44.138.0
           configurationFile: .github/renovate.json5
           token: ${{ steps.get_token.outputs.token }}
