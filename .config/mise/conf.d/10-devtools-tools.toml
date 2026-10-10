@@ -41,7 +41,7 @@ cspell = "10.2.0"
 # mise.lock digest. Renovate's go datasource cannot resolve a cmd/
 # subpackage path, so the custom manager in .github/renovate.json5 strips
 # the suffix for it.
-"go:github.com/editorconfig-checker/editorconfig-checker/v3/cmd/editorconfig-checker" = "v3.11.2"
+"go:github.com/editorconfig-checker/editorconfig-checker/v3/cmd/editorconfig-checker" = "v3.11.3"
 # The secret scanner behind devtools:gitleaks. It reached this drop-in
 # a release after its four siblings above: the de-containerization pass
 # pinned it in the root mise.toml, which is repo-local, so consumers kept
