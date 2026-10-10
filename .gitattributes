@@ -29,3 +29,9 @@ apm.lock.yaml rebase-resolve=regenerate
 # a skill body produce two different measurements of it. Neither is the
 # answer; re-running the recipe is.
 **/skills/*/tokens.json rebase-resolve=regenerate
+
+# The codex port of resolve-rebase-conflicts shows the conflict marker
+# shape the same way the claude skill does. The claude resolve guard and
+# the claude rebase marker scan exempt only the claude path by name, so
+# the codex copies declare themselves here.
+**/skills/codex-resolve-rebase-conflicts/SKILL.md conflict-markers=documented
