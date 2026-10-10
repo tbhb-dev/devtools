@@ -68,7 +68,7 @@ jobs:
         uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
         with:
           # renovate: datasource=github-releases depName=jdx/mise
-          version: 2026.9.0
+          version: 2026.10.3
 
       # mise installs the vale binary but does not fetch the style
       # packages .vale.ini declares, and the Python linters run from the
@@ -106,7 +106,7 @@ jobs:
         uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
         with:
           # renovate: datasource=github-releases depName=jdx/mise
-          version: 2026.9.0
+          version: 2026.10.3
           install_args: uv
 
       - name: Check that uv.lock matches pyproject.toml
@@ -164,7 +164,7 @@ jobs:
         uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
         with:
           # renovate: datasource=github-releases depName=jdx/mise
-          version: 2026.9.0
+          version: 2026.10.3
           install_args: go
 
       - name: Run tests with coverage
@@ -181,7 +181,7 @@ jobs:
       # shows on its own, and stash the binary coverage data for the
       # coverage job to merge into the combined report.
       - name: Upload ${{ matrix.os }} coverage report
-        uses: actions/upload-code-coverage@d8e329117199404bba6fc81efe8093dc7c015e34 # v1.4.2
+        uses: actions/upload-code-coverage@2b21a77928be8d5168c2b9581a67f2adbebacc52 # v1.4.4
         with:
           file: coverage.xml
           language: Go
@@ -221,7 +221,7 @@ jobs:
         uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
         with:
           # renovate: datasource=github-releases depName=jdx/mise
-          version: 2026.9.0
+          version: 2026.10.3
           install_args: go
 
       - name: Download per-slot coverage data
@@ -236,7 +236,7 @@ jobs:
         run: mise run cover-go-merge
 
       - name: Upload combined coverage report
-        uses: actions/upload-code-coverage@d8e329117199404bba6fc81efe8093dc7c015e34 # v1.4.2
+        uses: actions/upload-code-coverage@2b21a77928be8d5168c2b9581a67f2adbebacc52 # v1.4.4
         with:
           file: coverage.xml
           language: Go
@@ -261,7 +261,7 @@ jobs:
         uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
         with:
           # renovate: datasource=github-releases depName=jdx/mise
-          version: 2026.9.0
+          version: 2026.10.3
           install_args: go
 
       - name: Run govulncheck
@@ -285,7 +285,7 @@ jobs:
         uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
         with:
           # renovate: datasource=github-releases depName=jdx/mise
-          version: 2026.9.0
+          version: 2026.10.3
           install_args: go
 
       - name: Check vendor drift

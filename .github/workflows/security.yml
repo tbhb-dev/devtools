@@ -59,14 +59,14 @@ jobs:
         uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
         with:
           # renovate: datasource=github-releases depName=jdx/mise
-          version: 2026.9.0
+          version: 2026.10.3
           install_args: go
 
       - name: Run govulncheck (SARIF)
         run: mise run vuln-sarif govulncheck.sarif
 
       - name: Upload govulncheck SARIF
-        uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4
+        uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4
         with:
           sarif_file: govulncheck.sarif
           category: govulncheck
@@ -92,14 +92,14 @@ jobs:
         uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
         with:
           # renovate: datasource=github-releases depName=jdx/mise
-          version: 2026.9.0
+          version: 2026.10.3
           install_args: go
 
       - name: Run gomodscan (SARIF)
         run: mise run gomodscan-sarif gomodscan.sarif
 
       - name: Upload gomodscan SARIF
-        uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4
+        uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4
         with:
           sarif_file: gomodscan.sarif
           category: gomodscan

@@ -86,7 +86,7 @@ jobs:
         uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
         with:
           # renovate: datasource=github-releases depName=jdx/mise
-          version: 2026.9.0
+          version: 2026.10.3
           install_args: apm
 
       # The frozen install comes first because the root manifest carries
@@ -119,7 +119,7 @@ jobs:
       actions: read
       security-events: write
     # yamllint disable-line rule:line-length
-    uses: cisco-ai-defense/skill-scanner/.github/workflows/scan-skills.yml@ec7c7f09c38c30af00e145e113b69fae96cbeb1a # 2.0.13
+    uses: cisco-ai-defense/skill-scanner/.github/workflows/scan-skills.yml@9f8ad1a3774ff395939f23f675af27987d98bc2a # 2.2.1
     with:
       # scan-skills' default scan_mode is scan-all, which always adds
       # --recursive --check-overlap, and its own docs say skill_path
