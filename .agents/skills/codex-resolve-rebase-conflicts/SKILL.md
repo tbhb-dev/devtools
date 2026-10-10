@@ -25,6 +25,8 @@ The scripts read the index stages rather than the marker labels, so the naming h
 
 With `merge.conflictStyle` set to `diff3` or `zdiff3`, a conflict has three sections rather than two:
 
+<!-- rumdl-disable merge-conflict -->
+
 ```text
 <<<<<<< HEAD
 the base-side content
@@ -34,6 +36,8 @@ what both sides started from
 the replayed-side content
 >>>>>>> <commit> (<subject>)
 ```
+
+<!-- rumdl-enable merge-conflict -->
 
 That `|||||||` section is the common ancestor, and it's the most useful part of the block: it says what each side changed rather than only what each side now holds. The default `merge` style omits it. Handle both, and never assume the two-way form.
 

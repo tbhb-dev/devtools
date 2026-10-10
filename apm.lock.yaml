@@ -1,5 +1,5 @@
 lockfile_version: '1'
-generated_at: '2026-10-10T16:26:30.329922+00:00'
+generated_at: '2026-10-10T19:44:14.826946+00:00'
 apm_version: 0.28.0
 dependencies:
 - repo_url: _local/agy
@@ -165,13 +165,13 @@ dependencies:
     .claude/skills/rebase/scripts/start-rebase.sh: sha256:2a495bd4719d0f6e65612bbdec700bf7cb9bad7458394743f17927f4c1cd4ce2
     .claude/skills/rebase/scripts/verify-rebase.sh: sha256:42567bac9bddcb97d16607f0ecde703ccf8aba10cbc89cb32983be5cd88ebb5d
     .claude/skills/rebase/tokens.json: sha256:f8d089167cb2ef516c8610796f8ab87eca5e90d9ae89e31067e79d9fb323c17f
-    .claude/skills/resolve-rebase-conflicts/SKILL.md: sha256:5878528ba5d49f72485a9212f55e1ca7e3404db475ce6addf1a07f9debfd59fe
+    .claude/skills/resolve-rebase-conflicts/SKILL.md: sha256:4149f905b2dbb3dd020c7193d527a9203fccf91ca492c5708c832c68709b55ae
     .claude/skills/resolve-rebase-conflicts/scripts/classify-conflicts.sh: sha256:e4c96dfc3a69e0c44982d3bfe011805ee64ec41acb6c44cb1d117be81c4a2dad
     .claude/skills/resolve-rebase-conflicts/scripts/conflict_shape.py: sha256:9b97797ebb0174960454aed1a49901e4dbd8d24c078f33168229c6f1eda07008
     .claude/skills/resolve-rebase-conflicts/scripts/guard-resolve.sh: sha256:defe2056c3b123d8b9cff870454bf940554f25d5eceaa4ab8630d9c93d89d77c
     .claude/skills/resolve-rebase-conflicts/scripts/resolve-union.sh: sha256:a64762cb87341cb1c4050820790f2eff0b50c07ae6d62e7995136d0ffc070b71
     .claude/skills/resolve-rebase-conflicts/scripts/take-side.sh: sha256:93f47713021834b6f5b138c42f48e26c40e41ed760a06a4a268787d25ce3a092
-    .claude/skills/resolve-rebase-conflicts/tokens.json: sha256:5533417d996e3fc4203bab105f331ea42cc0c850d7fe3a017b101d126424d65b
+    .claude/skills/resolve-rebase-conflicts/tokens.json: sha256:eac244cbf841e1b972500c306d5f7a59828731190410e1e290d9de52efd544e1
     .claude/skills/review-commit-message/SKILL.md: sha256:1e1d03a5fde6c7169f2e6f685b0a84b0fa88f10fd18085dd5740eaf2da8b7f0e
     .claude/skills/review-commit-message/tokens.json: sha256:98b02b3dbb02d03ecfee43ece56b4f83fdad95bce7d9325d5a7fca104aeb2576
     .claude/skills/review-pr-description/SKILL.md: sha256:273af83c04f4a82b0f4c41faaecba7c24eae7c74804cd8c393544cb152fa142e
@@ -332,12 +332,12 @@ dependencies:
     .agents/skills/codex-rebase/scripts/start-rebase.sh: sha256:42f56f78d535f599103d20ba2e8462163bdc5973903101318e7a7ffe75ad9496
     .agents/skills/codex-rebase/scripts/verify-rebase.sh: sha256:2c509fb84aa88aec261473df5396bfcb7b017b6480643eebadd6cafe91b2b88d
     .agents/skills/codex-rebase/tokens.json: sha256:2c2edde6e247e8d8594ffeb17c6cdbbf6d23fa9509e13c0dbe603694debb252b
-    .agents/skills/codex-resolve-rebase-conflicts/SKILL.md: sha256:7056ff9d353cde01bde86425128c5b09220e791e3ec2d1ccf3dd323fc0852646
+    .agents/skills/codex-resolve-rebase-conflicts/SKILL.md: sha256:8bea79fd731e1044bb3775ed261ce69dbdef32a5bff2290a3587ad286f3f94ec
     .agents/skills/codex-resolve-rebase-conflicts/scripts/classify-conflicts.sh: sha256:78300f099cba926c97cc224e37bf8a9e8846722115378b9fb0001009605a7588
     .agents/skills/codex-resolve-rebase-conflicts/scripts/conflict_shape.py: sha256:cc2b87c5b9d7de560bda3a5b6be623b8fbd35c35f4c9dac19e13af694dc3dd29
     .agents/skills/codex-resolve-rebase-conflicts/scripts/resolve-union.sh: sha256:3c9b29d25e24d891b71bade29d14dfbc11d5d0f2243fa4d44db2a52a8e2d9c32
     .agents/skills/codex-resolve-rebase-conflicts/scripts/take-side.sh: sha256:93f47713021834b6f5b138c42f48e26c40e41ed760a06a4a268787d25ce3a092
-    .agents/skills/codex-resolve-rebase-conflicts/tokens.json: sha256:ef50155511da93dce484ccd6f39b7c5b5c2a600afc4dfe02698ea367ea392e04
+    .agents/skills/codex-resolve-rebase-conflicts/tokens.json: sha256:c03a118d242dd37888d2284e4bdac3f435f6aca02bc9fde921abcc0f7c88bcbd
     .agents/skills/codex-review-commit-message/SKILL.md: sha256:a08f61c97226a510cce3d3922321df3b0fed6f4ec8ec11e354e4b0e6ab89731a
     .agents/skills/codex-review-commit-message/tokens.json: sha256:768f15901db529681539fe9a213ed7f255fc26c1dc485de18f33b925e46a60cd
     .agents/skills/codex-review-pr-description/SKILL.md: sha256:4c8935eac7a01a78f6da338eaa12a33b01318134fcc5e7f13dbaa9a3e8741628
@@ -876,7 +876,7 @@ deployments:
   owners:
   - ./packages/agents/codex
   active_owner: ./packages/agents/codex
-  content_hash: sha256:7056ff9d353cde01bde86425128c5b09220e791e3ec2d1ccf3dd323fc0852646
+  content_hash: sha256:8bea79fd731e1044bb3775ed261ce69dbdef32a5bff2290a3587ad286f3f94ec
 - kind: project-relative
   target: antigravity
   value: .agents/skills/codex-resolve-rebase-conflicts/scripts/classify-conflicts.sh
@@ -921,7 +921,7 @@ deployments:
   owners:
   - ./packages/agents/codex
   active_owner: ./packages/agents/codex
-  content_hash: sha256:ef50155511da93dce484ccd6f39b7c5b5c2a600afc4dfe02698ea367ea392e04
+  content_hash: sha256:c03a118d242dd37888d2284e4bdac3f435f6aca02bc9fde921abcc0f7c88bcbd
 - kind: project-relative
   target: antigravity
   value: .agents/skills/codex-review-commit-message
@@ -1722,7 +1722,7 @@ deployments:
   owners:
   - ./packages/agents/claude
   active_owner: ./packages/agents/claude
-  content_hash: sha256:5878528ba5d49f72485a9212f55e1ca7e3404db475ce6addf1a07f9debfd59fe
+  content_hash: sha256:4149f905b2dbb3dd020c7193d527a9203fccf91ca492c5708c832c68709b55ae
 - kind: project-relative
   target: claude
   value: .claude/skills/resolve-rebase-conflicts/scripts/classify-conflicts.sh
@@ -1776,7 +1776,7 @@ deployments:
   owners:
   - ./packages/agents/claude
   active_owner: ./packages/agents/claude
-  content_hash: sha256:5533417d996e3fc4203bab105f331ea42cc0c850d7fe3a017b101d126424d65b
+  content_hash: sha256:eac244cbf841e1b972500c306d5f7a59828731190410e1e290d9de52efd544e1
 - kind: project-relative
   target: claude
   value: .claude/skills/review-commit-message
