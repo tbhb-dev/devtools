@@ -101,7 +101,7 @@ url = "https://github.com/cocogitto/cocogitto/releases/download/7.0.0/cocogitto-
 url_api = "https://api.github.com/repos/cocogitto/cocogitto/releases/assets/366659399"
 
 [[tools.cspell]]
-version = "10.2.0"
+version = "10.3.6"
 backend = "npm:cspell"
 
 [[tools.gitleaks]]

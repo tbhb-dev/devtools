@@ -33,7 +33,7 @@ actionlint = "1.7.12"
 bats = "1.14.0"
 biome = "2.5.6"
 cocogitto = "7.0.0"
-cspell = "10.2.0"
+cspell = "10.3.6"
 # editorconfig-checker builds from source: v3.9.0 publishes no release
 # assets, and the aqua package tops out at 3.8.0 and installs the binary
 # under its per-platform asset name rather than the name lint-editorconfig
