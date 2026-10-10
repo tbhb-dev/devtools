@@ -205,31 +205,31 @@ checksum = "sha256:6cac9ffbca8f6a47091e4b5c772e0606049c3871cb67d900c0cedde630e54
 url = "https://nodejs.org/dist/v24.20.0/node-v24.20.0-win-x64.zip"
 
 [[tools.prek]]
-version = "0.5.1"
+version = "0.5.5"
 backend = "aqua:j178/prek"
 
 [tools.prek."platforms.linux-arm64"]
-checksum = "sha256:80f555f9b54c3d1bdefbdf6767e52839361fc5fe5520fd2fd9b9046b3d45ac7c"
-url = "https://github.com/j178/prek/releases/download/v0.5.1/prek-aarch64-unknown-linux-gnu.tar.gz"
-url_api = "https://api.github.com/repos/j178/prek/releases/assets/538950413"
+checksum = "sha256:420451a13aaf3de670dfe73b25e18dbca0d96bc3b153cc3924b9d01c3b7caa12"
+url = "https://github.com/j178/prek/releases/download/v0.5.5/prek-aarch64-unknown-linux-gnu.tar.gz"
+url_api = "https://api.github.com/repos/j178/prek/releases/assets/611684496"
 provenance = "github-attestations"
 
 [tools.prek."platforms.linux-x64"]
-checksum = "sha256:6506df452f0ad0111303d45e3a51ef27248a083e58d8fabf59c293781bec4f00"
-url = "https://github.com/j178/prek/releases/download/v0.5.1/prek-x86_64-unknown-linux-gnu.tar.gz"
-url_api = "https://api.github.com/repos/j178/prek/releases/assets/538950443"
+checksum = "sha256:5470e4aa0fc0ad9d3de7dfaf088fb746d59c2eda3b173c06418e7c8861a520eb"
+url = "https://github.com/j178/prek/releases/download/v0.5.5/prek-x86_64-unknown-linux-gnu.tar.gz"
+url_api = "https://api.github.com/repos/j178/prek/releases/assets/611684555"
 provenance = "github-attestations"
 
 [tools.prek."platforms.macos-arm64"]
-checksum = "sha256:9e5384f128d8731203d7cdd683e2786c269ac5c9dc04d5962f7d078966b16177"
-url = "https://github.com/j178/prek/releases/download/v0.5.1/prek-aarch64-apple-darwin.tar.gz"
-url_api = "https://api.github.com/repos/j178/prek/releases/assets/538950398"
+checksum = "sha256:e4bc3132023b50020e62b073bc3147082828bf250d8b9282850c6f2bed5471b6"
+url = "https://github.com/j178/prek/releases/download/v0.5.5/prek-aarch64-apple-darwin.tar.gz"
+url_api = "https://api.github.com/repos/j178/prek/releases/assets/611684483"
 provenance = "github-attestations"
 
 [tools.prek."platforms.windows-x64"]
-checksum = "sha256:0560f9bb198602241491abdcac0d0aecdb18fe64eeaff240b92efa224479fbcc"
-url = "https://github.com/j178/prek/releases/download/v0.5.1/prek-x86_64-pc-windows-msvc.zip"
-url_api = "https://api.github.com/repos/j178/prek/releases/assets/538950437"
+checksum = "sha256:6e52e1723b1b753b977be632a150d5516862471b29c14ad8e7d71685f07769b4"
+url = "https://github.com/j178/prek/releases/download/v0.5.5/prek-x86_64-pc-windows-msvc.zip"
+url_api = "https://api.github.com/repos/j178/prek/releases/assets/611684549"
 provenance = "github-attestations"
 
 [[tools.rumdl]]
