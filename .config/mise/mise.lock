@@ -73,7 +73,7 @@ url_api = "https://api.github.com/repos/biomejs/biome/releases/assets/492555468"
 provenance = "github-attestations"
 
 [[tools."cargo:ryl"]]
-version = "0.21.0"
+version = "0.24.0"
 backend = "cargo:ryl"
 
 [[tools.cocogitto]]
