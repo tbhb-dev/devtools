@@ -4,24 +4,24 @@
 // Package markdown detects hard-wrapped prose in Markdown documents.
 //
 // Markdown in tbhb repositories is never hard-wrapped. Every paragraph is a
-// single line, and the renderer decides where it breaks. Hard wrapping
+// single line, and the renderer places its line breaks. Hard wrapping
 // belongs to commit messages and to comments in code or config, each of
 // which has its own gate. A paragraph spanning two or more lines is the
 // violation this package looks for.
 //
 // To say *why* in the failure message, the analysis also infers the wrap
 // column. A break ending at column e whose next word runs n characters is
-// explained by wrapping at any width from e to e+n, so every break votes for
-// that interval and the column covered by the most intervals wins. Breaks no
-// width explains are the author's own, one sentence per line, which the
+// explained by wrapping at any width from e to e+n. The inferred column is
+// the one covered by the most of those intervals. A break that every width
+// leaves unexplained is the author's own, one sentence per line, which the
 // message names as semantic rather than width-driven because the fix differs.
 //
-// That inference needs evidence to be worth stating. Across a few breaks the
-// two causes are indistinguishable: three sentences that happen to end near
-// column 45 fit a wrap at 45 exactly as well as they fit deliberate sentence
-// breaks. When the break count falls below MinEvidence, the report doesn't
-// name a cause at all. The verdict never changes, only the explanation
-// offered for it.
+// Stating that inference needs evidence. Across a few breaks the two causes
+// are indistinguishable: three sentences that happen to end near column 45
+// fit a wrap at 45 exactly as well as they fit deliberate sentence breaks.
+// When the break count falls below MinEvidence, the report doesn't state a
+// cause at all. The verdict never changes, only the explanation offered
+// for it.
 package markdown
 
 import (
@@ -124,14 +124,14 @@ type Break struct {
 }
 
 // ExplainedBy reports whether wrapping at width would have forced this
-// break, meaning the next word couldn't have fit on the preceding line.
+// break: the next word couldn't have fit on the preceding line.
 func (b Break) ExplainedBy(width int) bool {
 	return b.End <= width && width <= b.End+b.Word
 }
 
 // Report is the verdict for one Markdown document.
 type Report struct {
-	// Paragraphs holds every run of two or more prose lines.
+	// Paragraphs contains every run of two or more prose lines.
 	Paragraphs []Paragraph
 	// Width is the wrap column explaining the most breaks, or zero when no
 	// candidate width explains any.
@@ -278,7 +278,7 @@ func closesRun(text string, inside bool) bool {
 }
 
 // Paragraphs finds every run of adjacent prose lines. Structural Markdown
-// never joins a run, and a new list item always starts one.
+// never joins a run. Each new list item starts a new run.
 func Paragraphs(text string) []Paragraph {
 	lines := splitLines(text)
 	var found []Paragraph
@@ -454,7 +454,7 @@ func DenyReason(path string, report Report) string {
 	)
 }
 
-// IsMarkdown reports whether a path names a Markdown document.
+// IsMarkdown reports whether a path refers to a Markdown document.
 func IsMarkdown(path string) bool {
 	lower := strings.ToLower(path)
 	return strings.HasSuffix(lower, ".md") || strings.HasSuffix(lower, ".markdown")
@@ -462,7 +462,7 @@ func IsMarkdown(path string) bool {
 
 // generatedChangelog is the one document this check never judges. A
 // changelog generator writes it from commit messages, which are hard-wrapped
-// under their own gate, so the wrapping arrives with the content and no
+// under their own gate. The wrapping arrives with the content, and no
 // author is in a position to unwrap it. Unwrapping it by hand only holds
 // until the next release regenerates the file.
 //

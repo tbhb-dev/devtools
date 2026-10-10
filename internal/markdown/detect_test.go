@@ -13,9 +13,9 @@ import (
 	"github.com/tbhb-dev/devtools/internal/markdown"
 )
 
-// wrapped is five lines, so its four breaks clear MinEvidence and the report
-// is willing to name a cause. A shorter sample remains a violation, but it
-// reports no cause. See the thin-evidence case in TestCause.
+// wrapped is five lines. Its four breaks clear MinEvidence, which lets the
+// report state a cause. A shorter sample remains a violation, but its report
+// doesn't state a cause. See the thin-evidence case in TestCause.
 const wrapped = "This paragraph has been hard-wrapped by an agent at roughly column\n" +
 	"seventy-two, which is exactly the behavior this hook exists to\n" +
 	"refuse before it can ever reach the disk in the first place, and\n" +
@@ -238,7 +238,7 @@ func TestUnwrapIsIdempotentAndClean(t *testing.T) {
 	assert.Equal(t, once, markdown.Unwrap(once), "fixing twice changes nothing")
 }
 
-// TestUnwrapRoundTrip is the invariant worth pinning: a paragraph wrapped at
+// TestUnwrapRoundTrip pins the central invariant: a paragraph wrapped at
 // any plausible column is both flagged and restored exactly.
 func TestUnwrapRoundTrip(t *testing.T) {
 	t.Parallel()

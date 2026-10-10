@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright Tony Burns
 
-// Package buildmeta carries build-time information injected via ldflags, with
+// Package buildmeta exposes build-time information injected via ldflags, with
 // a fallback that consults the runtime/debug build info when no ldflags apply
 // (such as go install directly from source).
 package buildmeta

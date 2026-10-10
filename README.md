@@ -11,7 +11,7 @@ apm install tbhb-dev/devtools/packages/agents/claude#v0.9.0
 apm install tbhb-dev/devtools/packages/agents/common#v0.9.0
 ```
 
-The package deploys these primitives from sub-packages under [`packages/agents/`](packages/agents/): `claude` carries the skills below plus the `guard-markdown` hook declaration, and `common` carries the harness-neutral `worktree-wip` instructions.
+The package deploys these primitives from sub-packages under [`packages/agents/`](packages/agents/): `claude` contains the skills below plus the `guard-markdown` hook declaration, and `common` contains the harness-neutral `worktree-wip` instructions.
 
 | Primitive | Type | Purpose |
 | --- | --- | --- |
@@ -20,11 +20,11 @@ The package deploys these primitives from sub-packages under [`packages/agents/`
 | `worktree-wip` | instructions | Stash and work-in-progress rules for repos that run more than one agent worktree session. |
 | `guard-markdown` | hook | `PreToolUse` gate on `Write` and `Edit` that refuses Markdown whose paragraphs span more than one line. |
 
-Pinning the bare repo (`apm install tbhb-dev/devtools#v0.9.0`) resolves the root workspace manifest, whose dependencies on the four sub-packages under `packages/agents/` are local paths. A remote consumer's `apm` resolves those transitively, with each sub-package gated by its own targets, so the bare pin gives a claude-only consumer exactly what the `claude` and `common` pins deliver while the codex and agy scaffolds skip on target intersection. This repo installs its own package the way a consumer does: `apm install` deploys the primitives into the local harness layout, and CI rejects drift between the `packages/agents/*/.apm/` sources and the deployed copies.
+Pinning the bare repo (`apm install tbhb-dev/devtools#v0.9.0`) resolves the root workspace manifest, whose dependencies on the four sub-packages under `packages/agents/` are local paths that a remote consumer's `apm` resolves transitively, filtering each sub-package by its own targets. For a claude-only consumer, the bare pin gives exactly what the `claude` and `common` pins deliver. The codex and agy scaffolds skip on target intersection. This repo installs its own package the way a consumer does: `apm install` deploys the primitives into the local harness layout, and CI rejects drift between the `packages/agents/*/.apm/` sources and the deployed copies.
 
 ## Checks
 
-A check is one rule enforced everywhere it matters. The same binary answers to all three callers, so the rule can't drift between them:
+A check is one rule enforced everywhere it matters. Because all three callers run the same binary, the rule can't drift between them:
 
 | Caller | Invocation |
 | --- | --- |
@@ -69,7 +69,7 @@ mise run build
 
 ## Development
 
-[mise](https://mise.jdx.dev) pins the toolchain and drives the workflow: `mise run bootstrap` sets up a fresh clone, `mise run lint` runs the full lint suite, `mise run test` runs the tests, and `mise run build` compiles the binaries into `bin/`. On a machine with no mise, the committed shim at `tools/mise-bootstrap` runs in place of `mise` and installs the pinned release on first use. The pins live in [mise.toml](mise.toml) and the drop-ins under `.config/mise/conf.d/`, locked by digest in the committed `mise.lock` files. See [AGENTS.md](AGENTS.md) for the agent-facing contributor guide.
+[mise](https://mise.jdx.dev) pins the toolchain and runs the workflow: `mise run bootstrap` sets up a fresh clone, `mise run lint` runs the full lint suite, `mise run test` runs the tests, and `mise run build` compiles the binaries into `bin/`. On a machine with no mise, the committed shim at `tools/mise-bootstrap` runs in place of `mise` and installs the pinned release on first use. The pins live in [mise.toml](mise.toml) and the drop-ins under `.config/mise/conf.d/`, locked by digest in the committed `mise.lock` files. See [AGENTS.md](AGENTS.md) for the agent-facing contributor guide.
 
 ## Releases
 
@@ -77,7 +77,7 @@ mise run build
 
 ## Python
 
-[`packages/devtools`](packages/devtools) holds the Python side, kept deliberately small for now. Its gates run through `mise run lint-py-all` and `mise run cover-py`, which enforce ruff at its full ruleset, pyrefly's strict preset, and 100% branch coverage. `uv sync` provisions everything from `uv.lock`.
+[`packages/devtools`](packages/devtools) holds the Python side, which is deliberately small for now. Its gates run through `mise run lint-py-all` and `mise run cover-py`, which enforce ruff at its full ruleset, pyrefly's strict preset, and 100% branch coverage. `uv sync` provisions everything from `uv.lock`.
 
 ## License
 
