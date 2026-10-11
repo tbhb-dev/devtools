@@ -17,6 +17,11 @@
 # because neither has anything to say about a synthetic history. What
 # they report is held constant so the commit comparison is the only
 # thing any assertion here turns on.
+#
+# The mise stub prints a changelog entry rather than arbitrary text. The
+# preview check counts the lines an entry starts, so a stub printing
+# anything else fails that check in every test here, including the ones
+# asserting a pass.
 
 setup() {
   SCRIPT="${BATS_TEST_DIRNAME}/../../tools/release-readiness.sh"
@@ -44,7 +49,7 @@ setup() {
   git push --quiet origin main
 
   printf '#!/bin/sh\nprintf "success build\\n"\n' > "$BIN/gh"
-  printf '#!/bin/sh\nprintf "a changelog\\n"\n' > "$BIN/mise"
+  printf '#!/bin/sh\nprintf -- "- a changelog entry\\n"\n' > "$BIN/mise"
   printf '#!/bin/sh\nprintf "v1.2.4\\n"\n' > "$BIN/cog"
   chmod +x "$BIN/gh" "$BIN/mise" "$BIN/cog"
   export PATH="$BIN:$PATH"
@@ -89,6 +94,19 @@ setup() {
   run "$SCRIPT"
   [ "$status" -eq 1 ]
   [[ $output == *"FAIL  HEAD is origin/main"* ]]
+}
+
+@test "refuses a changelog preview that rendered no entries" {
+  # mise announces the task it runs on stderr whatever the task prints,
+  # so a check reading both streams together passes over an empty
+  # preview. This stub reproduces that: chatter on stderr, nothing on
+  # stdout.
+  printf '#!/bin/sh\nprintf "[preview-changelog] running\\n" >&2\n' > "$BIN/mise"
+  chmod +x "$BIN/mise"
+
+  run "$SCRIPT"
+  [ "$status" -eq 1 ]
+  [[ $output == *"FAIL  the changelog previews"* ]]
 }
 
 @test "refuses where origin carries no release branch" {

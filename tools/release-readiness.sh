@@ -129,11 +129,22 @@ else
 fi
 
 # --- The changelog previews ---
-
-if preview=$(mise run preview-changelog 2>&1) && [ -n "$preview" ]; then
-  ok "the changelog previews"
+#
+# The two streams stay apart, because merging them is what made this
+# check vacuous. mise announces the task it runs and warns about a
+# missing venv, both on stderr, so under `2>&1` $preview was non-empty
+# whatever cog rendered. This reported OK throughout the v0.9.0 release
+# while the preview underneath it was empty.
+#
+# Entries rather than output. cog prints nothing and exits 0 for a range
+# it can make no changelog of, so counting the lines an entry starts is
+# what separates a rendered changelog from a silent empty one.
+if ! preview=$(mise run preview-changelog 2>/dev/null); then
+  fail "the changelog previews" "mise run preview-changelog exited non-zero"
+elif [ "$(printf '%s\n' "$preview" | grep -c '^- ' || true)" -eq 0 ]; then
+  fail "the changelog previews" "cog rendered no entries for the commits since the last tag"
 else
-  fail "the changelog previews" "mise run preview-changelog produced nothing usable"
+  ok "the changelog previews"
 fi
 
 # --- The version the automatic path would derive ---
