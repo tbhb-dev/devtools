@@ -120,7 +120,15 @@ if ! runs=$(gh api "repos/{owner}/{repo}/commits/$local_head/check-runs" \
 elif [ -z "$runs" ]; then
   fail "checks green on HEAD" "no check runs reported for $local_head"
 else
-  bad=$(printf '%s\n' "$runs" | grep -vE '^(success|skipped|neutral) ' || true)
+  # The release job's own run lands on HEAD as a check run, because the
+  # dispatch builds this same commit. A release that failed partway
+  # would otherwise block every retry on the commit it failed on, and
+  # the outcome of an earlier release says nothing about whether this
+  # commit is releasable. The name is the `name:` of the job in
+  # release.yml. Only a finished release run is skipped: one still
+  # running may be mid-tag, and dispatching beside it is what this
+  # check is there to stop.
+  bad=$(printf '%s\n' "$runs" | grep -vE '^(success|skipped|neutral) ' | grep -vE '^(failure|cancelled|timed_out|startup_failure) release$' || true)
   if [ -z "$bad" ]; then
     ok "checks green on HEAD"
   else
