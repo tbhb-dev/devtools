@@ -116,7 +116,7 @@ publish() {
 
   run "$SCRIPT" v1.2.3
   [ "$status" -eq 1 ]
-  [[ $output == *"FAIL  the release commit is authored by tbhb-releases[bot]"* ]]
+  [[ $output == *"FAIL  the release commit is authored by tbhb-dev-releases[bot]"* ]]
   [[ $output == *"it names Test <test@example.com>"* ]]
 }
 

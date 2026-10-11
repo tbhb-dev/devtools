@@ -61,8 +61,8 @@ jobs:
         id: app-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          app-id: ${{ vars.RELEASE_APP_ID }}
-          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          app-id: ${{ secrets.RELEASES_APP_ID }}
+          private-key: ${{ secrets.RELEASES_PRIVATE_KEY }}
           permission-contents: write
 
       # Unlike the read-only workflows, this checkout keeps its
@@ -127,7 +127,7 @@ jobs:
       # by a key the runner holds, and the release App has none, so an
       # App-identity commit has to be one GitHub creates: it signs with
       # its own key and the result reads as authored by
-      # tbhb-releases[bot] and committed by GitHub.
+      # tbhb-dev-releases[bot] and committed by GitHub.
       #
       # The paths come off cog's commit rather than a list here. Add a
       # seventh version literal to cog.toml's pre_bump_hooks and this
