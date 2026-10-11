@@ -120,6 +120,18 @@ setup() {
   [[ $output == *"OK    checks green on HEAD"* ]]
 }
 
+@test "refuses a release run still in progress on HEAD" {
+  # A running release may be about to tag, so a second dispatch beside
+  # it is exactly what readiness exists to stop.
+  printf '#!/bin/sh\nprintf "success build\\npending release\\n"\n' > "$BIN/gh"
+  chmod +x "$BIN/gh"
+
+  run "$SCRIPT"
+  [ "$status" -eq 1 ]
+  [[ $output == *"FAIL  checks green on HEAD"* ]]
+  [[ $output == *"pending release"* ]]
+}
+
 @test "refuses a failed check that is not the release run" {
   # The exemption is for the release job alone, so a failure in a job
   # whose name merely contains the word still fails.

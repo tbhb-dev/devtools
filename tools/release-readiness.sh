@@ -125,8 +125,10 @@ else
   # would otherwise block every retry on the commit it failed on, and
   # the outcome of an earlier release says nothing about whether this
   # commit is releasable. The name is the `name:` of the job in
-  # release.yml.
-  bad=$(printf '%s\n' "$runs" | grep -vE '^(success|skipped|neutral) ' | grep -vE '^[^ ]+ release$' || true)
+  # release.yml. Only a finished release run is skipped: one still
+  # running may be mid-tag, and dispatching beside it is what this
+  # check is there to stop.
+  bad=$(printf '%s\n' "$runs" | grep -vE '^(success|skipped|neutral) ' | grep -vE '^(failure|cancelled|timed_out|startup_failure) release$' || true)
   if [ -z "$bad" ]; then
     ok "checks green on HEAD"
   else
