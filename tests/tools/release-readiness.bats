@@ -109,6 +109,30 @@ setup() {
   [[ $output == *"FAIL  the changelog previews"* ]]
 }
 
+@test "passes over a failed release run on HEAD" {
+  # A dispatch that failed partway leaves its job on the commit it
+  # built, and retrying the release means asking about that same commit.
+  printf '#!/bin/sh\nprintf "success build\\nfailure release\\n"\n' > "$BIN/gh"
+  chmod +x "$BIN/gh"
+
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [[ $output == *"OK    checks green on HEAD"* ]]
+}
+
+@test "refuses a failed check that is not the release run" {
+  # The exemption is for the release job alone, so a failure in a job
+  # whose name merely contains the word still fails.
+  printf '#!/bin/sh\nprintf "failure release-notes\\nfailure build\\n"\n' > "$BIN/gh"
+  chmod +x "$BIN/gh"
+
+  run "$SCRIPT"
+  [ "$status" -eq 1 ]
+  [[ $output == *"FAIL  checks green on HEAD"* ]]
+  [[ $output == *"failure release-notes"* ]]
+  [[ $output == *"failure build"* ]]
+}
+
 @test "refuses where origin carries no release branch" {
   # Straight at the ref. A push deleting it is refused, main being the
   # bare repository's own HEAD.
