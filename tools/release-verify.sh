@@ -53,7 +53,7 @@ readonly TAGGER='Tony Burns <tony@tonyburns.net>'
 # App's bot user rather than anything the runner chooses. The local part
 # is that user's numeric id, so recreating the App changes this address
 # and the release identity along with it.
-readonly RELEASE_AUTHOR='tbhb-releases[bot] <278792582+tbhb-releases[bot]@users.noreply.github.com>'
+readonly RELEASE_AUTHOR='tbhb-dev-releases[bot] <340658377+tbhb-dev-releases[bot]@users.noreply.github.com>'
 readonly RELEASE_BRANCH=main
 
 failures=0
