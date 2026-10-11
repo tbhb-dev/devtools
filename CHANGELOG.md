@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file. See [conven
 - - -
 <!-- release -->
 
+## [v0.10.0](https://github.com/tbhb-dev/devtools/compare/26e9d79de6ab1b045725386749647528ed745e14..v0.10.0) - 2026-10-11
+
+### Bug Fixes
+
+- (**apm**) regenerate the lockfile for the v0.9.0 package manifests - ([05a6818](https://github.com/tbhb-dev/devtools/commit/05a68189c5178f1bae78583501af581589f6b711)) - [@tbhb](https://github.com/tbhb)
+- (**deps**) update go-deps (#72) - ([3f08922](https://github.com/tbhb-dev/devtools/commit/3f089224376150f5c5cbe7b24de3f6c8ca227d6c)) - tbhb-renovate[bot]
+- (**release**) let readiness pass over a failed release run on HEAD (#133) - ([7306236](https://github.com/tbhb-dev/devtools/commit/730623682a91dc6053208202301b9cffe0e49897)) - tbhb.dev Agent
+- (**release**) request the release token as the tbhb-dev-releases app (#130) - ([e7499a2](https://github.com/tbhb-dev/devtools/commit/e7499a2f15744c7a57244010ac05f68b8998ba65)) - tbhb.dev Agent
+- (**release**) render the changelog preview and fail an empty one (#68) - ([72af9d8](https://github.com/tbhb-dev/devtools/commit/72af9d8cf28907d5e18ec2e11fbf9a10a5ca3427)) - [@tbhb](https://github.com/tbhb)
+- (**skills**) stop the release version context dying on a bounded diff (#129) - ([3073dd5](https://github.com/tbhb-dev/devtools/commit/3073dd51412a6370b5562456a58a7ccb434f8344)) - tbhb.dev Agent
+- (**skills**) avoid a find/exec chain the skill scanner flags critical - ([1499428](https://github.com/tbhb-dev/devtools/commit/14994287efab46e382e4e2377e3f44ccf7826dda)) - [@tbhb](https://github.com/tbhb)
+
+### Build system
+
+- install editorconfig-checker v4 from its release archives (#127) - ([a8d0686](https://github.com/tbhb-dev/devtools/commit/a8d0686efeee597a5f8e6fb6153021df3fd4063d)) - tbhb.dev Agent
+- install ryl from release archives and lint through ryl check (#126) - ([cfd622f](https://github.com/tbhb-dev/devtools/commit/cfd622fd403cd134e2bea296c28b54218b5c701b)) - tbhb.dev Agent
+
+### Refactoring
+
+- ![BREAKING](https://img.shields.io/badge/BREAKING-red) move the repository to tbhb-dev/devtools (#102) - ([5194088](https://github.com/tbhb-dev/devtools/commit/519408860cb7c6af8b18aeb26d8e5ee4b79806a4)) - tbhb.dev Agent
+
+- - -
+
+<!-- release -->
+
 ## [v0.9.0](https://github.com/tbhb-dev/devtools/compare/49c1017fba1def1ab6099fe53e16678d79bf4020..v0.9.0) - 2026-08-17
 
 ### Features
