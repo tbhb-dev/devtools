@@ -400,14 +400,16 @@ run = "uv run bandit -r packages/*/src -q"
 
 # The glob excludes the LICENSE (canonical Apache 2.0 text), the
 # auto-generated changelog, vale's own style packages, scratch dirs,
-# vendored code, the gitignored agent worktrees (whose nested vendor
-# trees otherwise crash vale), and the agent drafts, which their own
+# vendored code, the gitignored apm_modules copy of this package (its
+# soft-wrapped READMEs crash vale's proselint.Uncomparables, #139), the
+# gitignored agent worktrees (whose nested vendor trees otherwise crash
+# vale), and the agent drafts, which their own
 # gates check under the stricter commit scope. The name and usage come
 # from the skill-contract template; the glob is why the body stays
 # repo-specific.
 [tasks.lint-prose]
 extends = "devtools:lint-prose"
-run = "vale --output=ai-tells-agent.tmpl --glob='!{LICENSE,CHANGELOG.md,.vale/*,tmp/*,vendor/*,.venv/*,.claude/worktrees/*,.pytest_cache/*,.complexipy_cache/*,COMMIT_AGENTMSG,PR_AGENTDESC.md,SQUASH_AGENTMSG}' $usage_paths"
+run = "vale --output=ai-tells-agent.tmpl --glob='!{LICENSE,CHANGELOG.md,.vale/*,apm_modules/*,tmp/*,vendor/*,.venv/*,.claude/worktrees/*,.pytest_cache/*,.complexipy_cache/*,COMMIT_AGENTMSG,PR_AGENTDESC.md,SQUASH_AGENTMSG}' $usage_paths"
 
 # This repository's own check, applied to itself. `go run` rather than an
 # installed binary so the gate reflects the working tree: a change to the

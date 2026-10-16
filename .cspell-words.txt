@@ -16,6 +16,7 @@ RSTART
 Sprintf
 TSSDK
 Tricolon
+Uncomparables
 Worktree
 Worktrees
 addopts
