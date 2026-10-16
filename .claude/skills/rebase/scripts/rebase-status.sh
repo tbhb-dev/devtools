@@ -35,6 +35,7 @@ gitr() {
 section() { printf '\n== %s ==\n' "$1"; }
 none() { printf '(none)\n'; }
 
+script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 root=$(git rev-parse --show-toplevel)
 cd "$root"
 git_dir=$(git rev-parse --absolute-git-dir)
@@ -148,5 +149,5 @@ if [ -n "$unmerged" ]; then
   printf 'Hand these to the resolve-rebase-conflicts skill. It classifies each\n'
   printf 'path before anything edits it, and resolves the mechanical ones itself.\n'
 else
-  printf 'bash .claude/skills/rebase/scripts/continue-rebase.sh\n'
+  printf 'bash %s/continue-rebase.sh\n' "$script_dir"
 fi

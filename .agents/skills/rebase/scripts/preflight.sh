@@ -106,7 +106,8 @@ section "worktree"
 printf 'root:     %s\n' "$root"
 printf 'branch:   %s\n' "$branch"
 case $root in
-*/.codex/worktrees/*) printf 'layout:   Codex worktree under .codex/worktrees\n' ;;
+*/.claude/worktrees/*) printf 'layout:   agent worktree under .claude/worktrees\n' ;;
+*/.codex/worktrees/*) printf 'layout:   agent worktree under .codex/worktrees\n' ;;
 *) printf 'layout:   primary checkout\n' ;;
 esac
 printf 'head:     %s\n' "$(git rev-parse --short HEAD)"
@@ -238,8 +239,8 @@ if [ -n "$untracked" ]; then printf '%s\n' "$untracked"; else none; fi
 if [ -n "$staged$unstaged" ]; then
   printf '\nThe tree is dirty. --autostash carries it across, and start-rebase.sh\n'
   printf 'passes that flag. Never a bare git stash pop: worktrees share one\n'
-  printf 'stash stack. If that durability is not enough, stop and let the operator\n'
-  printf 'settle the worktree before starting the rebase.\n'
+  printf 'stash stack. Where the work is worth keeping across an abort as well,\n'
+  printf 'park it in a throwaway wip commit first (see the worktree rules).\n'
 fi
 
 # Predicted conflicts. merge-tree performs the merge in memory and
@@ -261,7 +262,7 @@ if [ -n "$base" ]; then
     # informational block follows those after a blank line.
     printf 'merge-tree reports conflicts on:\n'
     printf '%s\n' "$predicted" | awk 'NR > 1 { if ($0 == "") exit; print }'
-    printf '\nclassify each one with resolve-rebase-conflicts once the\n'
+    printf '\nclassify each one with the resolve-rebase-conflicts skill once the\n'
     printf 'rebase actually stops. These names are the preview, not the stop.\n'
   fi
 fi

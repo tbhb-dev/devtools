@@ -59,6 +59,8 @@ base=${1:-}
 root=$(git rev-parse --show-toplevel)
 cd "$root"
 git_dir=$(git rev-parse --absolute-git-dir)
+state_file="$git_dir/rebase-agent-state"
+completed_file="$git_dir/rebase-agent-state.completed"
 
 if [ -d "$git_dir/rebase-merge" ] || [ -d "$git_dir/rebase-apply" ]; then
   die "a rebase is already in progress. Resume it with continue-rebase.sh, or abandon it with git rebase --abort."
@@ -73,6 +75,11 @@ git rev-parse --verify --quiet "$base^{commit}" >/dev/null ||
 branch=$(git rev-parse --abbrev-ref HEAD)
 [ "$branch" != HEAD ] || die "HEAD is detached. Check out the branch you mean to rebase."
 
+# A completed or aborted earlier workflow must not become the comparison
+# point for this one. The current invocation owns a fresh record, including
+# the no-op case where no record should survive at all.
+rm -f "$state_file" "$completed_file"
+
 before=$(git rev-parse HEAD)
 base_sha=$(git rev-parse "$base")
 
@@ -85,7 +92,7 @@ fi
 # it to range-diff the branch against its pre-rebase self, which is the
 # only view that shows a resolution having dropped a hunk.
 printf 'branch=%s\nbase=%s\nbase_sha=%s\nbefore=%s\n' \
-  "$branch" "$base" "$base_sha" "$before" >"$git_dir/rebase-agent-state"
+  "$branch" "$base" "$base_sha" "$before" >"$state_file"
 
 printf 'Rebasing %s (%s) onto %s (%s).\n\n' \
   "$branch" "$(git rev-parse --short "$before")" "$base" "$(git rev-parse --short "$base_sha")"
@@ -127,6 +134,7 @@ if [ -d "$git_dir/rebase-merge" ] || [ -d "$git_dir/rebase-apply" ]; then
 fi
 
 if [ "$status" -ne 0 ]; then
+  rm -f "$state_file" "$completed_file"
   printf '\n== failed ==\n'
   printf 'git exited %s without leaving a rebase in progress, so the branch is\n' "$status"
   printf 'where it started. Report the message above rather than retrying.\n'
@@ -134,6 +142,7 @@ if [ "$status" -ne 0 ]; then
 fi
 
 after=$(git rev-parse HEAD)
+: >"$completed_file"
 printf '\n== finished ==\n'
 printf 'before: %s\n' "$(git rev-parse --short "$before")"
 printf 'after:  %s\n' "$(git rev-parse --short "$after")"

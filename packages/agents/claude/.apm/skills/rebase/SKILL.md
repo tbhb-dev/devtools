@@ -59,7 +59,7 @@ git commit -am wip --no-verify
 
 That's the one sanctioned `--no-verify` in this repository, and `git reset --soft HEAD~1` afterwards removes it before anything reaches history.
 
-Never a bare `git stash pop` or `git stash apply`. Worktrees share one global stash stack whose indices shift whenever any worktree pushes. A bare pop takes whatever entry is at `stash@{0}` right then. The guard hook refuses it.
+Never a bare `git stash pop` or `git stash apply`. Worktrees share one global stash stack whose indices shift whenever any worktree pushes. A bare pop takes whatever entry is at `stash@{0}` right then.
 
 ## Step 3: start the rebase
 
@@ -81,7 +81,9 @@ bash .claude/skills/rebase/scripts/rebase-status.sh
 
 That says which commit stopped, how far through the replay it sits, which paths remain unmerged, and what git staged without asking.
 
-Then invoke the `resolve-rebase-conflicts` skill. It classifies each path before anything edits it and settles the mechanical ones itself, which covers most of them in this repository. Don't resolve conflicts here. The classification is what keeps a mechanical case from turning into a decision someone makes by hand.
+When another workflow started the rebase, preflight reconstructs the durable before/base record from git's active rebase state, so verification still has both ranges after the replay finishes.
+
+Then invoke the `resolve-rebase-conflicts` skill. It classifies each path before anything edits it and settles the mechanical ones itself, which covers most of them in this repository. Don't resolve conflicts here. The classification is what keeps a mechanical case from turning into a decision someone makes by hand. Keep the resolution in this thread, because delegated agents share the filesystem and concurrent conflict edits are unsafe.
 
 Once you have staged every path:
 
@@ -135,7 +137,7 @@ The script also lists any path the repository declares generated through `rebase
 
 Say what the base was, how many commits replayed, which paths conflicted, and how you settled each one. Give what the gates reported, and name anything the `range-diff` flagged.
 
-Then hand back. Pushing is the caller's call. Because a rebase rewrites the branch, the push needs `git push --force-with-lease origin HEAD`. The guard refuses a bare `--force`, because the lease is what keeps the push from discarding whatever arrived while this session worked. Where a pull request is open, `pr` and `watch-pr` take it from there.
+Then hand back. Pushing is the caller's call. Because a rebase rewrites the branch, the push needs `git push --force-with-lease origin HEAD`. A bare `--force` is wrong here, because the lease is what keeps the push from discarding whatever arrived while this session worked. Where a pull request is open, `pr` and `watch-pr` take it from there.
 
 ## Where this sits
 

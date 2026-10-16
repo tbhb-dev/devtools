@@ -107,6 +107,10 @@ devtools = { workspace = true }
 # so the invocation that relies on it is the task's own bare call, plus
 # whatever a contributor types.
 paths = ["packages"]
+# The generated skill sources hold the one deployed classifier, which sat
+# under a hidden .apm directory this tool never walked before the sources
+# moved to a visible path. Skipping them keeps that gate where it was.
+exclude = ["**/agents/source/**"]
 # Sonar's default cognitive complexity ceiling; complexipy ships the
 # same default, but an unpinned threshold would let an upstream default
 # change move the gate without a visible diff here.

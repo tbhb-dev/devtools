@@ -3,6 +3,9 @@
 # requires-python = ">=3.14"
 # dependencies = []
 # ///
+# pylint: disable=duplicate-code
+# This deterministic classifier deploys inside two standalone harness packages.
+# Keeping the copies byte-equivalent is the behavior being protected.
 """Decide what shape a single conflict has.
 
 Works from the three complete versions of the file rather than from the
@@ -191,8 +194,8 @@ def print_sorted_union(
         print(f"  {len(both)} line(s) added by both sides, which the union keeps once")
     print(f"  result: {len(result)} lines")
     print(
-        "  resolve: bash .claude/skills/resolve-rebase-conflicts/scripts/"
-        "resolve-union.sh " + path
+        f"  resolve: bash {pathlib.Path(__file__).resolve().parent}/"
+        f"resolve-union.sh {path}"
     )
     if declared == "union":
         print("  declared: rebase-resolve=union, and the evidence agrees")

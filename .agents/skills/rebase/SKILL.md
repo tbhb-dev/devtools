@@ -1,7 +1,7 @@
 ---
 name: rebase
 description: >-
-  Replay the current branch onto its base and establish that the result is sound. Preflight settles the base by comparing the local default branch against origin's copy. The rebase runs under pinned settings. A range-diff afterwards says what the replay did to each commit. The gates then run against a tree no commit ever saw. Conflicts route to resolve-rebase-conflicts. Use this whenever the user asks to rebase or to bring a branch current, and whenever a workflow needs the branch moved first.
+  Replay the current branch onto its base and establish that the result is sound. Preflight settles the base by comparing the local default branch against origin's copy. The rebase runs under pinned settings. A range-diff afterwards says what the replay did to each commit. The gates then run against a tree no commit ever saw. Conflicts route to the resolve-rebase-conflicts skill. Use this whenever the user asks to rebase or to bring a branch current, and whenever a workflow needs the branch moved first.
 ---
 
 # Rebase workflow
@@ -12,11 +12,13 @@ Codex doesn't provide a skill-scoped command hook. Use only the scripts named he
 
 ## Preflight
 
-Run `bash .agents/skills/rebase/scripts/preflight.sh`.
+```text
+bash .agents/skills/rebase/scripts/preflight.sh
+```
 
-## Step 0: open the task list
+## Step 0: the checklist
 
-Create these with `update_plan`, keeping exactly one item `in_progress` at a time.
+Where the harness provides `update_plan`, track these with it, keeping exactly one item `in_progress` at a time. Otherwise work the list in order as written.
 
 1. Choose the base
 2. Settle the working tree
@@ -42,9 +44,17 @@ Nothing to replay means nothing to do. Say so and stop.
 
 `--autostash` handles a dirty tree, and `start-rebase.sh` passes it. It scopes the save to this rebase and never touches the shared stash stack, which is what makes it the sanctioned form here.
 
-The stashed work is outside the worktree while you resolve a conflict, so nothing you see there reflects it. It can also conflict on the way back once the replay finishes. If that durability isn't enough, stop and let the operator settle the worktree before starting. Don't invent a temporary commit or reset sequence inside this workflow.
+The stashed work is outside the worktree while you resolve a conflict, so nothing you see there reflects it. It can also conflict on the way back once the replay finishes.
 
-Never a bare `git stash pop` or `git stash apply`. Worktrees share one global stash stack whose indices shift whenever any worktree pushes. A bare pop takes whatever entry is at `stash@{0}` right then. The guard hook refuses it.
+Where the work has to persist through a cancelled rebase as well, park it in a throwaway commit first:
+
+```text
+git commit -am wip --no-verify
+```
+
+That's the one sanctioned `--no-verify` in this repository, and `git reset --soft HEAD~1` afterwards removes it before anything reaches history.
+
+Never a bare `git stash pop` or `git stash apply`. Worktrees share one global stash stack whose indices shift whenever any worktree pushes. A bare pop takes whatever entry is at `stash@{0}` right then.
 
 ## Step 3: start the rebase
 
@@ -64,7 +74,11 @@ Read the output for a line about rerere replaying a recorded resolution. That's 
 bash .agents/skills/rebase/scripts/rebase-status.sh
 ```
 
-That says which commit stopped, how far through the replay it sits, which paths remain unmerged, and what git staged without asking. When another workflow started the rebase, preflight reconstructs the durable before/base record from git's active rebase state so verification still has both ranges after the replay finishes. Then follow `resolve-rebase-conflicts`. Keep the resolution in this thread because delegated agents share the filesystem and concurrent conflict edits are unsafe. The skill classifies each path before anything edits it and settles the mechanical ones itself.
+That says which commit stopped, how far through the replay it sits, which paths remain unmerged, and what git staged without asking.
+
+When another workflow started the rebase, preflight reconstructs the durable before/base record from git's active rebase state, so verification still has both ranges after the replay finishes.
+
+Then invoke the `resolve-rebase-conflicts` skill. It classifies each path before anything edits it and settles the mechanical ones itself, which covers most of them in this repository. Don't resolve conflicts here. The classification is what keeps a mechanical case from turning into a decision someone makes by hand. Keep the resolution in this thread, because delegated agents share the filesystem and concurrent conflict edits are unsafe.
 
 Once you have staged every path:
 
@@ -118,7 +132,7 @@ The script also lists any path the repository declares generated through `rebase
 
 Say what the base was, how many commits replayed, which paths conflicted, and how you settled each one. Give what the gates reported, and name anything the `range-diff` flagged.
 
-Then hand back. Pushing is the caller's call. Because a rebase rewrites the branch, the push needs `git push --force-with-lease origin HEAD`. The guard refuses a bare `--force`, because the lease is what keeps the push from discarding whatever arrived while this session worked. Where a pull request is open, `pr` and `watch-pr` take it from there.
+Then hand back. Pushing is the caller's call. Because a rebase rewrites the branch, the push needs `git push --force-with-lease origin HEAD`. A bare `--force` is wrong here, because the lease is what keeps the push from discarding whatever arrived while this session worked. Where a pull request is open, `pr` and `watch-pr` take it from there.
 
 ## Where this sits
 
