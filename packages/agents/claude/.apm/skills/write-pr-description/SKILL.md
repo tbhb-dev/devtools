@@ -2,7 +2,7 @@
 name: write-pr-description
 license: Apache-2.0
 description: >-
-  Write or revise the pull request description in PR_AGENTDESC.md, as a forked agent that reads the branch itself. Fills the frontmatter properties, a Conventional Commits title, and every section the repository's template declares, then runs the mechanical validator until it passes before returning. The pr skill calls this to draft, fix-pr calls it after remediation commits arrive, and merge-pr calls it for a final pass. Every call pairs with review-pr-description afterwards.
+  Write or revise the pull request description in PR_AGENTDESC.md, as a forked agent that reads the branch itself. Fills the frontmatter properties, a Conventional Commits title, and every section the repository's template declares, then runs the mechanical validator until it passes before returning. The pr skill calls this to draft, fix-pr calls it after remediation commits arrive, and merge-pr calls it for a final pass. Every call pairs with the pr review script afterwards.
 context: fork
 agent: general-purpose
 background: false
@@ -14,7 +14,7 @@ Write `PR_AGENTDESC.md` at the repository root, then return. You run forked, whi
 
 ## Arguments
 
-`$ARGUMENTS` contains the repository root, and after it whatever the caller wants addressed. A first draft arrives with nothing extra. Any revision has the findings `review-pr-description` returned, or a note that remediation added commits the description hasn't caught up with.
+`$ARGUMENTS` contains the repository root, and after it whatever the caller wants addressed. A first draft arrives with nothing extra. Any revision has the findings the pr review script returned, or a note that remediation added commits the description hasn't caught up with.
 
 Treat any findings in the arguments as the work. Resolve each one and say so.
 
@@ -43,7 +43,7 @@ milestone:
 <prose>
 ```
 
-Those frontmatter keys and no others. Labels take a flow sequence and an empty one fails the validator, because nobody's filter finds an unlabelled pull request.
+Those frontmatter keys and no others. Labels take a flow sequence and an empty one fails the validator, because nobody's filter finds an unlabelled pull request. Leave `milestone:` empty where there is none. `null` and `~` read the same way, so neither specifies a milestone.
 
 The title is a level 1 heading in the Conventional Commits shape. A squash merge turns it into the commit subject on the default branch, so its type has to be one the landing commits use, and it states what the whole branch does rather than what the last commit did.
 

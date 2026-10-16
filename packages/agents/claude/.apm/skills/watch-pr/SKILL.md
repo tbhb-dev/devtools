@@ -44,9 +44,14 @@ The lines to expect:
 
 - `WATCHING #<number>` once, at the start
 - `PASS <job>`, `SKIP <job>`, or `FAIL <job> <run link>`, one per check as it settles
-- `ALL GREEN #<number>`, `FAILED #<number> with N failing check(s)`, or `TIMEOUT #<number>` to close
+- `ALL GREEN #<number>`, `FAILED #<number> with N failing check(s)`, `TIMEOUT #<number>`, or `NO CHECKS #<number>` to close
+- `ERROR <reason>` where `gh` failed or answered with something other than a list of checks
 
-Running the same command through `Bash` also works and blocks until the same ending, with the exit code reporting the outcome: `0` all passed, `1` something failed, `2` the wait ran out. Prefer `Monitor`. Use the blocking form only where the next step can't start until the answer arrives.
+Each poll reads the checks through one `gh` call.
+
+A rerun replaces the run it repeats, so an old failure that a rerun fixed doesn't report, and two workflows sharing a job name stay apart.
+
+Running the same command through `Bash` also works and blocks until the same ending, with the exit code reporting the outcome: `0` all passed, `1` something failed, `2` inconclusive when the wait expires or no check registers. A `gh` failure also returns `2`. Prefer `Monitor`. Use the blocking form only where the next step can't start until the answer arrives.
 
 Override the bounds through the environment when a run is unusually slow. `PR_CHECKS_TIMEOUT` sets the whole wait and `PR_CHECKS_INTERVAL` the poll spacing, both in seconds. Keep `timeout_ms` past `PR_CHECKS_TIMEOUT` so the script reports its own timeout rather than dying at the tool's.
 
@@ -56,7 +61,7 @@ Say which checks failed and hand back. Give the pull request, the failing jobs, 
 
 Where the caller asked only to watch, stop here. Where the caller asked for a fix, invoke `fix-pr` with the same number. That skill reads the logs and identifies the local task reproducing each failure.
 
-A timeout isn't a failure. Say the checks were still running, give the elapsed bound, and let the caller decide whether to wait again.
+A timeout isn't a failure, and neither is a pull request with no checks. Say the checks were still running, or that none registered, give the bound, and let the caller decide whether to wait again. An empty check set never counts as green.
 
 ## Preconditions
 

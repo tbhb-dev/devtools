@@ -1,42 +1,112 @@
 ---
 name: write-pr-description
 description: >-
-  Write or revise PR_AGENTDESC.md from the branch, its commits, and the repository template, then run the mechanical validator until it passes. Use as a delegated writer from pr, fix-pr, or merge-pr. Pass review findings or branch-drift notes in the task.
+  Write or revise the pull request description in PR_AGENTDESC.md, as a delegated agent that reads the branch itself. Fills the frontmatter properties, a Conventional Commits title, and every section the repository's template declares, then runs the mechanical validator until it passes before returning. Use as the delegated writer from pr, fix-pr, or merge-pr, with review findings or branch-drift notes in the task. Every call pairs with the pr review script afterwards.
 ---
 
 # Write a pull request description
 
-Work only in the repository named by the caller. The task may also carry review findings or a note about new commits. Resolve every supplied finding.
+Write `PR_AGENTDESC.md` at the repository root, then return. You run as a delegated agent, which keeps the branch diff in your context rather than the caller's. Read the material below and write from it.
 
-Gather context once:
+## Arguments
+
+The task specifies the repository root, and after it whatever the caller wants addressed. A first draft arrives with nothing extra. Any revision has the findings the pr review script returned, or a note that remediation added commits the description hasn't caught up with.
+
+Treat any findings in the task as the work. Resolve each one and say so.
+
+## Context
+
+Gather it once, before writing anything:
 
 ```bash
 bash .agents/skills/write-pr-description/scripts/context.sh
 ```
 
-Write `PR_AGENTDESC.md` with exactly these elements: YAML frontmatter containing `base`, `draft`, `labels`, `reviewers`, `assignees`, and `milestone`, followed by a Conventional Commits level-one title. Put every section the repository template declares after the title, in the template's order. Use a nonempty label list drawn from the context.
+## The layout
 
-Describe the whole branch. Keep Summary, Why, Verification, Risk, and Related distinct. Verification names commands actually run. Avoid counts, diff narration, unsupported claims, selling language, and request/session/model/tool provenance. Preserve accurate existing prose during revisions.
+Write the file in exactly this order.
 
-Before returning, read the finished draft for closed enumerations and scope words such as `only`, `every`, and `never`. Establish those claims from the branch or weaken them.
+```text
+---
+base: <branch this merges into>
+draft: <true or false>
+labels: [<one or more from the set above>]
+reviewers: []
+assignees: []
+milestone:
+---
 
-Run until clean:
+# <type>(<scope>)?: <description>
+
+## <first template section>
+
+<prose>
+```
+
+Those frontmatter keys and no others. Labels take a flow sequence and an empty one fails the validator, because nobody's filter finds an unlabelled pull request. Leave `milestone:` empty where there is none. `null` and `~` read the same way, so neither specifies a milestone.
+
+The title is a level 1 heading in the Conventional Commits shape. A squash merge turns it into the commit subject on the default branch, so its type has to be one the landing commits use, and it states what the whole branch does rather than what the last commit did.
+
+Then every section the template declares, in the template's order, filled with prose. Replace each instructional comment rather than leaving it in place.
+
+## One question per section
+
+The sections answer different questions, so don't let them repeat each other. Summary says what changes. Why says what problem made it necessary. Verification names the commands you actually ran, in backticks. Risk says what breaks if this is wrong and how to back it out. Related points at issues, or says `None`.
+
+Avoid:
+
+- Restating the diff. A reviewer reads the diff already.
+- Counting. No file, line, test, or commit counts.
+- Provenance filler. Nothing about requests, sessions, prompts, models, or tools.
+- Claims you haven't checked, including verification nobody ran.
+- Selling it. Drop `robust`, `comprehensive`, `significantly`, and their neighbors.
+- Paths that don't exist. The validator checks each backticked path against the tree and the diff.
+
+## Revising rather than starting over
+
+Where a draft already exists, the context printed it earlier. Keep the sentences that are still accurate. A revision that rewrites untouched prose costs the caller another review round for nothing, and it loses wording an earlier review already cleared.
+
+A finding points at one instance of a fault rather than the fault itself. Fix the instance, then read the rest of the draft for the same fault, because a reviewer that found one instance finds the next one on the next round. That sweep isn't the rewriting this section warns against, since it changes a sentence only where the sentence is wrong.
+
+Where the published description differs from the draft, the branch has moved since the last publish. Bring the draft forward rather than reverting it to what GitHub shows.
+
+## Read the draft back before returning
+
+The validator covers what a script can check. The reviewer sends drafts back for the faults listed below, and the context printed earlier already contains the answer to each, so a round trip spent on one buys nothing.
+
+**Closed enumerations.** A sentence listing the kinds of change on the branch claims to list every one, and a reviewer reads it that way. Walk the changed-file listing against every sentence of that form, and confirm the sentence covers each path or that you left the path out on purpose. Where you can't confirm it, write the sentence open, so it claims only what you checked.
+
+**Scope words.** `only`, `every`, `never`, and `the one place` each make a claim about the files you didn't quote. Open the file and establish the scope before writing one. A setting described as mattering on one CI slot is a claim about every other slot, and the workflow in the diff either bears that out or doesn't.
+
+**The Avoid list earlier in this document.** Read the finished draft against it once. Following a rule while writing and satisfying it in the finished text are different things.
+
+## Run the validator before returning
 
 ```bash
 bash .agents/skills/pr/scripts/validate-description.sh
 ```
 
-Return only one of:
+Run it, fix every finding, and run it again until its output is empty. Each finding gives a line and the correction.
+
+Returning a draft that fails the validator spends a review round on something a script settles by itself, and the caller only has to send you back, so treat this as part of writing rather than a step after it.
+
+## What to return
+
+Return this block and stop there. Skip the preamble and the praise, and leave the description itself for the caller to read off disk.
 
 ```text
 DRAFT: WRITTEN
 
-changed: <one line per material edit, or first draft>
-addressed: <each supplied finding, or nothing requested>
+changed: <what you altered, one line per item, or "first draft">
+addressed: <each finding from the arguments and how, or "nothing requested">
 ```
+
+or, when the branch or the repository makes drafting impossible:
 
 ```text
 DRAFT: BLOCKED
 
-reason: <decision or missing prerequisite>
+reason: <what stopped you>
 ```
+
+Blocked covers a branch with nothing to land, a missing template, and a validator finding you can't resolve without a decision the caller has to make. It doesn't cover a validator finding you simply haven't fixed yet.

@@ -69,9 +69,9 @@ such change behind one entry point:
   bash .claude/skills/pr/scripts/create-pr.sh
 
 That script validates the description against the template, checks that
-review-pr-description cleared the exact bytes on disk, resolves the
-labels and every issue reference before anything is published, and
-updates the open pull request when one already exists.
+the review stamp covers the exact bytes on disk and the branch as it
+stands, resolves the labels and every issue reference before anything is
+published, and updates the open pull request when one already exists.
 
 Reading stays open: gh pr list, view, diff, status, and checks all run
 without asking."

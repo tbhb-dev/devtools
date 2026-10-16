@@ -80,7 +80,7 @@ The caller decides how the fix gets onto the branch. `$ARGUMENTS` holds that ans
 | `Separate commit` | `The fix lands as its own commit. History keeps the record of what broke.` |
 | `Amend and force-push` | `The fix folds into the commit that caused it, pushed with --force-with-lease.` |
 
-Either way, the `commit` skill takes it from there, and it writes the message and runs the review and the gates exactly as it always does. One thing changes for an amend: pass `--amend` after the repository root when invoking `review-commit-message`, so it reads `git diff --cached HEAD~1` rather than the staged delta. Skip that and the reviewer judges a whole message against a partial diff, returning findings that look certain and are wrong. Where the fix splits into unrelated groups the commit skill says so and takes them one at a time, which suits a separate commit better than an amend.
+Either way, the `commit` skill takes it from there, and it writes the message and runs the review and the gates exactly as it always does. One thing changes for an amend: the commit skill's review and commit scripts both take `--amend`. The reviewer then reads the amended commit's whole content rather than the staged delta. Skip that and the reviewer judges a whole message against a partial diff, returning findings that look certain and are wrong. Where the fix splits into unrelated groups the commit skill says so and takes them one at a time, which suits a separate commit better than an amend.
 
 ## Step 5: bring the description forward
 
@@ -94,7 +94,7 @@ That rebuilds `PR_AGENTDESC.md` from what the pull request currently says, reass
 
 A fix changes what the branch does, so the published description now describes a branch that has moved. Where the change alters what a reader needs to know, invoke `write-pr-description` with the repository root and a note saying which commits arrived since the last publish.
 
-Then invoke `review-pr-description` and loop on its verdict the same way the `pr` skill does, bounded at three rounds. Publish the result with `bash .claude/skills/pr/scripts/create-pr.sh`, which updates the open pull request rather than opening another.
+Then review it with `bash .claude/skills/pr/scripts/review.sh` and loop on the verdict the same way the `pr` skill does, bounded at three rounds. Publish the result with `bash .claude/skills/pr/scripts/create-pr.sh`, which updates the open pull request rather than opening another and pushes the branch on the way. Pass `--confirmed` only where the operator chose a route including fixes in this session, or answered now. After an amend, pass `--rewrite` as well, because the push replaces the commit stored on origin. The script leases on that exact commit and refuses where origin moved.
 
 Skip this where the fix left the description accurate. A typo in a lint rule rarely changes what the branch is for. Say which way you judged it.
 
@@ -102,7 +102,7 @@ Don't edit `PR_AGENTDESC.md` here. A guard hook refuses it, and the writer owes 
 
 ## Step 6: push and hand back
 
-A separate commit pushes normally:
+Where step 5 republished, `create-pr.sh` already pushed. Otherwise, a separate commit pushes normally:
 
 ```text
 git push origin HEAD
@@ -118,7 +118,7 @@ Never a bare `--force`. A guard hook refuses it, because the lease is the differ
 
 Report what failed, what caused it, and what the fix changed. Then say the checks are running again.
 
-Where the caller asked for a fix and nothing more, stop here. Where the caller asked to see it through, invoke `watch-pr` with the same number and repeat from step 1 on a fresh failure.
+Stop here if the caller asked for a fix and nothing more. If the caller asked to see it through, invoke `watch-pr` with the same number and repeat from step 1 on a fresh failure.
 
 Bound the loop. After three rounds on the same check, stop, then report what each attempt changed and why the check still fails. A fourth attempt at the same kind of fix is rarely the one that works.
 

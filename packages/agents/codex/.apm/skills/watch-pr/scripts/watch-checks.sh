@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 # watch-checks — emit one line per check as it settles, then exit.
 #
-# Written as an event stream for a long-running Codex exec session. Each
-# stdout line reports a newly settled check without another gh query.
+# Written as an event stream. Under Claude Code the Monitor tool turns
+# each stdout line into a notification; under Codex one long-running
+# exec session reads them as they arrive. Either way the caller learns
+# about the first failure when it happens rather than after the slowest
+# job finishes, and waits without spending a turn per look.
 #
 # The caller needs:
 #
@@ -13,8 +16,15 @@
 #   * the command exits once nothing is pending, so the watch ends by
 #     itself rather than sitting armed until the timeout
 #
+# Each poll reads the checks once, through one gh call, and a response
+# that isn't a list of checks stops the watch with an error rather than
+# reading as "nothing pending". A rerun replaces the run it repeats: the
+# newest run per workflow and job name is the one reported, keyed on
+# both so two workflows sharing a job name stay apart.
+#
 # It also works as a plain blocking call, where the exit code carries
-# the outcome: 0 all passed, 1 something failed, 2 the wait ran out.
+# the outcome: 0 all passed, 1 something failed, 2 inconclusive (the
+# wait ran out, no check ever registered, or gh failed).
 #
 # Usage: watch-checks.sh [pull-request-number]
 # Written to bash 3.2.
@@ -60,13 +70,22 @@ printf 'WATCHING #%s\n' "$number"
 
 # gh sorts checks into buckets: pass, fail, pending, skipping, cancel.
 # Anything outside pending has finished moving.
+#
+# gh answers a pull request with no checks yet by failing, with "no
+# checks reported" on stderr, rather than with an empty list. That one
+# failure means an empty set; any other is an error.
+gh_err=$(mktemp)
+trap 'rm -f "$gh_err"' EXIT
 snapshot() {
-  raw_checks=$(gh pr checks "$number" --json name,bucket,link,workflow 2>/dev/null) ||
-    fail "could not read checks for #${number}"
+  if ! raw_checks=$(gh pr checks "$number" --json name,bucket,link,workflow 2>"$gh_err"); then
+    grep -q 'no checks reported' "$gh_err" ||
+      fail "could not read checks for #${number}: $(head -n 1 "$gh_err")"
+    raw_checks='[]'
+  fi
   printf '%s\n' "$raw_checks" | jq -e 'type == "array"' >/dev/null 2>&1 ||
     fail "gh returned an invalid checks response for #${number}"
   checks=$(printf '%s\n' "$raw_checks" | jq '
-    map(. + {sort_id: (.link | capture("(?<id>[0-9]+)$").id | tonumber)})
+    map(. + {sort_id: ((((.link // "") | capture("(?<id>[0-9]+)$") | .id) // "0") | tonumber)})
     | sort_by(.workflow, .name, .sort_id)
     | group_by(.workflow, .name)
     | map(last | del(.sort_id))

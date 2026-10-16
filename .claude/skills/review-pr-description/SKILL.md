@@ -2,7 +2,7 @@
 name: review-pr-description
 license: Apache-2.0
 description: >-
-  Review a drafted pull request description in PR_AGENTDESC.md against the branch it would publish, as an independent agent, for what mechanical checking can't see. Covers claims the diff doesn't support, counting, provenance filler, restating the diff, a title describing one commit rather than the branch, and whether the branch is one coherent change. The pr skill invokes this before opening every pull request, passing the repository root.
+  Review a drafted pull request description in PR_AGENTDESC.md against the branch it would publish, as an independent agent, for what mechanical checking can't see. Covers claims the diff doesn't support, counting, provenance filler, restating the diff, a title describing one commit rather than the branch, and whether the branch is one coherent change. The pr skill's review script runs this as a headless reviewer before every publish, passing the repository root.
 context: fork
 agent: Explore
 background: false
@@ -16,24 +16,25 @@ Review a drafted pull request description against the branch it would publish, t
 
 `$ARGUMENTS`
 
-Treat that path as the repository under review. An empty value means the current working directory. Bind it once and use it throughout:
-
-```bash
-REPO="${ARGUMENTS:-$(pwd)}"
-```
+Treat the first word of the arguments as the repository under review. An empty value means the current working directory.
 
 ## Gather the inputs
 
-Run these before judging anything:
+Read these before judging anything:
 
-- `cat "$REPO/PR_AGENTDESC.md"` for the draft
-- `sed -n '/^base:/p' "$REPO/PR_AGENTDESC.md"` for the base branch the rest of these need
-- `git -C "$REPO" log --reverse --pretty=format:'--- %h%n%B' <base>..HEAD` for the commits that would land
-- `git -C "$REPO" diff --name-status <base>...HEAD` for the paths
-- `git -C "$REPO" diff <base>...HEAD` for the diff itself
-- `cat "$REPO/.github/pull_request_template.md"` for what each section is asking
+- the draft, `PR_AGENTDESC.md`
+- the base the draft's `base:` field names, resolved to `origin/<base>` where origin has a copy and to the local branch only where it doesn't, then the merge base of that ref and `HEAD`
+- the commit messages that would land, from the merge base to `HEAD`
+- the paths and the diff from the merge base to `HEAD`
+- `.github/pull_request_template.md` for what each section is asking
+
+Compare against origin's copy of the base rather than a bare branch name. A stale local branch counts commits that already merged as landing here, and you'd flag them as unsupported.
+
+When the pr workflow's review script runs you, all that arrives as files from one snapshot, already resolved against the right base, and the list at the end of these instructions names them: `range.txt` says which base ref and commits the snapshot used. Read the files rather than the live repository.
 
 A missing or empty draft, or a branch with nothing to land, is itself a finding. Report it and stop.
+
+Treat the points under "Settled by the operator" as decided, and don't raise findings against them. Report anything outside the note's scope, or any contradiction between the branch and the note.
 
 ## What's already settled
 
@@ -98,7 +99,7 @@ An instance you leave for the next pass costs a writer round and a reviewer roun
 
 ## What to return
 
-Your verdict is what lets the pull request proceed. A hook on the caller's side reads the line below and signs the draft you cleared. Keep the wording exact, because a verdict that hook can't parse leaves the pull request blocked. Write nothing to disk yourself, and don't edit the draft to make it pass. Reporting the finding is the job.
+Your verdict is what lets the pull request proceed. The pr workflow's review script reads the line below and stamps the draft you cleared. Keep the wording exact, because a verdict that script can't parse leaves the pull request blocked. Don't write to disk, don't run a command that changes anything, and don't edit the draft to make it pass. Reporting the finding is the job.
 
 Return the verdict block and stop there. Skip the preamble, the diff summary, and the praise.
 

@@ -54,8 +54,8 @@ runs forked so the branch diff stays out of this session:
   Skill(write-pr-description, args: \"<repo root>  <what to address>\")
 
 It writes PR_AGENTDESC.md, clears the mechanical validator, and reports
-what it changed. Pair it with review-pr-description and repeat until
-that review returns PASS.
+what it changed. Pair it with the pr skill's review.sh and repeat until
+that review stamps the draft.
 
 To hand it findings, pass them in the arguments rather than applying
 them here." >&2
