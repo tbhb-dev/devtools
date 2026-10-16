@@ -67,9 +67,10 @@ jobs:
           CONFIG_PATH: ${{ inputs.config_path || '.github/renovate.json5' }}
         run: |
           # renovate: datasource=docker depName=ghcr.io/renovatebot/renovate
-          RENOVATE_IMAGE="ghcr.io/renovatebot/renovate:43.214.2@sha256:94ea97399b0dfba2e42b9571fc5bca6e1fbf5e72ecf6062cfe6aba5bec76b19e"
-          # Hand the pin to the preset-reference step so both run the same
-          # engine and only this one marker ever needs bumping.
+          RENOVATE_IMAGE="ghcr.io/renovatebot/renovate:44.138.0@sha256:32027ed5e5e450f76ee372fcd6e72c8114db7fdb28c97c520515a03ea4a0d77b"
+          # Same image as the `renovate-image` input in renovate.yaml;
+          # Renovate bumps both in one PR. Hand the pin to the
+          # preset-reference step so both steps run the same engine.
           echo "RENOVATE_IMAGE=${RENOVATE_IMAGE}" >> "${GITHUB_ENV}"
           # Validate the repo config plus whichever shared preset files are
           # present. The presets live only in this repo; workflow_call

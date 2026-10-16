@@ -36,19 +36,16 @@
   repositories: ["tbhb-dev/devtools"],
 
   packageRules: [
-    // The Renovate engine is pinned twice: the release tag renovate.yaml
-    // passes as `renovate-version`, and the validator's Docker image in
+    // The Renovate engine image is pinned twice: the `renovate-image` input
+    // in renovate.yaml, and the validator's image in
     // renovate-config-validator.yaml. Separate PRs let the two skew, and
-    // the validator should run the same engine version the cron workflow
-    // does, so group them into one PR. Repo-level rules append after the
+    // the validator should run the same engine the cron workflow does, so
+    // group them into one PR. Repo-level rules append after the
     // shared preset's and later rules win, so this takes the two out of
     // the generic github-actions group.
     {
       groupName: "renovate",
-      matchDepNames: [
-        "renovatebot/renovate",
-        "ghcr.io/renovatebot/renovate",
-      ],
+      matchDepNames: ["ghcr.io/renovatebot/renovate"],
     },
   ],
 
@@ -63,7 +60,9 @@
     // marker on the line above. Covers the Renovate engine image in
     // renovate-config-validator.yaml and the actionlint image in
     // lint-workflows.yml; the `\S+_IMAGE` variable name keeps one matcher
-    // serving every such pin.
+    // serving every such pin. The unquoted `renovate-image: <ref>` action
+    // input in renovate.yaml matches too, so the engine image moves at both
+    // sites from one datasource lookup.
     //
     //   # renovate: datasource=docker depName=rhysd/actionlint
     //   ACTIONLINT_IMAGE="docker.io/rhysd/actionlint:1.7.12@sha256:..."
@@ -73,23 +72,7 @@
         "/^\\.github/workflows/[^/]+\\.ya?ml$/",
       ],
       matchStrings: [
-        "# renovate: datasource=(?<datasource>.*?) depName=(?<depName>.*?)\\s+\\S+_IMAGE=\"[^:]+:(?<currentValue>[^@]+)@(?<currentDigest>sha256:[a-f0-9]+)\"",
-      ],
-    },
-
-    // .github/workflows/renovate.yaml. Pins the Renovate engine version
-    // the self-hosted action downloads at runtime. No digest — the
-    // github-action input takes a release tag, not a container ref.
-    //
-    //   # renovate: datasource=github-releases depName=renovatebot/renovate
-    //   renovate-version: 43.281.1
-    {
-      customType: "regex",
-      managerFilePatterns: [
-        "/^\\.github/workflows/renovate\\.yaml$/",
-      ],
-      matchStrings: [
-        "# renovate: datasource=(?<datasource>.*?) depName=(?<depName>.*?)\\s+renovate-version:\\s+(?<currentValue>\\S+)",
+        "# renovate: datasource=(?<datasource>.*?) depName=(?<depName>.*?)\\s+(?:\\S+_IMAGE=\"|renovate-image:\\s+)[^:]+:(?<currentValue>[^@]+)@(?<currentDigest>sha256:[a-f0-9]+)\"?",
       ],
     },
 
