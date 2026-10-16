@@ -2,8 +2,9 @@
 # preflight — resolve the transcript, open the retro, and report what the
 # session looks like, before the skill body reads anything.
 #
-# The Codex skill runs this explicitly before analysis. Locating the
-# transcript, scaffolding the retro,
+# Claude inlines this through the !`...` preprocessor and Codex runs it
+# as the first command, so either way it runs once before the agent reads
+# the skill body. Locating the transcript, scaffolding the retro,
 # preserving the artifacts, and profiling the session are all mechanical,
 # and doing them here means the agent starts from the numbers rather than
 # spending its first several tool calls producing them.
@@ -27,9 +28,15 @@ export PYTHONUTF8=1
 unset CDPATH GIT_DIR GIT_WORK_TREE GREP_OPTIONS
 IFS=$' \t\n'
 
-here=$(cd "$(dirname "$0")" && pwd)
+# shellcheck disable=SC1091 # lib.sh is generated beside this script
+. "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+
+here=$DT_LIB_DIR
 skill=$(dirname "$here")
-readonly PROJECTS="$HOME/.codex/sessions"
+# Both harnesses' transcript stores. Which one holds a given file does not
+# matter here: session.py detects the format from the file itself.
+readonly CLAUDE_STORE="$HOME/.claude/projects"
+readonly CODEX_STORE="$HOME/.codex/sessions"
 readonly LOOP_ROWS=${ANALYZE_PREFLIGHT_LOOPS:-12}
 
 section() { printf '\n== %s ==\n' "$1"; }
@@ -42,10 +49,10 @@ cannot_resolve() {
   printf 'UNRESOLVED — %s\n' "$1"
   section "what to do"
   cat <<GUIDE
-Do not open rollout files to search them. Reading transcripts to find
+Do not open transcripts to search them. Reading transcripts to find
 one costs more context than the analysis that follows.
 
-Dispatch a delegated agent to locate it, following the template in
+Dispatch a cheap delegated agent to locate it, following the template in
 $skill/references/LOCATE_SESSION.md. Give it the fingerprint the operator
 described: a filename the session created, an identifier, or a rule name
 out of its output.
@@ -54,8 +61,12 @@ Then run this preflight again with the path it returns:
 
   bash $here/preflight.sh <path>
 
-Codex stores rollouts under date directories in ~/.codex/sessions. Do not
-infer a rollout path from the repository or worktree path.
+Claude Code keeps transcripts under ~/.claude/projects/<project>/. A session
+running inside a git worktree writes under the MAIN repository's project
+directory, and the worktree's own directory may exist while holding no
+.jsonl at all. Codex keeps rollouts under date directories in
+~/.codex/sessions. Do not infer either path from the repository or
+worktree path.
 GUIDE
   exit 0
 }
@@ -75,13 +86,20 @@ fi
 arg=${1:-}
 [ -n "$arg" ] || cannot_resolve "no path given"
 
-# Accept a path, or a bare session id resolved against the projects tree.
+# Accept a path, or a bare session id resolved against both stores. A
+# Claude transcript is named for its id; a Codex rollout ends with it.
 transcript=""
 if [ -f "$arg" ]; then
   transcript=$arg
-elif [ -d "$PROJECTS" ]; then
-  # A bare id names the UUID suffix under exactly one dated rollout path.
-  candidate=$(find "$PROJECTS" -type f -name "*${arg%.jsonl}.jsonl" 2>/dev/null | head -2)
+else
+  id=${arg%.jsonl}
+  candidate=""
+  [ -d "$CLAUDE_STORE" ] && candidate=$(find "$CLAUDE_STORE" -maxdepth 2 -type f -name "${id}.jsonl" 2>/dev/null)
+  if [ -d "$CODEX_STORE" ]; then
+    found=$(find "$CODEX_STORE" -type f -name "*${id}.jsonl" 2>/dev/null)
+    candidate=$(printf '%s\n%s' "$candidate" "$found")
+  fi
+  candidate=$(printf '%s\n' "$candidate" | grep . || true)
   count=$(printf '%s' "$candidate" | grep -c . || true)
   if [ "$count" = 1 ]; then
     transcript=$candidate
@@ -105,16 +123,16 @@ printf '%s\n' "$transcript"
 # Scaffold the retro and preserve the artifacts. Everything the reports
 # below print is written to disk too, so a later reader can check the work.
 section "retro"
-bash "$here/new-retro.sh" "$transcript" || {
+retro_out=$(bash "$here/new-retro.sh" "$transcript") || {
   printf 'scaffolding failed — tell the operator\n'
   exit 0
 }
+printf '%s\n' "$retro_out"
 
-retro_root=$(dirname "$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null || echo .)")
-meta=$("$here/session.py" meta "$transcript")
-stamp=$(printf '%s\n' "$meta" | sed -n 's/^SESSION_DATE=//p')
-name=$(printf '%s\n' "$meta" | sed -n 's/^SESSION_ID=//p')
-artifacts="$retro_root/.codex/retros/${stamp}_${name}/artifacts"
+# new-retro.sh reports where it put the retro; read that rather than
+# recomputing the harness-dependent location here.
+retro_dir=$(printf '%s\n' "$retro_out" | sed -n 's/^retro dir:  //p')
+artifacts="$retro_dir/artifacts"
 
 # The profile, inlined. These are the same reports sitting in artifacts/,
 # trimmed to what frames the problem: what the session was made of, what

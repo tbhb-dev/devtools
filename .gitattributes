@@ -70,3 +70,7 @@ packages/agents/codex/.apm/skills/review-prose-fix/** rebase-resolve=regenerate
 .agents/skills/write-prose-fix/** rebase-resolve=regenerate
 .claude/skills/review-prose-fix/** rebase-resolve=regenerate
 .agents/skills/review-prose-fix/** rebase-resolve=regenerate
+packages/agents/claude/.apm/skills/analyze-session/** rebase-resolve=regenerate
+packages/agents/codex/.apm/skills/analyze-session/** rebase-resolve=regenerate
+.claude/skills/analyze-session/** rebase-resolve=regenerate
+.agents/skills/analyze-session/** rebase-resolve=regenerate

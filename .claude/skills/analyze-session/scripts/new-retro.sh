@@ -5,7 +5,7 @@
 # remain available afterwards. Output goes under the MAIN checkout, never the
 # worktree that ran the analysis, because worktrees get deleted. The transcript
 # is copied rather than referenced for the same reason: a path under
-# ~/.claude/projects/ is not a stable location.
+# ~/.claude/projects/ or ~/.codex/sessions/ is not a stable location.
 #
 # Re-running is safe. The canned reports refresh, and an existing RETRO.md is
 # left exactly as the author left it.
@@ -25,7 +25,10 @@ export PYTHONUTF8=1
 unset CDPATH GIT_DIR GIT_WORK_TREE GREP_OPTIONS
 IFS=$' \t\n'
 
-here=$(cd "$(dirname "$0")" && pwd)
+# shellcheck disable=SC1091 # lib.sh is generated beside this script
+. "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+
+here=$DT_LIB_DIR
 skill_dir=$(dirname "$here")
 template="$skill_dir/templates/RETRO.md"
 
@@ -33,9 +36,12 @@ usage() {
   cat <<'USAGE'
 usage: new-retro.sh <transcript.jsonl> [extra-artifact ...]
 
-Creates <main worktree>/.claude/retros/YYYYMMDD_<session id>/ holding
-RETRO.md plus artifacts/ (the transcript, the canned session.py reports,
-and any extra files named on the command line).
+Creates <main worktree>/.claude/retros/YYYYMMDD_<session id>/ (or .codex/retros
+under Codex) holding RETRO.md plus artifacts/ (the transcript, the canned
+session.py reports, and any extra files named on the command line).
+
+The transcript may come from either harness. ANALYZE_SESSION_FORMAT=claude
+or =codex overrides the format session.py would detect.
 USAGE
 }
 
@@ -67,6 +73,7 @@ root=$(dirname "$common_dir")
 # session.py parses the JSON, so the date comes from the session's own last
 # record rather than from whenever this script runs. Its uv script shebang
 # selects the interpreter, so it runs directly.
+fmt=${ANALYZE_SESSION_FORMAT:-auto}
 session_id=""
 session_date=""
 records=""
@@ -80,7 +87,7 @@ while IFS='=' read -r key value; do
   *) ;;
   esac
 done <<EOF
-$("$here/session.py" meta "$transcript")
+$("$here/session.py" meta --format "$fmt" "$transcript")
 EOF
 
 if [ -z "$session_id" ] || [ -z "$session_date" ]; then
@@ -88,14 +95,20 @@ if [ -z "$session_id" ] || [ -z "$session_date" ]; then
   exit 1
 fi
 
-outdir="$root/.claude/retros/${session_date}_${session_id}"
+# The retro lives with the harness running the analysis, whichever
+# harness wrote the transcript.
+case $(dt_harness) in
+codex) retro_base=.codex/retros ;;
+*) retro_base=.claude/retros ;;
+esac
+outdir="$root/$retro_base/${session_date}_${session_id}"
 artifacts="$outdir/artifacts"
 mkdir -p "$artifacts"
 
 cp "$transcript" "$artifacts/transcript.jsonl"
 
 for report in index errors loops lint; do
-  "$here/session.py" "$report" "$transcript" >"$artifacts/$report.txt"
+  "$here/session.py" "$report" --format "$fmt" "$transcript" >"$artifacts/$report.txt"
 done
 
 copied=0
@@ -124,16 +137,19 @@ else
   retro_state="scaffolded from template"
 fi
 
-# Retros are local working notes. Keep them out of history, once.
-ignore_entry=".claude/retros/"
-gitignore="$root/.gitignore"
-if grep -qxF "$ignore_entry" "$gitignore" 2>/dev/null ||
-  grep -qxF "${ignore_entry%/}" "$gitignore" 2>/dev/null; then
+# Retros are local working notes. Keep them out of history through the
+# repository-local exclude file instead of editing the checked-out .gitignore.
+ignore_entry="$retro_base/"
+exclude="$common_dir/info/exclude"
+mkdir -p "$(dirname "$exclude")"
+touch "$exclude"
+if grep -qxF "$ignore_entry" "$exclude" 2>/dev/null ||
+  grep -qxF "${ignore_entry%/}" "$exclude" 2>/dev/null; then
   ignore_state="already ignored"
 else
   printf '\n# Session retrospectives. Local working notes, never committed.\n%s\n' \
-    "$ignore_entry" >>"$gitignore"
-  ignore_state="added to .gitignore"
+    "$ignore_entry" >>"$exclude"
+  ignore_state="added to .git/info/exclude"
 fi
 
 echo "retro dir:  $outdir"

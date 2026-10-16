@@ -31,7 +31,7 @@ Prefer a script, a task, or a hook over an instruction. Number them in the order
 
 ## Agent constructs
 
-What the harness itself could fix. Use a proven hook or repository gate to enforce a rule that instruction can only request. Use a fresh delegated agent to keep work out of the calling context. Specify the Codex facility exactly and confirm the installed harness supports it before recommending it.
+What the harness that ran the session could fix. Use a hook or a repository gate to enforce a rule that instruction can only request. Use a delegated agent to keep work out of the calling context. Specify the event, agent type, or skill exactly, and confirm the installed harness supports it before recommending it.
 
 | finding | construct | event or type | buys | costs |
 | ------- | --------- | ------------- | ---- | ----- |
