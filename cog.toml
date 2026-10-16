@@ -30,6 +30,7 @@ tag_prefix = "v"
 # (tbhb-dev/devtools/packages/agents/claude#vX.Y.Z), keeping the matched
 # prefix in $1 so the optional sub-path survives the rewrite untouched.
 # The g flag covers a line naming more than one ref.
+# Refresh the local package versions before cog records the release tree.
 pre_bump_hooks = [
   "perl -pi -e 's/^version: .*/version: {{version}}/' apm.yml",
   "perl -pi -e 's/^version: .*/version: {{version}}/' packages/agents/common/apm.yml",
@@ -41,6 +42,7 @@ pre_bump_hooks = [
   "perl -pi -e 's{(tbhb-dev/devtools(?:/[a-z/-]+)?#v)[0-9.]+}{${1}{{version}}}g' README.md",
   "perl -pi -e 's{rev: v[0-9.]+}{rev: v{{version}}}' README.md",
   "perl -0777 -pi -e 's/^name = \"devtools\"\nversion = .*/name = \"devtools\"\nversion = \"{{version}}\"/m' uv.lock",
+  "apm install",
 ]
 
 [changelog]

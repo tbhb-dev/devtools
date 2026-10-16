@@ -38,6 +38,10 @@ setup() {
 # the check from matching the first `version =` it finds.
 write_sites() {
   local v=$1
+  : > apm.lock.yaml
+  for package in common claude codex agy; do
+    printf -- '- repo_url: _local/%s\n  version: %s\n  source: local\n  local_path: ./packages/agents/%s\n' "$package" "$v" "$package" >> apm.lock.yaml
+  done
   printf 'name: devtools\nversion: %s\n' "$v" > apm.yml
   printf 'name: devtools-agents-common\nversion: %s\n' "$v" > packages/agents/common/apm.yml
   printf 'name: devtools-agents-claude\nversion: %s\n' "$v" > packages/agents/claude/apm.yml
@@ -86,7 +90,7 @@ commit_at() {
   [[ $output == *"packages/agents/claude/apm.yml:2"* ]]
   [[ $output == *'expected `version: 1.2.3`'* ]]
   [[ $output == *'found `version: 1.2.2`'* ]]
-  [[ $output == *"TOTAL: 1 finding(s)"* ]]
+  [[ $output == *"TOTAL: 2 finding(s)"* ]]
 }
 
 @test "reports each README site independently" {
@@ -162,4 +166,24 @@ commit_at() {
   run "$SCRIPT"
   [ "$status" -eq 1 ]
   [[ $output == *"no tag reachable from HEAD"* ]]
+}
+
+@test "fails when a local APM lock version drifts from its manifest" {
+  commit_at 1.2.3
+  sed -i '0,/version: 1.2.3/s//version: 1.2.2/' apm.lock.yaml
+
+  run "$SCRIPT"
+  [ "$status" -eq 1 ]
+  [[ $output == *"apm.lock.yaml:2"* ]]
+  [[ $output == *'expected `version: 1.2.3`'* ]]
+  [[ $output == *"TOTAL: 1 finding(s)"* ]]
+}
+
+@test "fails when a local APM lock entry is missing" {
+  commit_at 1.2.3
+  sed -i '/local_path: .\/packages\/agents\/common/d' apm.lock.yaml
+
+  run "$SCRIPT"
+  [ "$status" -eq 1 ]
+  [[ $output == *"no local package entry for packages/agents/common"* ]]
 }
