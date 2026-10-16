@@ -2,7 +2,7 @@
 
 setup() {
   ROOT="${BATS_TEST_DIRNAME}/../.."
-  CHECK="${ROOT}/packages/agents/codex/.apm/skills/codex-fix-prose/scripts/check-suppressions.sh"
+  CHECK="${ROOT}/packages/agents/codex/.apm/skills/fix-prose/scripts/check-suppressions.sh"
   REPO="${BATS_TEST_TMPDIR}/repo"
   git init --quiet --initial-branch=main "$REPO"
   git -C "$REPO" config user.name Tester

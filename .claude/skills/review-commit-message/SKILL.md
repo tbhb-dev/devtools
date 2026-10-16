@@ -2,7 +2,7 @@
 name: review-commit-message
 license: Apache-2.0
 description: >-
-  Review a drafted commit message in COMMIT_AGENTMSG against the staged diff, as an independent agent, for the things mechanical linting can't see: claims the diff doesn't support, counting, provenance filler, restating the diff, subject mood and bounds, plain-text form, and whether the staged change is one logical change. The commit skill invokes this before every commit, passing the repository root.
+  Review a drafted commit message in COMMIT_AGENTMSG against the staged diff, as an independent agent, for the things mechanical linting can't see: claims the diff doesn't support, counting, provenance filler, restating the diff, subject mood and bounds, plain-text form, and whether the staged change is one logical change. The commit skill's review script runs this as a headless reviewer before every commit, passing the repository root.
 context: fork
 agent: Explore
 background: false
@@ -16,31 +16,31 @@ Review a drafted commit message against its staged diff and return a verdict. Yo
 
 `$ARGUMENTS`
 
-Treat the first word as the repository under review. An empty value means the current working directory. Bind it once and use it throughout:
-
-```bash
-REPO="${ARGUMENTS:-$(pwd)}"
-```
+Treat the first word of the arguments as the repository under review. An empty value means the current working directory. Bind it once and use it throughout as `REPO`.
 
 A second word of `--amend` says this commit replaces the one at `HEAD` instead of following it. That changes which diff you read. The rest of your job is unchanged.
 
 ## Gather the inputs
 
-Run these before judging anything:
+Read these before judging anything:
 
 - `cat "$REPO/COMMIT_AGENTMSG"` for the draft
 - `git -C "$REPO" diff --cached --name-status` for the staged paths
 - `git -C "$REPO" diff --cached` for the staged diff
 - `git -C "$REPO" log -5 --pretty=format:'%h %s'` for project style
 
-Where the caller passed `--amend`, swap the two staged-diff commands for these:
+Where the arguments include `--amend`, swap the two staged-diff commands for these:
 
 - `git -C "$REPO" diff --cached --name-status HEAD~1`
 - `git -C "$REPO" diff --cached HEAD~1`
 
 Those show the amended commit's full contents: the existing commit plus whatever the author has staged since. Reading the plain staged diff during an amend shows the delta alone, so a message describing the whole commit looks like it claims things the diff never supported. That mistake produces confident, wrong findings.
 
+When the commit script's review runs you, those outputs arrive as files from one snapshot, already against the right base, and the list at the end of these instructions names them. Read the files rather than the live repository.
+
 A missing or empty draft, or an empty staged diff, is itself a finding. Report it and stop.
+
+Treat the points under "Settled by the operator" as decided, and don't raise findings against them. Report anything outside the note's scope or any contradiction between the staged diff and the note.
 
 ## What to check
 
@@ -82,7 +82,7 @@ Judge the staged diff, not the message.
 
 ## What to return
 
-Your verdict is what lets the commit proceed. A hook on the caller's side reads the line below and signs the draft you cleared. Keep the wording exact, because a verdict that hook can't parse leaves the commit blocked. Write nothing to disk yourself, and don't edit the draft to make it pass. Reporting the finding is the job.
+Your verdict is what lets the commit proceed. The commit workflow's review script reads the line below and stamps the draft you cleared. Keep the wording exact, because a verdict that script can't parse leaves the commit blocked. Don't write to disk, don't stage, don't run a git command that changes anything, and don't edit the draft to make it pass. Reporting the finding is the job.
 
 Return the verdict block and stop there. Skip the preamble, the diff summary, and the praise.
 
@@ -104,6 +104,6 @@ VERDICT: CHANGES REQUIRED
    fix:  <the specific correction>
 ```
 
-Tag each finding `truthfulness`, `substance`, `form`, or `atomicity`.
+Tag each finding `truthfulness`, `substance`, `form`, or `atomicity`. Report every instance in one pass.
 
 Return `PASS` when the draft holds up. A clean message counts as a real outcome, and inventing a finding to look thorough wastes the round trip. Report only what you can point at in the draft or the diff.

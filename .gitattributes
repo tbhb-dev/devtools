@@ -30,8 +30,18 @@ apm.lock.yaml rebase-resolve=regenerate
 # answer; re-running the recipe is.
 **/skills/*/tokens.json rebase-resolve=regenerate
 
-# The codex port of resolve-rebase-conflicts shows the conflict marker
-# shape the same way the claude skill does. The claude resolve guard and
-# the claude rebase marker scan exempt only the claude path by name, so
-# the codex copies declare themselves here.
-**/skills/codex-resolve-rebase-conflicts/SKILL.md conflict-markers=documented
+# tools/generate-skills.sh writes these from packages/agents/source/skills.
+# Merging two versions of generated output produces something the
+# generator never wrote, so a conflict takes one side whole and
+# `mise run generate-skills` writes the real answer afterwards. One line
+# per migrated skill, because a skill not yet migrated is hand-maintained
+# and its conflicts need judgement. The deployed copies follow from the
+# packages through `apm install`.
+packages/agents/claude/.apm/skills/commit/** rebase-resolve=regenerate
+packages/agents/codex/.apm/skills/commit/** rebase-resolve=regenerate
+packages/agents/claude/.apm/skills/review-commit-message/** rebase-resolve=regenerate
+packages/agents/codex/.apm/skills/review-commit-message/** rebase-resolve=regenerate
+.claude/skills/commit/** rebase-resolve=regenerate
+.agents/skills/commit/** rebase-resolve=regenerate
+.claude/skills/review-commit-message/** rebase-resolve=regenerate
+.agents/skills/review-commit-message/** rebase-resolve=regenerate

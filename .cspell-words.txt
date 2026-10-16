@@ -10,6 +10,7 @@ Equalf
 Errorf
 Honnef
 Magika
+NOSYSTEM
 PYTHONUTF
 RLENGTH
 RSTART
@@ -87,6 +88,7 @@ distroless
 docstrings
 dogfooding
 dogfoods
+dontAsk
 dunder
 dupl
 dupword
@@ -360,6 +362,7 @@ testdata
 testifylint
 testpackage
 testpaths
+textconv
 textfmt
 thelper
 tmpl

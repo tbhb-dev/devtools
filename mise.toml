@@ -313,6 +313,7 @@ run = [
   "mise run devtools:lint-mise",
   "mise run lint-editorconfig",
   "mise run lint-skills",
+  "mise run check-generated-skills",
   "mise run lint-script-hygiene",
   "mise run check-versions",
 ]
@@ -480,6 +481,20 @@ run = "bash tools/check-script-hygiene.sh"
 [tasks.check-versions]
 description = "Check the published version literals against the latest release tag"
 run = "bash tools/check-versions.sh"
+
+# A skill with a source under packages/agents/source/skills is written
+# into both harness packages from that one source, because APM deploys a
+# package verbatim and has no per-target variant. Run this before
+# skill-tokens and apm install, which read what it writes. The check is
+# what keeps a hand edit to the output from shipping: it runs in the lint
+# aggregate and fails on any file the generator would write differently.
+[tasks.generate-skills]
+description = "Write each harness's copy of the skills that have a source"
+run = "bash tools/generate-skills.sh"
+
+[tasks.check-generated-skills]
+description = "Fail when a generated skill differs from what its source writes"
+run = "bash tools/generate-skills.sh --check"
 
 # Count what each skill costs in context and write tokens.json beside it.
 # Needs the `ant` CLI authenticated; kept out of `lint` because it calls
