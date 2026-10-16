@@ -98,7 +98,10 @@ jobs:
           # a mise.lock file already exists.
           RENOVATE_ALLOWED_UNSAFE_EXECUTIONS: mise
         with:
-          # renovate: datasource=github-releases depName=renovatebot/renovate
-          renovate-version: 44.138.0
+          # Tag plus digest: the action takes a value containing `:` as the
+          # whole image reference, so the container is pinned by content.
+          # The same reference sits in renovate-config-validator.yaml.
+          # renovate: datasource=docker depName=ghcr.io/renovatebot/renovate
+          renovate-image: ghcr.io/renovatebot/renovate:44.138.0@sha256:32027ed5e5e450f76ee372fcd6e72c8114db7fdb28c97c520515a03ea4a0d77b # yamllint disable-line rule:line-length
           configurationFile: .github/renovate.json5
           token: ${{ steps.get_token.outputs.token }}
