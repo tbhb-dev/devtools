@@ -9,21 +9,35 @@
 # means the message needs the same gates a commit gets: the linters, and
 # a reviewer that did not write it.
 #
+# In order, it refuses unless: the draft names this pull request; the
+# review stamp covers the draft's bytes, the pull request, its live
+# head, its base branch, and the commit that base points at; gh acts as
+# the configured gh_login, when one is configured; the pull request is
+# open, ready, mergeable, CLEAN, approved where a review is required,
+# and green by the latest run of every check; the commit-msg gates pass;
+# and somebody confirmed the merge (the operator flag, a merge
+# pre-approval for this session, or the machine's delegation check, in
+# that order). The confirmation is another program, so the stamp and the
+# live pull request are checked again after it. The merge itself names
+# the reviewed head, so a commit pushed during these checks is refused
+# by GitHub rather than squashed in, and it sends this script's own copy
+# of the stamped bytes.
+#
 # Cleanup lands here for the same reason create-pr owns its own: there
 # is no post-merge hook to hang it on. The drafts that the pull request
 # workflow left behind become garbage the moment the branch merges, and
-# this is the code that watched that happen.
+# this is the code that watched that happen. A branch that lives in a
+# fork is never touched: a same-named branch on origin is someone else's.
 #
-# Usage: squash-merge.sh [pull-request-number]
-# Written to bash 3.2.
+# Usage: squash-merge.sh [--confirmed] [number]
+#   --confirmed  the operator answered yes to this merge in this session
+# Exit:  0 merged, 1 refused or failed, 75 held: nobody has confirmed the
+#        merge; ask, then pass --confirmed
 set -euo pipefail
 
 # --- environment hardening -------------------------------------------
-# The agent reads this output, so the operator's preferences must not
-# change its shape. LC_ALL pins collation, because sort and the [a-z]
-# ranges below mean different things under a UTF-8 locale. The unsets
-# cover variables that silently retarget a command: GH_REPO sends gh at
-# another repository, CDPATH makes a relative cd print somewhere else.
+# lib.sh repeats this block; it stays here too so the hygiene gate can
+# see it in the file that calls git and gh.
 export LC_ALL=C
 export GH_PAGER=cat
 export GH_PROMPT_DISABLED=1
@@ -31,14 +45,13 @@ export PYTHONUTF8=1
 unset CDPATH GH_REPO GH_HOST GREP_OPTIONS
 IFS=$' \t\n'
 
+# shellcheck disable=SC1091 # lib.sh is generated beside this script
+. "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+# shellcheck disable=SC1091 # generated beside this script
+. "$DT_LIB_DIR/pull-request.sh"
+
 readonly SQUASH_DRAFT=SQUASH_AGENTMSG
 readonly DESC_DRAFT=PR_AGENTDESC.md
-
-root=$(git rev-parse --show-toplevel)
-cd "$root"
-git_dir=$(git rev-parse --absolute-git-dir)
-readonly SQUASH_STAMP="$git_dir/squash-agentmsg.reviewed"
-readonly DESC_STAMP="$git_dir/pr-agentdesc.reviewed"
 
 die() {
   printf 'squash-merge: %s\n' "$1" >&2
@@ -47,13 +60,29 @@ die() {
 
 step() { printf '\n--- %s\n' "$1"; }
 
-command -v gh >/dev/null 2>&1 || die "gh is not installed"
-gh auth status >/dev/null 2>&1 || die "gh is not authenticated"
+usage="usage: squash-merge.sh [--confirmed] [number]"
+confirmed=false
+number=""
+for arg in "$@"; do
+  case $arg in
+  --confirmed) confirmed=true ;;
+  -* | *[!0-9]*) die "$usage" ;;
+  *)
+    [ -z "$number" ] || die "$usage"
+    number=$arg
+    ;;
+  esac
+done
 
-branch=$(git rev-parse --abbrev-ref HEAD)
-number=${1:-}
+mp_need_tools
+root=$(dt_root)
+cd "$root"
+state=$(dt_state_dir)
+here=$DT_LIB_DIR
+
+branch=$(gitr rev-parse --abbrev-ref HEAD)
 if [ -z "$number" ]; then
-  number=$(gh pr list --head "$branch" --state open --json number --jq '.[0].number' 2>/dev/null || true)
+  number=$(gh pr list --head "$branch" --state open --json number --jq '.[0].number // empty' 2>/dev/null || true)
   [ -n "$number" ] || die "no open pull request for ${branch}. Pass a number explicitly."
 fi
 
@@ -68,92 +97,199 @@ drafted_for=$(printf '%s' "$subject" | sed -n 's/.*(#\([0-9][0-9]*\))[[:space:]]
   die "${SQUASH_DRAFT} was drafted for #${drafted_for:-unknown}, not #${number}."
 printf 'drafted for #%s\n' "$number"
 
-# --- gate 2: the review signature ------------------------------------
+# --- gate 2: the review stamp, against the live pull request ---------
 
-step "checking the review signature"
-digest() {
-  if command -v sha256sum >/dev/null 2>&1; then
-    sha256sum "$1" | cut -d' ' -f1
-  else
-    shasum -a 256 "$1" | cut -d' ' -f1
-  fi
+view=$state/merge.view.json
+read_live() {
+  mp_view "$number" "$view" \
+    state,isDraft,mergeable,mergeStateStatus,reviewDecision,headRefName,baseRefName,headRefOid,isCrossRepository,statusCheckRollup ||
+    die "cannot read pull request #${number}."
+  head_oid=$(mp_field "$view" headRefOid)
+  base_ref=$(mp_field "$view" baseRefName)
+  base_oid=$(mp_base_oid "$base_ref") || die "cannot read where ${base_ref} points."
 }
 
-[ -f "$SQUASH_STAMP" ] ||
-  die "review-squash-message has not cleared this message. Invoke that skill,
-resolve what it returns, then retry."
-[ "$(cat "$SQUASH_STAMP")" = "$(digest "$SQUASH_DRAFT")" ] ||
-  die "${SQUASH_DRAFT} changed after review-squash-message signed off. Review it
-again, then retry."
-printf 'signed\n'
+require_reviewed() {
+  [ -f "$state/squash.stamp" ] ||
+    die "no independent review has cleared this message. Run it, resolve what
+it returns, then retry:
 
-# --- gate 3: the commit-msg linters ----------------------------------
+  bash $here/review.sh $number"
+  (dt_require_stamp squash "$SQUASH_DRAFT" pr "$number" head "$head_oid" base "$base_ref" base_oid "$base_oid") ||
+    die "the reviewed message and pull request are no longer the ones about to
+merge. Review again against the current draft and branch:
+
+  bash $here/review.sh $number"
+}
+
+step "checking the review stamp"
+read_live
+require_reviewed
+reviewed_head=$(dt_stamp_value squash head)
+printf 'reviewed at head %s, onto %s at %s\n' "$reviewed_head" "$base_ref" "$base_oid"
+
+# --- gate 3: the account gh acts as ----------------------------------
 #
-# The same four hooks a commit answers to. They run here rather than
-# only in the skill body because this message never passes through
-# git's commit-msg hook: GitHub writes the commit, not this machine.
+# A merge cannot be undone, so it goes out under the configured account
+# or not at all. Without a configured gh_login there is nothing to
+# compare against, and the output says the check was skipped.
 
-step "running the commit-msg gates"
-if command -v prek >/dev/null 2>&1; then
-  prek run --stage commit-msg --commit-msg-filename "$SQUASH_DRAFT" ||
-    die "the squash message fails the commit-msg gates. Fix it, review it again, retry."
+step "checking the gh account"
+want_login=$(dt_conf gh_login)
+if [ -z "$want_login" ]; then
+  printf 'gh_login is not configured; skipping the account check\n'
 else
-  printf 'prek is not installed; skipping. The message was linted in the skill body.\n'
+  login=$(gh api user --jq .login 2>/dev/null) || die "gh could not say which account it is signed in as."
+  [ "$login" = "$want_login" ] ||
+    die "gh is signed in as ${login:-nobody}, not the configured ${want_login}. Nothing was merged."
+  printf 'signed in as %s\n' "$login"
 fi
 
 # --- gate 4: the pull request is actually mergeable -------------------
 
 step "checking #${number}"
-state=$(gh pr view "$number" --json state --jq '.state')
-[ "$state" = OPEN ] || die "#${number} is ${state}, not OPEN."
 
-is_draft=$(gh pr view "$number" --json isDraft --jq '.isDraft')
-[ "$is_draft" = false ] || die "#${number} is a draft. Mark it ready before merging."
+# GitHub recomputes mergeability whenever the base moves, and reports
+# UNKNOWN for the few seconds that takes, so the second of two merges in
+# a row reads UNKNOWN almost every time. Wait that out through the same
+# snapshot, then judge whatever settled. CONFLICTING and every other
+# blocking state still refuse below, and so does a wait that runs out.
+wait_limit=${MERGE_MERGEABLE_WAIT:-60}
+poll_every=${MERGE_MERGEABLE_POLL:-3}
+waited=0
+while [ "$(mp_field "$view" mergeable)" = UNKNOWN ] || [ "$(mp_field "$view" mergeStateStatus)" = UNKNOWN ]; do
+  [ "$waited" -lt "$wait_limit" ] ||
+    die "#${number} still reports its mergeability as UNKNOWN after ${wait_limit}s. Try again shortly."
+  [ "$waited" -gt 0 ] || printf 'GitHub is still computing mergeability; waiting up to %ss\n' "$wait_limit"
+  sleep "$poll_every"
+  waited=$((waited + (poll_every > 0 ? poll_every : 1)))
+  read_live
+done
+[ "$waited" = 0 ] || require_reviewed
 
-rollup=$(gh pr view "$number" --json statusCheckRollup \
-  --jq '.statusCheckRollup[]? | (.conclusion // .state // "PENDING")' 2>/dev/null || true)
-bad=$(printf '%s\n' "$rollup" | grep -c -E '^(FAILURE|TIMED_OUT|CANCELLED|ACTION_REQUIRED|ERROR)$' || true)
-pending=$(printf '%s\n' "$rollup" | grep -c -E '^(PENDING|IN_PROGRESS|QUEUED|EXPECTED|WAITING)$' || true)
-[ "$bad" = "0" ] || die "#${number} has ${bad} failing check(s). Hand it to the fix-pr skill."
-[ "$pending" = "0" ] ||
-  die "#${number} has ${pending} check(s) still running. Wait through the watch-pr skill."
-printf 'open, ready, and green\n'
+pr_state=$(mp_field "$view" state)
+[ "$pr_state" = OPEN ] || die "#${number} is ${pr_state}, not OPEN."
+[ "$(mp_field "$view" isDraft)" = false ] || die "#${number} is a draft. Mark it ready before merging."
+mergeable=$(mp_field "$view" mergeable)
+[ "$mergeable" = MERGEABLE ] || die "#${number} is not mergeable (${mergeable:-unknown})."
+merge_state=$(mp_field "$view" mergeStateStatus)
+[ "$merge_state" = CLEAN ] ||
+  die "#${number} is not ready to merge (${merge_state:-unknown}). BEHIND or DIRTY goes to the rebase skill."
+review_decision=$(mp_field "$view" reviewDecision)
+case ${review_decision:-NONE} in
+APPROVED | NONE) ;;
+*) die "#${number} review decision is ${review_decision}, not approved." ;;
+esac
+cross_repo=$(mp_field "$view" isCrossRepository)
+case $cross_repo in
+true | false) ;;
+*) die "cannot determine whether #${number} comes from a fork; branch cleanup is unsafe." ;;
+esac
+
+status=0
+judged=$(mp_judge_checks "$view") || status=$?
+case $status in
+0) ;;
+1)
+  printf '%s\n' "$judged" | awk -F'\t' '$1 == "fail" { printf "%-14s %s\n", $2, $3 }' >&2
+  die "#${number} has a failing check, judged by its latest run. Hand it to the fix-pr skill."
+  ;;
+2)
+  printf '%s\n' "$judged" | awk -F'\t' '$1 == "pending" { printf "%-14s %s\n", $2, $3 }' >&2
+  die "#${number} has a check still running. Wait through the watch-pr skill."
+  ;;
+*) die "the checks of #${number} could not be read." ;;
+esac
+printf 'open, ready, mergeable, and green\n'
+
+# --- gate 5: the commit-msg linters ----------------------------------
+#
+# The same four hooks a commit answers to. They run here rather than
+# only in the skill body because this message never passes through
+# git's commit-msg hook: GitHub writes the commit, not this machine.
+# There is no fallback: without the task, nothing merges.
+
+step "running the commit-msg gates"
+command -v mise >/dev/null 2>&1 || die "mise is not installed; the squash-message gate cannot run."
+mise task info lint-squash-msg >/dev/null 2>&1 ||
+  die "mise run lint-squash-msg is absent; the squash-message gate cannot run."
+mise run lint-squash-msg ||
+  die "the squash message fails the commit-msg gates. Fix it, review it again, retry."
+
+# --- gate 6: somebody confirmed the merge ----------------------------
+#
+# A bare `mise run preapprove` grants commit and pr and never merge; a
+# merge pre-approval has to name merge, because it is the one action
+# here that no later step can walk back.
+
+step "confirming"
+status=0
+dt_confirm merge "$confirmed" || status=$?
+case $status in
+0) ;;
+1) exit 1 ;;
+*) exit "$DT_HELD" ;;
+esac
+
+# The confirmation may have run another program, and the linters are
+# others too. Read the pull request and the stamp again, then merge
+# from a copy of the bytes the stamp covers.
+read_live
+require_reviewed
+message=$state/merge.message
+cp "$SQUASH_DRAFT" "$message"
+[ "$(dt_digest "$message")" = "$(dt_stamp_value squash draft)" ] ||
+  die "${SQUASH_DRAFT} changed while it was being copied. Review it again."
+subject=$(head -1 "$message")
+body=$state/merge.body
+awk 'NR > 1' "$message" | awk 'NF { seen = 1 } seen' >"$body"
+[ -s "$body" ] || die "the message has a subject and no body; a squash message says why."
 
 # --- merge -----------------------------------------------------------
 
-body=$(awk 'NR > 1' "$SQUASH_DRAFT" | awk 'NF { seen = 1 } seen')
-head_ref=$(gh pr view "$number" --json headRefName --jq '.headRefName')
-base_ref=$(gh pr view "$number" --json baseRefName --jq '.baseRefName')
-
 step "squashing #${number} into ${base_ref}"
-gh pr merge "$number" --squash --subject "$subject" --body "$body"
+gh pr merge "$number" --squash --match-head-commit "$reviewed_head" \
+  --subject "$subject" --body-file "$body"
 
 # --- clean up --------------------------------------------------------
 
 step "cleaning up"
 
+head_ref=$(mp_field "$view" headRefName)
+rm -f "$message" "$body" "$view"
+
 # The drafts describe a pull request that no longer exists. Removed
-# rather than emptied, so a stale read cannot carry them forward.
-rm -f "$SQUASH_DRAFT" "$DESC_DRAFT" "$SQUASH_STAMP" "$DESC_STAMP"
+# rather than emptied, so a stale read cannot carry them forward. The
+# two .reviewed files are the stamps this toolchain wrote before the
+# review moved under agent-skills/.
+git_dir=$(dt_git_dir)
+rm -f "$SQUASH_DRAFT" "$DESC_DRAFT" "$git_dir/squash-agentmsg.reviewed" "$git_dir/pr-agentdesc.reviewed"
+dt_clear squash
+dt_clear pr
 printf 'removed %s and %s\n' "$SQUASH_DRAFT" "$DESC_DRAFT"
 
 # The remote branch goes; the local one may be the branch this worktree
 # stands on, and deleting that would strand the session. Say so instead.
-if git ls-remote --exit-code --heads origin "$head_ref" >/dev/null 2>&1; then
-  git push origin --delete "$head_ref" >/dev/null 2>&1 &&
-    printf 'deleted origin/%s\n' "$head_ref" ||
+if [ "$cross_repo" = false ] && git ls-remote --exit-code --heads origin "$head_ref" >/dev/null 2>&1; then
+  if deleted=$(git push origin --delete "$head_ref" 2>&1); then
+    printf 'deleted origin/%s\n' "$head_ref"
+  elif printf '%s\n' "$deleted" | grep -Fq 'remote ref does not exist'; then
+    printf 'origin/%s was already deleted\n' "$head_ref"
+  else
     printf 'could not delete origin/%s; a ruleset may protect it\n' "$head_ref"
+  fi
 fi
 
 git fetch --quiet origin "$base_ref" 2>/dev/null || true
-if [ "$branch" = "$head_ref" ]; then
+if [ "$cross_repo" = true ]; then
+  printf 'left fork branch %s untouched\n' "$head_ref"
+elif [ "$branch" = "$head_ref" ]; then
   printf '\nThis worktree still stands on %s, which has merged.\n' "$head_ref"
   printf 'Switch to %s before deleting it, or drop the whole worktree.\n' "$base_ref"
-elif git rev-parse --verify --quiet "refs/heads/$head_ref" >/dev/null; then
+elif gitr rev-parse --verify --quiet "refs/heads/$head_ref" >/dev/null; then
   git branch -D "$head_ref" >/dev/null 2>&1 &&
     printf 'deleted local %s\n' "$head_ref" || true
 fi
 
 step "done"
-gh pr view "$number" --json url,state --template 'merged: {{.url}} ({{.state}})
-'
+gh pr view "$number" --json url,state --jq '"merged: \(.url) (\(.state))"'

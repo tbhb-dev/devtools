@@ -1,0 +1,1 @@
+Left alone, GitHub writes the squash message by concatenating every commit on the branch. That text has never passed a commit-msg hook, and it arrives on the default branch where the rest of the toolchain assumes those hooks ran. The toolchain never lints it after the merge, either. This workflow writes the message itself and puts it through the same checks a commit must pass.

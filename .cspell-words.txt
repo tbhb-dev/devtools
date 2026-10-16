@@ -335,6 +335,7 @@ spdxjson
 sqlclosecheck
 srem
 ssdf
+startswith
 staticcheck
 stdlib
 strconcat

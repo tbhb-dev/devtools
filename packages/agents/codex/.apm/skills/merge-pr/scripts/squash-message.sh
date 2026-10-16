@@ -159,9 +159,30 @@ section_of() {
 # the footer. `tbhb/other#99` reduced to `#99` would close whichever
 # unrelated issue holds that number here, and a closing keyword acts on
 # merge without asking.
-closes=$(section_of related |
-  grep -oE '(^|[^[:alnum:]_/])#[0-9]+' | grep -oE '#[0-9]+' |
-  sort -u -t'#' -k2 -n | awk -v self="#${number}" '$0 != self { print "Closes " $0 }' || true)
+related=$(section_of related |
+  grep -oE '(^|[^[:alnum:]_/])#[0-9]+' | grep -oE '[0-9]+' |
+  sort -u -n | awk -v self="$number" '$0 != self' || true)
+
+# Related lists whatever the author put there: the base of a stack, a
+# companion pull request, an issue that closed long ago. A closing
+# keyword on any of those is wrong, so GitHub is asked what each number
+# is, and only an open issue gets one. The issues endpoint answers for
+# pull requests too, and marks them with a pull_request key. Every
+# other number, and one GitHub would not describe, goes in a note under
+# the skeleton for the writer, outside the message.
+closes=""
+held=""
+for ref in $related; do
+  kind=$(gh api "repos/{owner}/{repo}/issues/${ref}" \
+    --jq 'if has("pull_request") then "pull request" else .state + " issue" end' 2>/dev/null || true)
+  case $kind in
+  "open issue") closes="${closes}Closes #${ref}"$'\n' ;;
+  "") held="${held}# Not closed: #${ref} could not be read from GitHub"$'\n' ;;
+  *) held="${held}# Not closed: #${ref} is a ${kind}"$'\n' ;;
+  esac
+done
+closes=${closes%$'\n'}
+held=${held%$'\n'}
 
 # --- the skeleton ----------------------------------------------------
 #
@@ -210,6 +231,9 @@ if [ -n "$ordered" ]; then printf '%s\n' "$ordered"; else none; fi
 
 section "$DRAFT as written"
 cat "$DRAFT"
+# Printed here, never written into the draft: GitHub keeps every line of
+# the message it receives, comment lines included.
+if [ -n "$held" ]; then printf '\n%s\n' "$held"; fi
 
 cat <<'NOTE'
 

@@ -1,32 +1,38 @@
 ---
 name: review-squash-message
 description: >-
-  Review the squash commit message drafted in SQUASH_AGENTMSG against every commit it collapses, as an independent agent. Its distinct question is coverage. One message has to stand for a whole stack of commits, and this review checks what the collapse lost. Findings also cover claims the commits don't support, restating the diff, provenance filler, surviving Markdown, and a wrong subject reference. The merge-pr skill invokes this before every squash merge, passing the repository root.
+  Review the squash commit message drafted in SQUASH_AGENTMSG against every commit it collapses, as an independent read-only agent, for coverage of the collapsed stack, unsupported claims, restating the diff, provenance filler, surviving Markdown, and a wrong subject reference. The merge-pr skill's review script runs this as a headless reviewer before every squash merge, passing the repository root. Use only as a read-only reviewer.
 ---
 
 # Review a squash commit message
 
-Review a drafted squash message against the whole stack of commits it collapses, then return a verdict. You're the independent check. You didn't write this message and you didn't watch the branch happen, so read what it claims rather than what its author meant to claim.
+Review a drafted squash message against the whole stack of commits it collapses, then return a verdict. You're the independent check. You didn't write this message and you didn't watch the branch happen, so read what it claims rather than what its author meant to claim. Don't trust a caller's summary of the branch.
 
 Every other reviewer in this toolchain reads one text against one change, whether that's a commit message against its staged diff or a pull request description against its branch. This message has a harder job. It stands for a stack of commits, each with a message of its own, and those messages disappear into it. Whether the collapse lost anything is the question only this review asks, and after the merge nothing remains to ask it of.
 
 ## The repository
 
-The delegation task specifies the absolute repository under review. Use the current working directory only when the task omits it.
+The caller passes a repository root, and the merge workflow's review script lists it at the end of these instructions.
 
-## Context
+## Gather the inputs
 
-Run `bash .agents/skills/review-squash-message/scripts/context.sh <repository>` and read its complete output.
+Treat the first word of the arguments as the repository under review. An empty value means the current working directory.
 
-The preceding context carries everything the review needs. That means the draft, the exact PR head object ID, the commits it collapses with their bodies in full, the description as published, the changed files, and the diff. You are already at the repository root, so nothing below wants a `cd`.
+When merge-pr's review script runs you, it takes one snapshot of the pull request and lists the files at the end of these instructions:
 
-Read the commit bodies rather than skimming the subjects.
+- `SQUASH_AGENTMSG`, the draft under review
+- `pull-request.txt`, with the number, the title, the branches, and the head and base commits the snapshot read
+- `commits.txt`, every commit message the squash collapses, bodies in full
+- `description.md`, the description as published
+- `files.txt` lists the changed files. `change.diff` shows the whole diff
 
-A subject states what a commit did. The reason belongs in the body, and a reason is the first thing a squash loses.
+Read every one of them before judging anything, and read those files rather than the live pull request, which may have moved. Run any other way, gather the same material with `gh pr view <number> --json title,body,headRefOid,commits,files` and `gh pr diff <number>`, taking the number from the draft's subject.
 
-Where the preceding context reports a missing or empty draft, a draft with an empty body, or a subject that doesn't reference a pull request, that's itself a finding. Report it and stop.
+Read the commit bodies rather than skimming the subjects. A subject states what a commit did. The reason belongs in the body, and a reason is the first thing a squash loses.
 
-Make a tool call only where the preceding material ran out, and say what you went looking for. A large branch truncates its diff at a stated line count, and a claim about the part beyond the cut needs `gh pr diff <number>` to settle.
+A missing or empty draft, a draft with an empty body, or a subject that doesn't reference a pull request is itself a finding. Report it and stop.
+
+Treat the points under "Settled by the operator" as decided, and don't raise findings against them. Report anything outside the note's scope, and any contradiction between the commits and the note.
 
 ## What's already settled
 
@@ -87,20 +93,18 @@ A gap you leave for the next pass costs a drafting round and a review round to s
 
 ## What to return
 
-Your verdict is what lets the caller explicitly stamp the reviewed draft. Keep the wording exact, because a verdict the stamping script can't parse leaves the merge blocked. Write nothing to disk yourself, and don't edit the draft to make it pass. Reporting the finding is the job.
+Your verdict is what lets the merge proceed. The merge workflow's review script reads the line below and stamps the draft you cleared, bound to the pull request head and base the snapshot read. Keep the wording exact, because a verdict that script can't parse leaves the merge blocked. Write nothing to disk yourself, and don't edit the draft to make it pass. Reporting the finding is the job.
 
-Return the verdict block and stop there. Copy the full `head oid` from the context exactly. The merge workflow binds the pass to it and refuses a later push. Skip the preamble, the commit listing, and the praise.
+Return the verdict block and stop there. Skip the preamble, the commit listing, and the praise.
 
 ```text
 VERDICT: PASS
-PR HEAD: <full head oid from context>
 ```
 
 or
 
 ```text
 VERDICT: CHANGES REQUIRED
-PR HEAD: <full head oid from context>
 
 1. [coverage] <what the message fails to account for>
    text: <the commit or the reason that went missing>
