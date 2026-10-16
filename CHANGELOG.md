@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file. See [conven
 - - -
 <!-- release -->
 
+## [v0.11.0](https://github.com/tbhb-dev/devtools/compare/7f66d9a5a04b507f00b9fda7566e6ed472bd7c60..v0.11.0) - 2026-10-16
+
+### Features
+
+- (**security**) share the private identifier leak gate (#172) - ([47d9027](https://github.com/tbhb-dev/devtools/commit/47d90277caaf3b3ba8b19bab2c03787fc7353992)) - tbhb.dev Agent
+- (**skills**) unify session analysis and clarify hook retries (#173) - ([c1c5e7f](https://github.com/tbhb-dev/devtools/commit/c1c5e7fa56945e33bf2b50584b6ac192a04dc499)) - tbhb.dev Agent
+- (**skills**) unite the prose family under shared sources (#169) - ([154829e](https://github.com/tbhb-dev/devtools/commit/154829e1867973123fb13ea3820a5006234bbbb4)) - tbhb.dev Agent
+- (**skills**) bind merge approval to the reviewed pull request (#164) - ([e280d72](https://github.com/tbhb-dev/devtools/commit/e280d7286ada9c6f2e9da9234c2a26a075bb3de2)) - tbhb.dev Agent
+- ![BREAKING](https://img.shields.io/badge/BREAKING-red) (**skills**) unify harness skills under shared sources (#155) - ([fd7ec94](https://github.com/tbhb-dev/devtools/commit/fd7ec949991aeda999269f01a60633a2e890f962)) - tbhb.dev Agent
+- (**tasks**) add opt-in Go and Python gates (#171) - ([297d031](https://github.com/tbhb-dev/devtools/commit/297d031b1642ebdc7f83b4debcce355b80f6cb95)) - tbhb.dev Agent
+
+### Bug Fixes
+
+- (**pins**) track devtools Renovate presets (#162) - ([8f42015](https://github.com/tbhb-dev/devtools/commit/8f420153cc92c3cee244724333daf8b34631ba9c)) - tbhb.dev Agent
+- (**release**) refresh local APM versions during the bump (#168) - ([2374bce](https://github.com/tbhb-dev/devtools/commit/2374bce953703eb7143e5d0401641e3e84cdc96e)) - tbhb.dev Agent
+- (**renovate**) pin the runner and validator to the same image (#149) - ([7f66d9a](https://github.com/tbhb-dev/devtools/commit/7f66d9a5a04b507f00b9fda7566e6ed472bd7c60)) - tbhb.dev Agent
+- (**security**) redact secret findings and scan history in CI (#163) - ([9b4e82a](https://github.com/tbhb-dev/devtools/commit/9b4e82aeb3bc62cf521f2690f424d6084f49ea6d)) - tbhb.dev Agent
+- (**tools**) report unfinished prose replacements as failures (#150) - ([744335b](https://github.com/tbhb-dev/devtools/commit/744335b9913412c193eca67fc9f40afce1b30cf1)) - tbhb.dev Agent
+- (**vale**) prevent a rule crash in the prose gate (#151) - ([8daff0b](https://github.com/tbhb-dev/devtools/commit/8daff0bb36155c66b342b036a52bb45b7b676994)) - tbhb.dev Agent
+
+### Refactoring
+
+- (**skills**) unite the rebase family under shared sources (#166) - ([4dd50c7](https://github.com/tbhb-dev/devtools/commit/4dd50c771edfb31e5e637c3a67225771210fa16d)) - tbhb.dev Agent
+
+- - -
+
+<!-- release -->
+
 ## [v0.10.0](https://github.com/tbhb-dev/devtools/compare/26e9d79de6ab1b045725386749647528ed745e14..v0.10.0) - 2026-10-11
 
 ### Bug Fixes
