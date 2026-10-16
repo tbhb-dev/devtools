@@ -252,6 +252,38 @@ stamp_file() { printf '%s/agent-skills/commit.stamp' "$(git rev-parse --absolute
   [ "$(git log -1 --format=%s)" = 'test: bind the review' ]
 }
 
+@test "commit reports a failing hook as a failure when it changed nothing" {
+  initial_commit
+  stage tracked.txt reviewed
+  bash "$SCRIPTS/review.sh"
+  mkdir -p .git/hooks
+  printf '#!/usr/bin/env bash\necho "lint: tracked.txt is wrong" >&2\nexit 1\n' >.git/hooks/pre-commit
+  chmod +x .git/hooks/pre-commit
+
+  run bash "$SCRIPTS/commit.sh" --confirmed
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"lint: tracked.txt is wrong"* ]]
+  [[ "$output" == *"A hook failed, and nothing in the index or the worktree changed"* ]]
+  [[ "$output" != *"A hook changed files"* ]]
+  [ "$(git log -1 --format=%s)" = 'test: initial state' ]
+}
+
+@test "commit reports a hook that edited files before failing as a modification" {
+  initial_commit
+  stage tracked.txt reviewed
+  bash "$SCRIPTS/review.sh"
+  mkdir -p .git/hooks
+  printf '#!/usr/bin/env bash\necho fixed >tracked.txt\nexit 1\n' >.git/hooks/pre-commit
+  chmod +x .git/hooks/pre-commit
+
+  run bash "$SCRIPTS/commit.sh" --confirmed
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"A hook changed files during the attempt"* ]]
+  [[ "$output" != *"nothing in the index or the worktree changed"* ]]
+}
+
 @test "review copies the operator note into the prompt and stamps its digest" {
   initial_commit
   stage tracked.txt reviewed

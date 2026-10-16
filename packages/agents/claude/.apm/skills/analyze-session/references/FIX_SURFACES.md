@@ -8,7 +8,7 @@ Give every agent the retro directory rather than the transcript. The canned repo
 
 | area | what to look for |
 | ---- | ---------------- |
-| Agent constructs | The hook event, subagent or skill that removes a failure outright |
+| Agent constructs | The hook, delegated agent, or skill that removes a failure outright |
 | Commit-time gates | Anything belonging in prek, the commit-msg chain or CI |
 | Repo tooling | The script or `mise` task that turns many round trips into one |
 | Configuration | A linter rule or ignore file tuned wrong for how the repo works |
@@ -16,48 +16,52 @@ Give every agent the retro directory rather than the transcript. The canned repo
 
 ## The shared prompt
 
-Spawn all five in one message. Each one gets this preamble, then its own area block:
+Launch all five together. `DISPATCH.md` in this directory shows how on this harness. Each one gets this preamble, then its own area block:
 
 ```text
-Agent({
-  subagent_type: "Explore",
-  description: "<AREA> recommendations",
-  prompt: `Recommend fixes for one area of a session retrospective.
+Recommend fixes for one area of a session retrospective.
 
-  RETRO: <RETRO DIRECTORY>
-  Read RETRO.md for the findings, and artifacts/ for the figures behind
-  them. artifacts/loops.txt ranks patterns by round trips wasted, which
-  is what "worth fixing" means here.
-  REPO: <ABSOLUTE PATH>
+RETRO: <RETRO DIRECTORY>
+Read RETRO.md for the findings, and artifacts/ for the figures behind
+them. artifacts/loops.txt ranks patterns by round trips wasted, which
+is what "worth fixing" means here.
+REPO: <ABSOLUTE PATH>
 
-  YOUR AREA: <AREA BLOCK>
+YOUR AREA: <AREA BLOCK>
 
-  Report only fixes belonging to your area. Say so plainly when a
-  finding belongs to a different area, rather than stretching your
-  recommendation to cover it.
+Report only fixes belonging to your area. Say so plainly when a
+finding belongs to a different area, rather than stretching your
+recommendation to cover it.
 
-  For each recommendation give: the finding it addresses, what you would
-  build or change, the round trips it would have saved, and what it
-  costs. State a cost for every one, because a recommendation without
-  one gives the reader no way to compare it.
+For each recommendation give: the finding it addresses, what you would
+build or change, the round trips it would have saved, and what it
+costs. State a cost for every one, because a recommendation without
+one gives the reader no way to compare it.
 
-  Rank yours by round trips saved. Name anything you considered and
-  rejected, with the reason, because a rejected option is worth as much
-  to the reader as a chosen one.`,
-})
+Rank yours by round trips saved. Name anything you considered and
+rejected, with the reason, because a rejected option is worth as much
+to the reader as a chosen one.
 ```
 
 ## The area blocks
 
-**Agent constructs.** Specify the hook event, subagent type, or skill that removes a failure rather than reminding someone about it. Confirm what the harness offers before recommending it, because the event list changes between releases and naming an event that no longer exists wastes the reader's time. Spawn the `claude-code-guide` agent, or read the reference at <https://code.claude.com/docs/en/hooks> plus the guide at <https://code.claude.com/docs/en/hooks-guide>. Match the construct to the failure. Use `PostToolUse` for a check the agent keeps forgetting. Use `PreToolUse` to refuse a command outright, where exit 2 blocks the call. Use a subagent for work that would otherwise fill the calling context.
+**Agent constructs.** Specify the hook, agent type, or skill that removes a failure rather than reminding someone about it.
+
+Only the harness that ran the session matters, and `session.py index` names it. Confirm what it offers before recommending anything, because facilities change between releases.
+
+For a Claude Code session, spawn the `claude-code-guide` agent, or read the reference at <https://code.claude.com/docs/en/hooks> plus the guide at <https://code.claude.com/docs/en/hooks-guide>. Match the construct to the failure. Use `PostToolUse` for a check the agent keeps forgetting. Use `PreToolUse` to refuse a command outright, where exit 2 blocks the call. Use a subagent for work that would otherwise fill the calling context.
+
+For a Codex session, choose a verified Codex facility: a delegated agent, skill, script, repository gate, or documented user-level hook.
+
+Only recommend skill-scoped hooks after a probe proves enforcement. Keep filesystem writers in the parent when shared-worktree concurrency would be unsafe.
 
 **Commit-time gates.** Look at `.pre-commit-config.yaml`, the commit-msg chain, and the CI workflows. Find what a gate would have caught earlier, and what a gate is catching too late to be cheap. Check whether a gate enumerates files through `git ls-files`, which excludes anything an agent just created and reports success without inspecting untracked work.
 
-**Repo tooling.** Look at `mise.toml`, the task files it includes, and `tools/`. Find the script or task that turns a run of round trips into one call. A task reporting every finding at once costs less than a loop reporting them one at a time.
+**Repo tooling.** Look at `mise.toml`, the task files it includes, and `tools/`. Find the script or task that turns a run of round trips into one call.
 
 **Configuration.** Look at the linter configs, the ignore files, and the settings. Find a rule tuned wrong for how this repository works, one matching text it should exempt, and one whose fix is mechanical rather than editorial. Separate a rule needing a config change from a rule needing an upstream fix.
 
-**Instructions.** Look at `AGENTS.md`, `CLAUDE.md`, and the skills. Find what no tool can enforce, and apply that test strictly. A rule a script could check belongs in the script, so recommend prose only where the decision needs real judgment.
+**Instructions.** Look at `AGENTS.md`, `CLAUDE.md`, and the skills. Find what no tool can enforce. A rule a script could check belongs in the script.
 
 ## Synthesis stays in the calling session
 
