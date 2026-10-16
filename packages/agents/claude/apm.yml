@@ -2,7 +2,9 @@
 # APM sub-package: Claude Code agent primitives. Restricted to the
 # claude target, so its content deploys only into a consumer that
 # activates that target. Holds the skills and the guard-markdown hook
-# declaration. Consumers pin it as
+# declaration. Skills with a source under packages/agents/source/skills
+# are generated here by `mise run generate-skills`; edit the source.
+# Consumers pin it as
 # tbhb-dev/devtools/packages/agents/claude#vX.Y.Z; the repo root manifest
 # depends on it by local path. The cog pre-bump hook keeps `version`
 # in lockstep with the root (see cog.toml).

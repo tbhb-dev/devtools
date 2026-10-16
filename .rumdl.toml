@@ -25,9 +25,15 @@ exclude = [
 # The pull request template opens at level 2 instead, so MD041 comes off
 # for that path: GitHub renders the pull request title above the body,
 # and a level 1 heading inside the template would repeat it.
+#
+# A skill source's parts/ fragments are spliced into a SKILL.md by
+# tools/generate-skills.sh, usually opening with the level 2 heading of
+# the step they hold, so they never start a document. The generated
+# SKILL.md they land in is linted whole.
 [per-file-ignores]
 "CHANGELOG.md" = ["MD024", "MD065"]
 ".github/pull_request_template.md" = ["MD041"]
+"packages/agents/source/skills/*/parts/*.md" = ["MD041"]
 
 [MD003]
 style = "atx"

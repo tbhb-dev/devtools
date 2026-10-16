@@ -145,7 +145,7 @@ for dir in "${dirs[@]}"; do
     continue
   }
   case $dir in
-  packages/agents/codex/* | */packages/agents/codex/* | .agents/skills/codex-* | */.agents/skills/codex-*)
+  packages/agents/codex/* | */packages/agents/codex/* | .agents/skills/* | */.agents/skills/*)
     TOKEN_BACKEND=codex
     MODEL=$CODEX_MODEL
     TOKENIZER=$CODEX_ENCODING

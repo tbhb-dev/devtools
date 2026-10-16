@@ -2,26 +2,28 @@
 # preflight — gather every fact the commit skill needs before it stages
 # or drafts anything.
 #
-# The commit SKILL.md inlines this through the !`...` preprocessor, so it
-# runs once before the agent reads the skill body. That ordering is the
-# point: the agent starts from a settled picture of the worktree instead
-# of spending its first several tool calls rediscovering it, and the
-# rebase-base decision that opens the workflow is already computed.
+# Claude inlines this through the !`...` preprocessor and Codex runs it
+# as the workflow's first command, so either way it runs once before the
+# agent stages anything. That ordering is the point: the agent starts
+# from a settled picture of the worktree instead of spending its first
+# several tool calls rediscovering it, and the rebase-base decision that
+# opens the workflow is already computed.
 #
 # Output is plain text under `== section ==` headers, each self-contained
 # so a partially-read report still answers something. Nothing here
 # touches the worktree, the index, or the branch. The one write is the
-# guard mark in the git directory, which arms the commit guard for this
-# run. The one network call fetches the base branch;
-# COMMIT_PREFLIGHT_FETCH=0 skips it.
+# guard mark in the git directory, which arms Claude's commit guard for
+# this run and is inert under Codex. The one network call fetches the
+# base branch; COMMIT_PREFLIGHT_FETCH=0 skips it.
+#
+# A repository with no commit yet, or no origin/<default>, is a normal
+# starting point rather than an error. The first commit has no base to
+# rebase onto, so the report says so and the workflow skips that step.
 set -euo pipefail
 
 # --- environment hardening -------------------------------------------
-# The agent reads this output, so the operator's preferences must not
-# change its shape. LC_ALL pins collation, because sort and the [a-z]
-# ranges below mean different things under a UTF-8 locale. The unsets
-# cover variables that silently retarget a command: GH_REPO sends gh at
-# another repository, CDPATH makes a relative cd print somewhere else.
+# lib.sh repeats this block; it stays here too so the hygiene gate can
+# see it in the file that calls git.
 export LC_ALL=C
 export GH_PAGER=cat
 export GH_PROMPT_DISABLED=1
@@ -29,26 +31,8 @@ export PYTHONUTF8=1
 unset CDPATH GH_REPO GH_HOST GREP_OPTIONS
 IFS=$' \t\n'
 
-# gitr runs git for output this script parses, with every formatting
-# knob pinned. log.showSignature is the one that matters most: it
-# prepends a verification line per commit to stdout, ahead of the
-# format string, so a --oneline listing silently becomes two lines per
-# commit and any head -n cap shows half a branch as though it were all
-# of it.
-#
-# Plain `git` stays available on purpose. Config reads, fetch, and push
-# need the operator's real configuration: the sign-off identity may come
-# from an includeIf work profile, and the network calls need credential
-# helpers and any url.insteadOf rewriting.
-gitr() {
-  command git --no-pager \
-    -c log.showSignature=false \
-    -c color.ui=false -c color.diff=false -c color.status=false \
-    -c core.quotePath=false \
-    -c diff.noprefix=false -c diff.mnemonicPrefix=false \
-    -c diff.renames=true -c diff.context=3 \
-    "$@"
-}
+# shellcheck disable=SC1091 # lib.sh is generated beside this script
+. "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 # Diff budget. The full patch is worth inlining when it is small enough
 # to read, and actively harmful when it is not: an oversized paste
@@ -114,7 +98,10 @@ behind_count() {
 
 root=$(git rev-parse --show-toplevel)
 cd "$root"
-branch=$(git rev-parse --abbrev-ref HEAD)
+# symbolic-ref rather than rev-parse: before the first commit HEAD names
+# a branch that does not exist yet, and rev-parse fails on it.
+branch=$(git symbolic-ref --quiet --short HEAD || printf 'detached\n')
+head=$(dt_head)
 
 # Default branch, preferring what the remote actually points HEAD at
 # over a guess. A worktree cloned without the symref falls back to a
@@ -132,6 +119,7 @@ printf 'root:     %s\n' "$root"
 printf 'branch:   %s\n' "$branch"
 case $root in
 */.claude/worktrees/*) printf 'layout:   agent worktree under .claude/worktrees\n' ;;
+*/.codex/worktrees/*) printf 'layout:   agent worktree under .codex/worktrees\n' ;;
 *) printf 'layout:   primary checkout\n' ;;
 esac
 upstream=$(git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null || echo none)
@@ -150,15 +138,15 @@ elif [ -f "$git_dir/CHERRY_PICK_HEAD" ]; then
 fi
 printf 'in progress: %s\n' "$in_progress"
 
-# Arm the commit guard for this run. That guard is a skill-frontmatter
-# hook, so it stays registered for the rest of the session and needs a
-# signal telling it a workflow is actually open. HEAD is that signal:
+# Arm the commit guard for this run. Under Claude that guard is a
+# skill-frontmatter hook, so it stays registered for the rest of the
+# session and needs a signal telling it a workflow is actually open.
+# Codex has no such hook and ignores the mark. HEAD is that signal:
 # the workflow leaves HEAD alone until it commits, and the commit that
 # ends the workflow moves HEAD past this mark and stands the guard down
 # without anyone having to clear it.
-guard_head=$(git rev-parse HEAD 2>/dev/null || printf 'unborn')
-printf '%s' "$guard_head" >"$(git rev-parse --absolute-git-dir)/commit-workflow.head"
-printf 'commit guard: armed at %s, inert again once HEAD moves\n' "$guard_head"
+printf '%s' "$head" >"$(git rev-parse --absolute-git-dir)/commit-workflow.head"
+printf 'commit guard: armed at %s, inert again once HEAD moves\n' "$head"
 
 section "rebase base"
 fetch_state=skipped
@@ -181,14 +169,34 @@ printf '%s vs origin/%s:  %s\n' "$branch" "$default_branch" \
 # Local main is only a safe rebase target when it carries everything
 # origin has. One commit behind and rebasing onto it replays the branch
 # over a stale base, which shows up later as a needless second rebase.
-local_behind=$(behind_count "refs/heads/$default_branch" "refs/remotes/origin/$default_branch")
-if [ "$local_behind" = "0" ]; then
+#
+# A root commit has nothing to rebase onto, and neither does a branch
+# whose default exists nowhere yet. Both skip the rebase step.
+has_local=false has_origin=false
+git rev-parse --verify --quiet "refs/heads/$default_branch" >/dev/null && has_local=true
+git rev-parse --verify --quiet "refs/remotes/origin/$default_branch" >/dev/null && has_origin=true
+if [ "$head" = unborn ]; then
+  printf 'recommended base: none (root commit)\n'
+  printf 'reason: HEAD has no commit yet, so this is the first commit; skip the rebase step\n'
+elif [ "$has_origin" = false ] && [ "$has_local" = false ]; then
+  printf 'recommended base: none\n'
+  printf 'reason: neither %s nor origin/%s exists; skip the rebase step\n' "$default_branch" "$default_branch"
+elif [ "$has_origin" = false ]; then
   printf 'recommended base: %s\n' "$default_branch"
-  printf 'reason: local %s carries everything origin/%s has\n' "$default_branch" "$default_branch"
+  printf 'reason: origin/%s does not exist, so local %s is the only base\n' "$default_branch" "$default_branch"
 else
-  printf 'recommended base: origin/%s\n' "$default_branch"
-  printf 'reason: local %s is %s commit(s) behind origin/%s\n' \
-    "$default_branch" "$local_behind" "$default_branch"
+  local_behind=$(behind_count "refs/heads/$default_branch" "refs/remotes/origin/$default_branch")
+  if [ "$has_local" = true ] && [ "$local_behind" = "0" ]; then
+    printf 'recommended base: %s\n' "$default_branch"
+    printf 'reason: local %s carries everything origin/%s has\n' "$default_branch" "$default_branch"
+  elif [ "$has_local" = true ]; then
+    printf 'recommended base: origin/%s\n' "$default_branch"
+    printf 'reason: local %s is %s commit(s) behind origin/%s\n' \
+      "$default_branch" "$local_behind" "$default_branch"
+  else
+    printf 'recommended base: origin/%s\n' "$default_branch"
+    printf 'reason: there is no local %s\n' "$default_branch"
+  fi
 fi
 
 section "preconditions"
@@ -221,17 +229,15 @@ else
   printf 'COMMIT_AGENTMSG: absent or empty (expected before drafting)\n'
 fi
 
-# The operator's standing answer to step 8, granted out of band through
-# `mise run preapprove` and keyed on the Claude Code session. Absence is
-# the default and the safe one: no record, no grant, and the
-# confirmation stands as written. A missing session id reads the same
-# way, so nothing here depends on the harness exporting one.
+# Who can answer step 8 besides the operator. commit.sh resolves this
+# itself at commit time, in the same order; the report here is so the
+# agent knows before it gets there whether to ask. A grant comes from
+# `mise run preapprove`, keyed on the session. A delegation comes from
+# the machine's delegation_check, which this only reports as configured
+# rather than calling, because asking it is the commit's job.
 section "pre-approval"
-preapproval=""
-if [ -n "${CLAUDE_CODE_SESSION_ID:-}" ]; then
-  preapproval="$(git rev-parse --absolute-git-dir)/preapprovals/$CLAUDE_CODE_SESSION_ID"
-fi
-if [ -n "$preapproval" ] && grant=$(grep '^commit ' "$preapproval" 2>/dev/null); then
+session=$(dt_session_id)
+if [ -n "$session" ] && grant=$(dt_preapproval commit); then
   case ${grant##* } in
   touchid) how="a Touch ID prompt stands behind it" ;;
   *) how="no biometric prompt stood behind it" ;;
@@ -239,6 +245,21 @@ if [ -n "$preapproval" ] && grant=$(grep '^commit ' "$preapproval" 2>/dev/null);
   printf 'commit: GRANTED, %s — step 8 skips the confirmation once every gate and the review pass\n' "$how"
 else
   printf 'commit: not granted — step 8 confirms with the operator as written\n'
+fi
+checker=$(dt_conf delegation_check)
+if [ -n "$checker" ]; then
+  printf 'delegation: %s is configured; commit.sh asks it when nobody else has answered\n' "$checker"
+else
+  printf 'delegation: none configured\n'
+fi
+
+section "review"
+printf 'harness:  %s\n' "$(dt_harness)"
+printf 'reviewer: %s\n' "$(dt_reviewer_label)"
+if [ -f "$(dt_git_dir)/agent-skills/commit.stamp" ]; then
+  printf 'stamp:    present from an earlier review; review.sh replaces it\n'
+else
+  printf 'stamp:    none\n'
 fi
 
 section "staged changes"

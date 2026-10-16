@@ -18,6 +18,10 @@
 #      a --no-verify is refused with its own reason before the general
 #      one, because those two are wrong for reasons of their own.
 #
+# This guard is a rail, not the gate. It runs only in a Claude session
+# that invoked the skill, and frontmatter hooks do not fire inside a
+# subagent; the script's own checks hold everywhere.
+#
 # The review-signature check used to sit here and now sits in that
 # script. A PreToolUse hook reads the Bash tool call, and the
 # `git commit` inside a script is not one, so a gate placed here would
@@ -172,9 +176,11 @@ hook on the tool call cannot reach live:
 
   bash .claude/skills/commit/scripts/commit.sh
 
-That script checks that review-commit-message signed the exact bytes now
-in COMMIT_AGENTMSG, records what is staged, commits, then reads the
-commit back and names any staged path that did not land in it.
+That script checks that the review stamp covers the exact bytes now in
+COMMIT_AGENTMSG and the staged tree, resolves who confirmed the commit,
+commits, then reads the commit back and names any staged path that did
+not land in it.
 
-Add --amend to fold the staged change into the commit already there. No
-other flag passes through."
+Add --amend to fold the staged change into the commit already there, and
+--confirmed once the operator has answered yes. No other flag passes
+through."
