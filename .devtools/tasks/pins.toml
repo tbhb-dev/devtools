@@ -3,7 +3,7 @@
 # vendir.toml: devtools itself does not include this file. It is the
 # publisher, so it pins nothing and has no sites to move or read.
 #
-# A consumer pins devtools in nine places across seven files, in three
+# A consumer pins devtools across these files, in three
 # syntaxes:
 #
 #   apm.yml                          tbhb-dev/devtools#vX.Y.Z
@@ -36,11 +36,11 @@
 # version of itself. That is inherent to a self-updating task: a change
 # to this body takes effect on the update AFTER the one that delivers it.
 #
-# The preset extends in .github/renovate.json5 is the one site that has
-# to be pinned by hand once. The substitution below moves an existing
-# ref and adds one to a site that has none, but the `// vX.Y.Z` comment
-# beside it is structural rather than a substitution, so a first pinning
-# writes the comment and every bump after it maintains one.
+# Every devtools .github/<name>.json5 preset with a ref is a pin site.
+# Unpinned references stay unpinned. check-pins reports them as "unpinned",
+# so they disagree with versioned sites rather than silently following main.
+# SHA refs need a version comment beside them; the update maintains an
+# existing comment but leaves adding a missing one to a hand edit.
 #
 # `apm install` is deliberately not called directly. It merges hook
 # declarations into .claude/settings.json additively and never
@@ -102,13 +102,11 @@ for wf in .github/workflows/*.yml .github/workflows/*.yaml; do
   edit "$wf" sed -E "s|(uses:[[:space:]]*tbhb-dev/devtools/[^@]*@)[0-9a-f]{7,40}([[:space:]]*#[[:space:]]*)v[^[:space:]]*|\\1$sha\\2$version|"
 done
 
-# Two expressions rather than one: the first moves a pinned ref and adds
-# one to a site that has none, and the second maintains the version
-# comment beside it. A site with no comment yet is left for the hand
-# edit that writes one, and devtools:check-pins names it until then.
+# Move existing refs on every devtools preset, then maintain their version
+# comments. References without a ref are left alone.
 if [ -f .github/renovate.json5 ]; then
-  edit .github/renovate.json5 sed -E "s|(github>tbhb-dev/devtools//\\.github/renovate-config\\.json5)(#[0-9A-Za-z._-]+)?\"|\\1#$sha\"|"
-  edit .github/renovate.json5 sed -E "s|(renovate-config\\.json5#[0-9a-f]{7,40}\",?[[:space:]]*//[[:space:]]*)v[^[:space:]]*|\\1$version|"
+  edit .github/renovate.json5 sed -E "s|(github>tbhb-dev/devtools//\\.github/[^/\"]+\\.json5)(#[^\"]+)\"|\\1#$sha\"|"
+  edit .github/renovate.json5 sed -E "s|(github>tbhb-dev/devtools//\\.github/[^/\"]+\\.json5#[0-9a-f]{7,40}\",?[[:space:]]*//[[:space:]]*)v[^[:space:]]*|\\1$version|"
 fi
 
 # vendir.yml and .pre-commit-config.yaml carry the version on a line that
@@ -176,7 +174,7 @@ fi
 # some of the group's pull requests were merged.
 #
 # Offline by design, so the lint aggregate stays hermetic. It proves the
-# nine sites agree with each other rather than that they agree with the
+# sites agree with each other rather than that they agree with the
 # remote: every declared version has to match, and every SHA-pinned site
 # has to carry the same commit. Resolving a tag to a commit is
 # update-pins' job, and it writes both halves from one resolution.
@@ -221,11 +219,11 @@ read_sites() {
       # The Renovate preset extends. A tag ref is the version outright; a
       # SHA ref carries its version in the comment beside it, and without
       # one the site still joins the SHA comparison.
-      /github>tbhb-dev\/devtools\/\/\.github\/renovate-config\.json5/ {
+      /github>tbhb-dev\/devtools\/\/\.github\/[^/"]+\.json5/ {
         line = $0
         ref = line
-        if (ref ~ /renovate-config\.json5#/) {
-          sub(/.*renovate-config\.json5#/, "", ref); sub(/".*$/, "", ref)
+        if (ref ~ /[^/"]+\.json5#/) {
+          sub(/.*[^/"]+\.json5#/, "", ref); sub(/".*$/, "", ref)
         } else {
           ref = ""
         }

@@ -1,0 +1,6 @@
+{
+  extends: [
+    "github>tbhb-dev/devtools//.github/renovate-config.json5#aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", // v0.10.0
+    "github>tbhb-dev/devtools//.github/renovate-go-config.json5#aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", // v0.10.0
+  ],
+}
