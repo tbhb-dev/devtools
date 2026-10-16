@@ -82,3 +82,22 @@ mise run build
 ## License
 
 Apache-2.0. See [LICENSE](LICENSE).
+
+## Private identifier gate
+
+Sync `.devtools/scripts/` alongside `.devtools/tasks/` in your consumer's `vendir.yml` (or sync `.devtools/` whole). Include `.devtools/tasks/leaks.toml` in mise's task configuration and add `mise run devtools:lint-leaks` to your lint task. This complements gitleaks with private network addresses, `*.ts.net` host names other than `example.ts.net` and its subdomains, password-manager references, and private-key headers.
+
+Findings report the location and rule without printing matched text. Sensitive locations become opaque identifiers.
+
+Add the `leaks-staged`, `leaks-commit-msg`, and `leaks-pre-push` hook IDs from this repository to prek. Run `mise run devtools:prek-install` after syncing: it installs a wrapper before prek's pre-push hook so the scan receives Git's ref lines. The pre-push hook ID verifies the wrapper installation. The wrapper scans the exact outgoing objects before prek consumes the ref lines. In CI, fetch full history and run `mise run --quiet devtools:lint-leaks -- --range "$BASE..$HEAD"` for the pull request's base and head commits.
+
+Keep private literals in `mise.local.toml`, which Git ignores:
+
+```toml
+[env]
+PROJECT_PRIVATE_STRINGS = "private-account-name, private-directory-name"
+```
+
+Every exported variable ending in `_PRIVATE_STRINGS` supplies comma-separated, case-insensitive fixed strings. The gate trims whitespace around entries and skips entries shorter than four characters with a warning. Commas and newlines inside a literal are unsupported. Run through mise so it loads the local environment. CI checks publishable patterns without these private values. Never commit the local file.
+
+Add extra case-insensitive extended regular expressions to `.leak-patterns`, one per line. The gate ignores blank lines and lines starting with `#`. For legitimate fixtures, document anchored path expressions in `.leak-allow`, with a comment explaining each exception. These exceptions apply to pattern findings only: the gate checks private literals even in allowed paths. Treat changes to both files as security configuration requiring review. The gate scans working files by default, index blobs with `--staged`, explicit file arguments for commit messages, and complete new Git objects with `--range` or pre-push. Encoded or split values are outside its scope.

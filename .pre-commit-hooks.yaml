@@ -110,3 +110,27 @@
   stages: [post-commit]
   always_run: true
   pass_filenames: false
+
+- id: leaks-staged
+  name: leaks-staged
+  entry: mise run --quiet devtools:lint-leaks -- --staged
+  language: system
+  stages: [pre-commit]
+  always_run: true
+  pass_filenames: false
+
+- id: leaks-commit-msg
+  name: leaks-commit-msg
+  entry: mise run --quiet devtools:lint-leaks --
+  language: system
+  stages: [commit-msg]
+  always_run: true
+  pass_filenames: true
+
+- id: leaks-pre-push
+  name: leaks-pre-push
+  entry: mise run --quiet devtools:check-leak-hook
+  language: system
+  stages: [pre-push]
+  always_run: true
+  pass_filenames: false

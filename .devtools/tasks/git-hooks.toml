@@ -25,4 +25,7 @@ run = "prek run --all-files"
 # agent ends up committing a message it wrote for an earlier change.
 ["devtools:prek-install"]
 description = "Install the project's git hooks (commit-msg, pre-commit, pre-push, post-commit)"
-run = "prek install -t commit-msg -t pre-commit -t pre-push -t post-commit"
+run = [
+  "prek install -t commit-msg -t pre-commit -t pre-push -t post-commit",
+  "bash $DEVTOOLS_DIR/scripts/install-pre-push.sh",
+]

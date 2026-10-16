@@ -173,6 +173,7 @@ hardwrap
 heredoc
 heredocs
 hookio
+hostnames
 htmlcov
 httpcache
 hypofuzz
@@ -353,6 +354,7 @@ symref
 synctest
 sysmsg
 tagalign
+tailnet
 tbhb
 teammate
 teammates
