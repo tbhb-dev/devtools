@@ -71,6 +71,38 @@ mise run build
 
 [mise](https://mise.jdx.dev) pins the toolchain and runs the workflow: `mise run bootstrap` sets up a fresh clone, `mise run lint` runs the full lint suite, `mise run test` runs the tests, and `mise run build` compiles the binaries into `bin/`. On a machine with no mise, the committed shim at `tools/mise-bootstrap` runs in place of `mise` and installs the pinned release on first use. The pins live in [mise.toml](mise.toml) and the drop-ins under `.config/mise/conf.d/`, locked by digest in the committed `mise.lock` files. See [AGENTS.md](AGENTS.md) for the agent-facing contributor guide.
 
+## Language tasks
+
+Copy [the vendir manifest](.devtools/vendir.yml) to `vendir.yml`, set both refs to a release containing these task sets, and run `vendir sync`. The manifest syncs the whole `.devtools` directory, including task files, scripts, and config templates. It defines that directory's contents. Keep local adaptations outside it. Existing consumers syncing only `.devtools/tasks` must expand their manifest to `.devtools/**` with `newRootPath: .devtools`. The shared `vendir.toml` drift gate checks that whole directory, and `pins.toml` updates both manifest refs without adding a pin for each task file.
+
+Select the languages in the consumer's `mise.toml`:
+
+```toml
+[task_config]
+includes = [
+  ".devtools/tasks/go.toml",
+  ".devtools/tasks/python.toml",
+  ".devtools/tasks/vendir.toml",
+  ".devtools/tasks/pins.toml",
+]
+```
+
+Run `mise run devtools:lint-go` or `mise run devtools:test-go`. Omit either language file when unused. Local wrappers such as `test-go` can run `mise run devtools:test-go`. In devtools, these wrappers keep task names without a namespace. Add `devtools:check-vendored` and `devtools:check-pins` to the consumer's combined lint task. Pin vendir in the consumer before the first sync. The shared conf.d pins supply the Go executables. Install Python tools in the consumer's uv dependency groups and lockfile. Go tasks using `go tool` also need the corresponding tool dependencies in the consumer's `go.mod`.
+
+Set overrides in `[env]`: `DEVTOOLS_GO_PACKAGES` defaults to `./...`, `DEVTOOLS_GO_BIN_PACKAGES` to `./cmd/...`, and `DEVTOOLS_GO_MODULES_MODE` to `readonly` (use `vendor` for a vendored module). Build metadata derives `DEVTOOLS_GO_MODULE` from `go list -m`. `DEVTOOLS_GO_BUILDMETA` defaults to that module's `internal/buildmeta` package, with string variables `Version`, `Commit`, and `Date`. Go ignores those linker assignments when the package is absent. Python source roots default to `src`: set `DEVTOOLS_PYTHON_DIRS` for `pylint`, complexipy, and vulture, `DEVTOOLS_PYTHON_SOURCE_DIRS` for bandit and coverage, and `DEVTOOLS_PYTHON_PROPERTY_DIRS` for fuzzing (default `tests/property`). Directory lists use shell word splitting and glob expansion, so paths must contain no whitespace. Ruff, pyrefly, `pytest`, and cosmic-ray read the consumer's own config for their scope and policy. Both complexipy and vulture also read local policy.
+
+Copy the needed templates from [`.devtools/config`](.devtools/config) to the project root, then adapt these fields. These are starting points. Syncing updates the templates without overwriting local policy.
+
+| File | Consumer adaptations |
+| --- | --- |
+| `go/.golangci.yml` → `.golangci.yml` | Replace `example.com/project` in the prefix for `gci`, the module-path for gofumpt, and the local-prefixes for `goimports`. Set the license and copyright template for `goheader` to your authors. Review dependency bans and thresholds. |
+| `go/.go-arch-lint.yml` → `.go-arch-lint.yml` | Replace components' `in` paths and `deps` edges with your layers. Adjust `exclude` for your tooling and fixtures. |
+| `go/.testcoverage.yml` → `.testcoverage.yml` | Replace `local-prefix` with your module path. Choose thresholds and excluded entry points. Keep `profile: coverage.out` for these tasks. |
+| `go/.gremlins.yaml` → `.gremlins.yaml` | Adjust `unleash.exclude-files` for generated or third-party code. The default excludes vendor. |
+| `python/ruff.toml` → `ruff.toml` | Adjust `exclude` and the test/script patterns under `lint.per-file-ignores`. Choose your rules and documentation string convention. Existing `[tool.ruff]` settings in `pyproject.toml` can stay there instead. |
+| `python/pyrefly.toml` → `pyrefly.toml` | Set `project-includes` and `project-excludes`. Keep the diagnostic catalog aligned with your pinned pyrefly version. Existing `[tool.pyrefly]` settings can stay in `pyproject.toml`. |
+| `.devtools/scripts/go-ldflags.sh` | No edits: set the module or metadata package through env if the defaults differ from your layout. `tools/go-ldflags.sh` in this repo forwards to it. |
+
 ## Releases
 
 [cocogitto](https://github.com/cocogitto/cocogitto) cuts `vX.Y.Z` tags from the Conventional Commit history. One tag serves both consumer paths, with APM installs pinning `tbhb-dev/devtools#vX.Y.Z` and Go installs pinning `@vX.Y.Z`.

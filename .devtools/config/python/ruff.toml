@@ -1,0 +1,69 @@
+line-length = 88
+# Same reasoning as testpaths above. Ruff walks from the invocation root, so
+# without this every finding in a skill script is reported once against the
+# source and once against its deployment.
+exclude = [".claude"]
+
+[lint]
+select = ["ALL"]
+ignore = [
+  # COM812 and ISC001 conflict with the formatter; ruff itself warns
+  # when they are enabled alongside `ruff format`.
+  "COM812",
+  "ISC001",
+  # Docstrings belong where they carry signal, not on every module,
+  # class, and function as ritual. The pydocstyle shape rules (D2xx,
+  # D4xx) still apply to every docstring that does exist.
+  "D100",
+  "D101",
+  "D102",
+  "D103",
+  "D104",
+  "D105",
+  "D106",
+  "D107",
+  # License headers ride the two-line SPDX comment the Go sources also
+  # carry; CPY001 only runs under preview mode anyway.
+  "CPY",
+  # Plain TODO comments are allowed; requiring an author (TD002), an
+  # issue link (TD003), or treating each one as a defect (FIX002) turns
+  # lightweight notes into ceremony.
+  "TD002",
+  "TD003",
+  "FIX002",
+]
+
+[lint.mccabe]
+# Sonar's default cyclomatic complexity ceiling.
+max-complexity = 15
+
+[lint.per-file-ignores]
+# S101: asserts are pytest's assertion API. PLR2004: literal expected
+# values read better in tests than named constants. INP001: test dirs
+# are intentionally __init__-free under pytest's importlib mode. FBT001:
+# a parametrized expected value is data, not a behavior flag, so the
+# boolean-trap rule has nothing to warn about at these call sites.
+"packages/*/tests/**" = ["S101", "PLR2004", "INP001", "FBT001"]
+
+# The same allowances for the tests that sit beside the script they cover
+# rather than under a tests/ directory. They pair by name with their subject,
+# so a rename that orphans one is visible in the diff. S603 and S607 join the
+# list because driving the script under test as a subprocess is the point:
+# its contract is the command line, not its functions.
+"**/test_*.py" = ["S101", "PLR2004", "INP001", "FBT001", "S603", "S607"]
+
+# T201: a skill script is a command-line tool whose output is the
+# product. print is the interface, not a stray debug statement, so the
+# rule that catches one catches the other here. Every other rule still
+# applies, because these scripts ship to consumer repositories.
+"**/skills/*/scripts/*.py" = ["T201"]
+
+# tools/ holds the repo-local standalone scripts, which are command-line
+# tools for the same reason and get the same allowance. S603 and S607 join
+# it because these scripts invoke vale and git by bare name on purpose: the
+# pinned toolchain puts them on PATH, and hardcoding an absolute path would
+# defeat that.
+"tools/*.py" = ["T201", "S603", "S607"]
+
+[lint.pydocstyle]
+convention = "google"

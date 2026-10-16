@@ -1,3 +1,7 @@
+# Sync the whole .devtools tree, as in ../vendir.yml, so language
+# task scripts and config templates travel with their task files.
+# The comparisons below already cover that whole tree.
+#
 # The vendir drift gate. Same task-file syntax, namespace, selection,
 # and pin rules as format.toml in this directory -- with two twists.
 #

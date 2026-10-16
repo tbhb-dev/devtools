@@ -7,6 +7,7 @@ setup() {
   STUB="${BATS_TEST_TMPDIR}/bin"
   mkdir -p "$WORK" "$STUB"
   cp -R "${BATS_TEST_DIRNAME}/fixtures/pins/." "$WORK/"
+  cp "${BATS_TEST_DIRNAME}/../../.devtools/vendir.yml" "$WORK/vendir.yml"
   extract_task devtools:update-pins > "${BATS_TEST_TMPDIR}/update.sh"
   extract_task devtools:check-pins > "${BATS_TEST_TMPDIR}/check.sh"
   cat > "$STUB/git" <<'STUB'
@@ -37,10 +38,12 @@ extract_task() {
   ' "$TASKS"
 }
 
-@test "update moves both devtools presets and their version comments" {
+@test "update moves presets and both whole-payload vendir refs" {
   run env usage_version=v0.11.0 bash "${BATS_TEST_TMPDIR}/update.sh"
   [ "$status" -eq 0 ]
   [ "$(grep -c 'json5#bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", // v0.11.0' .github/renovate.json5)" -eq 2 ]
+  [ "$(grep -c 'ref: v0.11.0' vendir.yml)" -eq 2 ]
+  grep -Fq '.devtools/**' vendir.yml
   run bash "$CHECK_SCRIPT"
   [ "$status" -eq 0 ]
   [[ "$output" == *'every devtools pin is on v0.11.0'* ]]

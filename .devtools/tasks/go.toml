@@ -1,0 +1,279 @@
+# Opt-in go tasks. Include this file from [task_config].
+# Tool versions come from the shared conf.d pins; project config stays local.
+
+["devtools:build"]
+description = "Build every binary into the bin directory"
+run = '''
+#!/usr/bin/env bash
+set -eu
+CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags "$(bash "$DEVTOOLS_DIR/scripts/go-ldflags.sh")" -o bin/ ${DEVTOOLS_GO_BIN_PACKAGES:-./cmd/...} "$@"
+'''
+
+["devtools:install"]
+description = "Install every binary to GOPATH/bin"
+run = '''
+#!/usr/bin/env bash
+set -eu
+CGO_ENABLED=0 go install -trimpath -buildvcs=false -ldflags "$(bash "$DEVTOOLS_DIR/scripts/go-ldflags.sh")" ${DEVTOOLS_GO_BIN_PACKAGES:-./cmd/...} "$@"
+'''
+
+["devtools:format-go"]
+description = "Format Go code via golangci-lint's formatters"
+run = '''
+#!/usr/bin/env bash
+set -eu
+golangci-lint fmt ${DEVTOOLS_GO_PACKAGES:-./...} "$@"
+'''
+
+["devtools:fix-go"]
+description = "Fix Go linting issues"
+run = [
+  '''
+#!/usr/bin/env bash
+set -eu
+go fix ${DEVTOOLS_GO_PACKAGES:-./...} "$@"
+''',
+  '''
+#!/usr/bin/env bash
+set -eu
+go fix ${DEVTOOLS_GO_PACKAGES:-./...} "$@"
+''',
+  '''
+#!/usr/bin/env bash
+set -eu
+golangci-lint fmt ${DEVTOOLS_GO_PACKAGES:-./...} "$@"
+''',
+  '''
+#!/usr/bin/env bash
+set -eu
+golangci-lint run --fix --modules-download-mode=${DEVTOOLS_GO_MODULES_MODE:-readonly} ${DEVTOOLS_GO_PACKAGES:-./...} "$@"
+''',
+]
+
+["devtools:lint-go"]
+description = "Run Go linters via golangci-lint"
+run = '''
+#!/usr/bin/env bash
+set -eu
+golangci-lint run --modules-download-mode=${DEVTOOLS_GO_MODULES_MODE:-readonly} ${DEVTOOLS_GO_PACKAGES:-./...} "$@"
+'''
+
+["devtools:lint-go-arch"]
+description = "Enforce intra-project layering rules from .go-arch-lint.yml"
+run = "go-arch-lint check"
+
+["devtools:lint-go-all"]
+description = "Aggregate every Go-flavored lint gate"
+run = [
+  "mise run devtools:lint-go",
+  "mise run devtools:lint-go-modernize",
+  "mise run devtools:lint-go-deadcode",
+  "mise run devtools:lint-go-arch",
+]
+
+["devtools:lint-go-modernize"]
+description = "Fail if `go fix` would modernize the tree"
+run = '''
+#!/usr/bin/env bash
+set -eu
+diff_output=$(go fix -diff ${DEVTOOLS_GO_PACKAGES:-./...} 2>&1)
+if [[ -n "$diff_output" ]]; then
+    echo "go fix would modernize the tree — run 'mise run devtools:fix-go' and commit:" >&2
+    echo "$diff_output" >&2
+    exit 1
+fi
+'''
+
+["devtools:lint-go-deadcode"]
+description = "Fail if `deadcode` finds unreachable functions from the binary entry points"
+run = '''
+#!/usr/bin/env bash
+set -eu
+output=$(go tool deadcode ${DEVTOOLS_GO_BIN_PACKAGES:-./cmd/...} 2>&1)
+if [[ -n "$output" ]]; then
+    echo "deadcode found unreachable code — remove or justify:" >&2
+    echo "$output" >&2
+    exit 1
+fi
+'''
+
+["devtools:lint-go-deadcode-tests"]
+description = "Like lint-go-deadcode but roots reachability at every test binary too"
+run = '''
+#!/usr/bin/env bash
+set -eu
+output=$(go tool deadcode -test ${DEVTOOLS_GO_PACKAGES:-./...} 2>&1)
+if [[ -n "$output" ]]; then
+    echo "deadcode (with -test) found unreachable code:" >&2
+    echo "$output" >&2
+    exit 1
+fi
+'''
+
+["devtools:test-go"]
+description = "Run the Go tests"
+run = '''
+#!/usr/bin/env bash
+set -eu
+go test ${DEVTOOLS_GO_PACKAGES:-./...} "$@"
+'''
+
+["devtools:test-go-race"]
+description = "Run the Go tests with the race detector"
+run = '''
+#!/usr/bin/env bash
+set -eu
+go test -race ${DEVTOOLS_GO_PACKAGES:-./...} "$@"
+'''
+
+["devtools:mutate-go"]
+description = "Run mutation testing via gremlins"
+usage = 'arg "<path>" default="."'
+run = '''
+#!/usr/bin/env bash
+set -eu
+go tool gremlins unleash --timeout-coefficient "${GREMLINS_TIMEOUT_COEFFICIENT:-100}" $usage_path "$@"
+'''
+
+["devtools:mutate-go-all"]
+description = "Mutate the whole module from the repository root"
+run = '''
+#!/usr/bin/env bash
+set -eu
+go tool gremlins unleash --timeout-coefficient "${GREMLINS_TIMEOUT_COEFFICIENT:-100}" . "$@"
+'''
+
+["devtools:fuzz-go"]
+description = "Run native Go fuzz targets under [path] (default the entire module)"
+usage = 'arg "<path>" default="./..."'
+run = '''
+#!/usr/bin/env bash
+set -eu
+bash "$DEVTOOLS_DIR/scripts/fuzz.sh" $usage_path "$@"
+'''
+
+["devtools:cover-go"]
+description = "Run the Go tests with coverage, print the per-function breakdown, and enforce the .testcoverage.yml thresholds"
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+go test -coverprofile=coverage.out ${DEVTOOLS_GO_PACKAGES:-./...}
+echo
+go tool cover -func=coverage.out | tail -n 30
+echo
+go tool go-test-coverage --config .testcoverage.yml
+'''
+
+["devtools:cover-go-html"]
+description = "Open the HTML coverage report"
+run = [
+  '''
+#!/usr/bin/env bash
+set -eu
+go test -coverprofile=coverage.out ${DEVTOOLS_GO_PACKAGES:-./...} "$@"
+''',
+  "go tool cover -html=coverage.out",
+]
+
+["devtools:cover-go-cobertura"]
+description = "Emit a Cobertura XML report from one local text profile"
+run = [
+  '''
+#!/usr/bin/env bash
+set -eu
+go test -coverprofile=coverage.out ${DEVTOOLS_GO_PACKAGES:-./...} "$@"
+''',
+  '''
+#!/usr/bin/env bash
+set -eu
+go tool gocover-cobertura < coverage.out > coverage.xml "$@"
+''',
+]
+
+["devtools:cover-go-binary"]
+description = "Run the Go tests into <covdir> as binary coverage, then render Cobertura XML"
+usage = 'arg "<covdir>" default="coverage.covdata"'
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+covdir="$MISE_PROJECT_ROOT/$usage_covdir"
+rm -rf "$covdir"
+mkdir -p "$covdir"
+go test ${DEVTOOLS_GO_PACKAGES:-./...} -cover -args -test.gocoverdir="$covdir"
+go tool covdata textfmt -i="$covdir" -o=coverage.out
+go tool gocover-cobertura < coverage.out > coverage.xml
+'''
+
+["devtools:cover-go-merge"]
+description = "Merge the per-slot binary coverage dirs into one report"
+usage = 'arg "<slotsdir>" default="coverage.covdata.slots"'
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+rm -rf coverage.covdata.merged
+mkdir -p coverage.covdata.merged
+go tool covdata merge -i="$(ls -d "$usage_slotsdir"/*/ | paste -sd, -)" -o=coverage.covdata.merged
+go tool covdata textfmt -i=coverage.covdata.merged -o=coverage.out
+go tool gocover-cobertura < coverage.out > coverage.xml
+'''
+
+["devtools:cover-go-check"]
+description = "Run only the threshold gate against an existing coverage.out"
+run = "go tool go-test-coverage --config .testcoverage.yml"
+
+["devtools:vuln"]
+description = "Scan the module for known vulnerabilities reachable from the binary entry points"
+run = '''
+#!/usr/bin/env bash
+set -eu
+go tool govulncheck ${DEVTOOLS_GO_PACKAGES:-./...} "$@"
+'''
+
+["devtools:vuln-sarif"]
+description = "Emit the govulncheck results as SARIF to <file> for the security.yml upload"
+usage = 'arg "<file>"'
+run = '''
+#!/usr/bin/env bash
+set -eu
+go tool govulncheck -format sarif ${DEVTOOLS_GO_PACKAGES:-./...} > "$usage_file" "$@"
+'''
+
+["devtools:gomodscan"]
+description = "Scan each vendored module for supply-chain concerns in one pass"
+run = "go tool gomodscan"
+
+["devtools:gomodscan-sarif"]
+description = "Emit the gomodscan findings as SARIF to <file> for the security.yml upload"
+usage = 'arg "<file>"'
+run = '''
+#!/usr/bin/env bash
+set -uo pipefail
+go tool gomodscan -format sarif > "$usage_file"
+rc=$?
+if [ "$rc" -gt 1 ]; then exit "$rc"; fi
+'''
+
+["devtools:tidy"]
+description = "Tidy go.mod"
+run = "go mod tidy"
+
+["devtools:verify"]
+description = "Verify dependencies"
+run = "go mod verify"
+
+["devtools:vendor"]
+description = "Vendor dependencies into ./vendor"
+run = ["go mod tidy", "go mod vendor"]
+
+["devtools:vendor-check"]
+description = "Check that vendor/, go.mod, and go.sum are in sync"
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+go mod tidy
+go mod vendor
+if ! git diff --exit-code -- go.mod go.sum vendor/; then
+    echo "vendor drift detected — run 'mise run devtools:vendor' and commit" >&2
+    exit 1
+fi
+'''

@@ -65,6 +65,10 @@ python.uv_venv_auto = "source"
 # hint prints a runnable `mise lock` command without the shared body
 # carrying a repo-specific literal.
 [env]
+DEVTOOLS_GO_MODULES_MODE = "vendor"
+DEVTOOLS_PYTHON_DIRS = "packages"
+DEVTOOLS_PYTHON_SOURCE_DIRS = "packages/*/src"
+DEVTOOLS_PYTHON_PROPERTY_DIRS = "packages/*/tests/property"
 DEVTOOLS_LOCK_PLATFORMS = "linux-x64,linux-arm64,macos-arm64,windows-x64"
 
 # Finish the arrangement the [settings] block above sets up: mise leaves
@@ -95,8 +99,10 @@ includes = [
   ".devtools/tasks/fix.toml",
   ".devtools/tasks/format.toml",
   ".devtools/tasks/git-hooks.toml",
+  ".devtools/tasks/go.toml",
   ".devtools/tasks/lint.toml",
   ".devtools/tasks/preapproval.toml",
+  ".devtools/tasks/python.toml",
   ".devtools/tasks/security.toml",
   ".devtools/tasks/leaks.toml",
   ".devtools/tasks/toolchain.toml",
@@ -170,12 +176,10 @@ run = ["vale sync", "uv sync"]
 # hashes pinned to 7) that Justfile variables used to hold.
 
 [tasks.build]
-description = "Build every binary into the bin directory"
-run = 'CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags "$(bash tools/go-ldflags.sh)" -o bin/ ./cmd/...'
+run = "mise run devtools:build"
 
 [tasks.install]
-description = "Install every binary to GOPATH/bin"
-run = 'CGO_ENABLED=0 go install -trimpath -buildvcs=false -ldflags "$(bash tools/go-ldflags.sh)" ./cmd/...'
+run = "mise run devtools:install"
 
 # The first argument names the ./cmd/<bin> package; the rest pass
 # through to it. No usage spec, because a spec declaring one argument
@@ -198,8 +202,7 @@ run = "rm -rf bin dist coverage.out coverage.html coverage.txt coverage.xml cove
 # --- Format ---
 
 [tasks.format-go]
-description = "Format Go code via golangci-lint's formatters"
-run = "golangci-lint fmt"
+run = "mise run devtools:format-go"
 
 # The in-place fixer paired with lint-shell-fmt's -d gate. shfmt reads
 # indent width and the final-newline setting from .editorconfig. The
@@ -223,8 +226,7 @@ if [ -n "$files" ]; then shfmt -w $files; fi
 # Scope comes from [tool.ruff] in pyproject.toml, so the path-less
 # invocation walks the whole tree, tests included.
 [tasks.format-py]
-description = "Format Python code in place via ruff's formatter"
-run = "uv run ruff format"
+run = "mise run devtools:format-py"
 
 # --- Fix ---
 
@@ -236,19 +238,12 @@ run = "uv run ruff format"
 # exactly the dependency set the compiler does and never falls back to
 # the module proxy.
 [tasks.fix-go]
-description = "Fix Go linting issues"
-run = [
-  "go fix ./...",
-  "go fix ./...",
-  "golangci-lint fmt",
-  "golangci-lint run --fix --modules-download-mode=vendor",
-]
+run = "mise run devtools:fix-go"
 
 # Applies only ruff's safe autofixes; anything it leaves behind needs a
 # human. Pair with format-py, which handles layout rather than lint.
 [tasks.fix-py]
-description = "Fix Python linting issues"
-run = "uv run ruff check --fix"
+run = "mise run devtools:fix-py"
 
 [tasks.fix-markdown-wrap]
 description = "Join every hard-wrapped Markdown paragraph back into one line"
@@ -257,15 +252,13 @@ run = "mise run lint-markdown-wrap -- --fix"
 # --- Lint ---
 
 [tasks.lint-go]
-description = "Run Go linters via golangci-lint (vendor-mode)"
-run = "golangci-lint run --modules-download-mode=vendor"
+run = "mise run devtools:lint-go"
 
 # The compiler covers cycles and cross-module visibility; this catches
 # the layer rules it can't (e.g., "cmd may depend on internal but not
 # the reverse").
 [tasks.lint-go-arch]
-description = "Enforce intra-project layering rules from .go-arch-lint.yml"
-run = "go-arch-lint check"
+run = "mise run devtools:lint-go-arch"
 
 # Covers the standalone scripts actionlint never opens (tools/fuzz.sh
 # and its neighbors). `--others` puts a brand new script in the gate
@@ -322,35 +315,18 @@ run = [
 
 # Same membership as the old lint-go-all recipe.
 [tasks.lint-go-all]
-description = "Aggregate every Go-flavored lint gate"
-run = [
-  "mise run lint-go",
-  "mise run lint-go-modernize",
-  "mise run lint-go-deadcode",
-  "mise run lint-go-arch",
-  "mise run devtools:lint-workflows",
-]
+run = ["mise run devtools:lint-go-all", "mise run devtools:lint-workflows"]
 
 # The Python counterpart to lint-go-all, covering the source under
 # packages/ and its tests. lint-bandit rides with the source linters
 # because the Go side runs gosec inside golangci-lint.
 [tasks.lint-py-all]
-description = "Aggregate every Python-flavored lint gate"
-run = [
-  "mise run lint-ruff-format",
-  "mise run lint-ruff",
-  "mise run lint-types",
-  "mise run lint-complexity",
-  "mise run lint-deadcode",
-  "mise run lint-dup-code",
-  "mise run lint-bandit",
-]
+run = "mise run devtools:lint-py-all"
 
 # Report drift and fail without rewriting; format-py is the in-place
 # counterpart.
 [tasks.lint-ruff-format]
-description = "Check Python formatting via ruff's formatter in --check mode"
-run = "uv run ruff format --check"
+run = "mise run devtools:lint-ruff-format"
 
 # Rule selection and the justified ignore list live in pyproject.toml
 # under [tool.ruff].
@@ -360,34 +336,29 @@ run = "uv run ruff format --check"
 # default is not equivalent: it passes a literal empty argument, which
 # ruff rejects with E902.
 [tasks.lint-ruff]
-description = "Lint Python against the full ruff ruleset"
-run = "uv run ruff check"
+run = "mise run devtools:lint-ruff"
 
 # The [tool.pyrefly] tables in pyproject.toml pin every error kind and
 # name the project scope, so a project-mode check is the whole gate. The
 # wrapper exists for agent worktrees, where pyrefly's hidden-path
 # skipping leaves it an empty view; see the script header.
 [tasks.lint-types]
-description = "Type check with pyrefly"
-run = "bash tools/lint-types.sh"
+run = "mise run devtools:lint-types"
 
 # Scope and threshold live in pyproject.toml under [tool.complexipy].
 [tasks.lint-complexity]
-description = "Measure per-function cognitive complexity against the ceiling"
-run = "uv run complexipy"
+run = "mise run devtools:lint-complexity"
 
 # Scope lives in pyproject.toml under [tool.vulture].
 [tasks.lint-deadcode]
-description = "Find dead Python code with vulture"
-run = "uv run vulture"
+run = "mise run devtools:lint-deadcode"
 
 # pylint pared down in pyproject.toml to its similarities checker alone
 # -- the one message in pylint's catalog no other tool in the chain
 # covers. pylint takes its scan roots on the command line rather than
 # from config, so the scope lives here.
 [tasks.lint-dup-code]
-description = "Detect copy-pasted Python code with pylint"
-run = "uv run pylint packages"
+run = "mise run devtools:lint-dup-code"
 
 # The static second pass behind ruff's `S` rules -- ruff ports only part
 # of bandit's checks and trails its releases. Pointing the scan at each
@@ -398,8 +369,7 @@ run = "uv run pylint packages"
 # would stay green over code it never saw. Scanning packages/ whole
 # would take the tests back in and fail on their asserts.
 [tasks.lint-bandit]
-description = "Scan the Python source for insecure code patterns with bandit"
-run = "uv run bandit -r packages/*/src -q"
+run = "mise run devtools:lint-bandit"
 
 # The glob excludes the LICENSE (canonical Apache 2.0 text), the
 # auto-generated changelog, vale's own style packages, scratch dirs,
@@ -547,48 +517,18 @@ run = [
 # Mirrors the vendor-drift check: contributors must run
 # `mise run fix-go` before pushing.
 [tasks.lint-go-modernize]
-description = "Fail if `go fix` would modernize the tree"
-run = '''
-#!/usr/bin/env bash
-set -eu
-diff_output=$(go fix -diff ./... 2>&1)
-if [[ -n "$diff_output" ]]; then
-    echo "go fix would modernize the tree — run 'mise run fix-go' and commit:" >&2
-    echo "$diff_output" >&2
-    exit 1
-fi
-'''
+run = "mise run devtools:lint-go-modernize"
 
 # Whole-program reachability complements the package-scoped `unused`
 # linter in golangci-lint. The tool prints findings but exits 0, so any
 # output is treated as failure.
 [tasks.lint-go-deadcode]
-description = "Fail if `deadcode` finds unreachable functions from the binary entry points"
-run = '''
-#!/usr/bin/env bash
-set -eu
-output=$(go tool deadcode ./cmd/... 2>&1)
-if [[ -n "$output" ]]; then
-    echo "deadcode found unreachable code — remove or justify:" >&2
-    echo "$output" >&2
-    exit 1
-fi
-'''
+run = "mise run devtools:lint-go-deadcode"
 
 # Noisier; intentionally not part of the default lint gate. Run before
 # wholesale refactors to surface code only kept alive by tests.
 [tasks.lint-go-deadcode-tests]
-description = "Like lint-go-deadcode but roots reachability at every test binary too"
-run = '''
-#!/usr/bin/env bash
-set -eu
-output=$(go tool deadcode -test ./... 2>&1)
-if [[ -n "$output" ]]; then
-    echo "deadcode (with -test) found unreachable code:" >&2
-    echo "$output" >&2
-    exit 1
-fi
-'''
+run = "mise run devtools:lint-go-deadcode-tests"
 
 # --- Test ---
 # The CI matrix runs this family on Windows, which is why it stayed in
@@ -608,16 +548,14 @@ run = [
 # Extra invocation args append to the run string, so `mise run test-go
 # -- -run TestFoo` reaches `go test` unchanged.
 [tasks.test-go]
-description = "Run the Go tests"
-run = "go test ./..."
+run = "mise run devtools:test-go"
 
 # Slower than plain test-go; pairs with goroutine-bearing code as it
 # lands. Native fuzz targets discovered by the nightly workflow rerun
 # under -race automatically when their function-under-test is reached
 # from -race builds; for ad-hoc local runs use this task.
 [tasks.test-go-race]
-description = "Run the Go tests with the race detector"
-run = "go test -race ./..."
+run = "mise run devtools:test-go-race"
 
 # The shell scripts under scripts/ and tools/ answer to bats rather than
 # to `go test`, so they get a third suite alongside the two language
@@ -642,8 +580,7 @@ run = "bats --recursive $usage_path"
 # Serial by default so a failing run prints a clean, ordered trace; pass
 # `mise run test-py -n auto` to fan the suite across xdist workers.
 [tasks.test-py]
-description = "Run the Python tests"
-run = "uv run pytest"
+run = "mise run devtools:test-py"
 
 # Gremlins gates each mutant's test run at
 # `coefficient * baseline_test_time`. The upstream default of 3 leaves a
@@ -652,16 +589,13 @@ run = "uv run pytest"
 # under any noticeable system load. 100 keeps the per-mutation worst case
 # under a minute. Override by setting GREMLINS_TIMEOUT_COEFFICIENT.
 [tasks.mutate-go]
-description = "Run mutation testing via gremlins"
-usage = 'arg "<path>" default="."'
-run = 'go tool gremlins unleash --timeout-coefficient "${GREMLINS_TIMEOUT_COEFFICIENT:-100}" $usage_path'
+run = "mise run devtools:mutate-go"
 
 # The nightly form, factored out so the mutation-nightly workflow has a
 # single task to invoke and contributors can run the same scan locally
 # before opening a release-bound PR.
 [tasks.mutate-go-all]
-description = "Mutate the whole module from the repository root"
-run = 'go tool gremlins unleash --timeout-coefficient "${GREMLINS_TIMEOUT_COEFFICIENT:-100}" .'
+run = "mise run devtools:mutate-go-all"
 
 # Both sweeps are slow enough to belong on a nightly schedule rather than
 # in the inner loop; this is the entry point for running them locally.
@@ -672,13 +606,7 @@ run = ["mise run mutate-go-all", "mise run mutate-py"]
 # cosmic-ray is the Python counterpart to gremlins. Scope, per-mutant
 # timeout, and the test command live in cosmic-ray.toml.
 [tasks.mutate-py]
-description = "Run mutation testing over the Python packages"
-run = [
-  "mkdir -p .cosmic-ray",
-  "uv run cosmic-ray init cosmic-ray.toml .cosmic-ray/session.sqlite",
-  "uv run cosmic-ray exec cosmic-ray.toml .cosmic-ray/session.sqlite",
-  "uv run cr-report .cosmic-ray/session.sqlite --show-pending",
-]
+run = "mise run devtools:mutate-py"
 
 [tasks.fuzz]
 description = "Run every fuzzing sweep"
@@ -688,9 +616,7 @@ run = ["mise run fuzz-go", "mise run fuzz-py"]
 # for the FUZZ_TIME budget (default 30s); the nightly workflow calls the
 # same script with a longer FUZZ_TIME.
 [tasks.fuzz-go]
-description = "Run native Go fuzz targets under [path] (default the entire module)"
-usage = 'arg "<path>" default="./..."'
-run = "tools/fuzz.sh $usage_path"
+run = "mise run devtools:fuzz-go"
 
 # hypofuzz drives the existing hypothesis property tests under
 # coverage-guided search. It never runs on a pull request: the nightly
@@ -698,48 +624,26 @@ run = "tools/fuzz.sh $usage_path"
 # A script body rather than a run string because invocation args have to
 # go before the `--` separator, and appended args would end up after it.
 [tasks.fuzz-py]
-description = "Run the Python property tests under coverage-guided fuzzing"
-run = '''
-#!/usr/bin/env bash
-set -eu
-uv run hypothesis fuzz "$@" -- packages/*/tests/property
-'''
+run = "mise run devtools:fuzz-py"
 
 [tasks.cover]
 description = "Run every coverage gate"
 run = ["mise run cover-go", "mise run cover-py"]
 
 [tasks.cover-go]
-description = "Run the Go tests with coverage, print the per-function breakdown, and enforce the .testcoverage.yml thresholds"
-run = '''
-#!/usr/bin/env bash
-set -euo pipefail
-go test -coverprofile=coverage.out ./...
-echo
-go tool cover -func=coverage.out | tail -n 30
-echo
-go tool go-test-coverage --config .testcoverage.yml
-'''
+run = "mise run devtools:cover-go"
 
 # Highlights covered and uncovered regions in source view so a
 # contributor can find exactly where a new test should land. Wraps
 # `go tool cover -html`.
 [tasks.cover-go-html]
-description = "Open the HTML coverage report"
-run = [
-  "go test -coverprofile=coverage.out ./...",
-  "go tool cover -html=coverage.out",
-]
+run = "mise run devtools:cover-go-html"
 
 # Cobertura is the lingua franca format coverage dashboards accept. This
 # is the quick local form; CI's per-slot and combined uploads flow
 # through cover-go-binary and cover-go-merge below.
 [tasks.cover-go-cobertura]
-description = "Emit a Cobertura XML report from one local text profile"
-run = [
-  "go test -coverprofile=coverage.out ./...",
-  "go tool gocover-cobertura < coverage.out > coverage.xml",
-]
+run = "mise run devtools:cover-go-cobertura"
 
 # CI uploads the binary covdir per matrix slot so the downstream coverage
 # job can merge the slots with `go tool covdata merge` (see cover-go-merge)
@@ -749,42 +653,20 @@ run = [
 # relative path. MISE_PROJECT_ROOT stands in for justfile_directory(): on Windows it arrives as a native path while $PWD
 # is the Git Bash form, and go needs the native one.
 [tasks.cover-go-binary]
-description = "Run the Go tests into <covdir> as binary coverage, then render Cobertura XML"
-usage = 'arg "<covdir>" default="coverage.covdata"'
-run = '''
-#!/usr/bin/env bash
-set -euo pipefail
-covdir="$MISE_PROJECT_ROOT/$usage_covdir"
-rm -rf "$covdir"
-mkdir -p "$covdir"
-go test ./... -cover -args -test.gocoverdir="$covdir"
-go tool covdata textfmt -i="$covdir" -o=coverage.out
-go tool gocover-cobertura < coverage.out > coverage.xml
-'''
+run = "mise run devtools:cover-go-binary"
 
 # Takes one subdirectory per slot under <slotsdir>, merges them into a
 # single profile, and renders the combined Cobertura XML to coverage.xml.
 # CI runs this in the downstream coverage job after collecting every
 # slot's uploaded covdata.
 [tasks.cover-go-merge]
-description = "Merge the per-slot binary coverage dirs into one report"
-usage = 'arg "<slotsdir>" default="coverage.covdata.slots"'
-run = '''
-#!/usr/bin/env bash
-set -euo pipefail
-rm -rf coverage.covdata.merged
-mkdir -p coverage.covdata.merged
-go tool covdata merge -i="$(ls -d "$usage_slotsdir"/*/ | paste -sd, -)" -o=coverage.covdata.merged
-go tool covdata textfmt -i=coverage.covdata.merged -o=coverage.out
-go tool gocover-cobertura < coverage.out > coverage.xml
-'''
+run = "mise run devtools:cover-go-merge"
 
 # The bare check separates a CI step that runs tests itself from the
 # threshold enforcement, and gives a contributor a way to re-check after
 # editing .testcoverage.yml without rerunning the suite.
 [tasks.cover-go-check]
-description = "Run only the threshold gate against an existing coverage.out"
-run = "go tool go-test-coverage --config .testcoverage.yml"
+run = "mise run devtools:cover-go-check"
 
 # The Python floor is absolute: [tool.coverage] in pyproject.toml sets
 # fail_under = 100 with branch coverage on, so anything unreachable
@@ -801,14 +683,12 @@ run = "go tool go-test-coverage --config .testcoverage.yml"
 # lint-bandit uses gives one --cov per member, so a new member scopes
 # itself, and an unimported module still lands at 0% against the floor.
 [tasks.cover-py]
-description = "Run the Python tests with branch coverage and enforce the 100% floor"
-run = 'uv run pytest --cov-branch $(printf -- "--cov=%s " packages/*/src)'
+run = "mise run devtools:cover-py"
 
 # Re-print the report and re-check the threshold against whatever data
 # .coverage already holds, without rerunning the suite.
 [tasks.cover-py-check]
-description = "Re-check the Python coverage threshold without rerunning the suite"
-run = "uv run coverage report"
+run = "mise run devtools:cover-py-check"
 
 # --- Security ---
 
@@ -817,17 +697,14 @@ run = "uv run coverage report"
 # dep in go.mod so the scanner version is reproducible; bumped via
 # Renovate.
 [tasks.vuln]
-description = "Scan the module for known vulnerabilities reachable from the binary entry points"
-run = "go tool govulncheck ./..."
+run = "mise run devtools:vuln"
 
 # govulncheck exits 0 in SARIF mode whether or not it finds
 # vulnerabilities -- the report has them -- so this task surfaces
 # findings through Code Scanning rather than failing the run, while a
 # genuine scanner failure still exits non-zero.
 [tasks.vuln-sarif]
-description = "Emit the govulncheck results as SARIF to <file> for the security.yml upload"
-usage = 'arg "<file>"'
-run = 'go tool govulncheck -format sarif ./... > "$usage_file"'
+run = "mise run devtools:vuln-sarif"
 
 # gomodscan flags dependencies that pkg.go.dev marks as retracted or
 # deprecated (S2C2F SCA-3), and dependencies the OSV malicious-package
@@ -835,22 +712,13 @@ run = 'go tool govulncheck -format sarif ./... > "$usage_file"'
 # for the module set, so run `mise run vendor` first when it is stale.
 # Exits 1 on findings, 2 on tool failure.
 [tasks.gomodscan]
-description = "Scan each vendored module for supply-chain concerns in one pass"
-run = "go tool gomodscan"
+run = "mise run devtools:gomodscan"
 
 # Unlike the gomodscan gate task, a findings exit (1) does not fail this
 # one -- Code Scanning surfaces severity downstream -- but a tool failure
 # (exit 2) still propagates.
 [tasks.gomodscan-sarif]
-description = "Emit the gomodscan findings as SARIF to <file> for the security.yml upload"
-usage = 'arg "<file>"'
-run = '''
-#!/usr/bin/env bash
-set -uo pipefail
-go tool gomodscan -format sarif > "$usage_file"
-rc=$?
-if [ "$rc" -gt 1 ]; then exit "$rc"; fi
-'''
+run = "mise run devtools:gomodscan-sarif"
 
 # Pairs govulncheck with the gomodscan and gitleaks scanners so the
 # security.yml workflow invokes one task rather than enumerate the
@@ -871,53 +739,31 @@ run = [
 # export and the HTTP cache both go in a throwaway dir the trap removes
 # on exit, so the run stays hermetic.
 [tasks.audit]
-description = "Audit the locked Python dependencies against the advisory database"
-run = '''
-#!/usr/bin/env bash
-set -eu
-work=$(mktemp -d)
-trap 'rm -rf "$work"' EXIT
-uv export --quiet --format pylock.toml --no-emit-project -o "$work/pylock.toml"
-uv run pip-audit --cache-dir "$work/cache" --locked "$work"
-'''
+run = "mise run devtools:audit"
 
 # --- Dependencies ---
 
 [tasks.tidy]
-description = "Tidy go.mod"
-run = "go mod tidy"
+run = "mise run devtools:tidy"
 
 [tasks.verify]
-description = "Verify dependencies"
-run = "go mod verify"
+run = "mise run devtools:verify"
 
 # Vendoring makes new transitive dependencies show up as a visible diff
 # at PR review time, turning the trust decision on each addition into a
 # human one.
 [tasks.vendor]
-description = "Vendor dependencies into ./vendor"
-run = ["go mod tidy", "go mod vendor"]
+run = "mise run devtools:vendor"
 
 # CI runs this on every PR; contributors run `mise run vendor` and commit
 # the result.
 [tasks.vendor-check]
-description = "Check that vendor/, go.mod, and go.sum are in sync"
-run = '''
-#!/usr/bin/env bash
-set -euo pipefail
-go mod tidy
-go mod vendor
-if ! git diff --exit-code -- go.mod go.sum vendor/; then
-    echo "vendor drift detected — run 'mise run vendor' and commit" >&2
-    exit 1
-fi
-'''
+run = "mise run devtools:vendor-check"
 
 # The Python counterpart to vendor-check. CI runs this on every PR;
 # contributors run `uv lock` and commit the result.
 [tasks.lock-check]
-description = "Check that uv.lock is in sync with pyproject.toml"
-run = "uv lock --check"
+run = "mise run devtools:lock-check"
 
 # --- Aggregators ---
 # Composed quality gates so a contributor hits one task instead of

@@ -1,0 +1,22 @@
+---
+apiVersion: vendir.k14s.io/v1alpha1
+kind: Config
+directories:
+  - path: .config/mise/conf.d
+    contents:
+      - path: .
+        git:
+          url: https://github.com/tbhb-dev/devtools
+          ref: v0.10.0
+        includePaths:
+          - .config/mise/conf.d/**
+        newRootPath: .config/mise/conf.d
+  - path: .devtools
+    contents:
+      - path: .
+        git:
+          url: https://github.com/tbhb-dev/devtools
+          ref: v0.10.0
+        includePaths:
+          - .devtools/**
+        newRootPath: .devtools

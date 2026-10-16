@@ -1,0 +1,122 @@
+# Opt-in python tasks. Include this file from [task_config].
+# Tool versions come from the shared conf.d pins; project config stays local.
+
+["devtools:format-py"]
+description = "Format Python code in place via ruff's formatter"
+run = "uv run ruff format"
+
+["devtools:fix-py"]
+description = "Fix Python linting issues"
+run = "uv run ruff check --fix"
+
+["devtools:lint-py-all"]
+description = "Aggregate every Python-flavored lint gate"
+run = [
+  "mise run devtools:lint-ruff-format",
+  "mise run devtools:lint-ruff",
+  "mise run devtools:lint-types",
+  "mise run devtools:lint-complexity",
+  "mise run devtools:lint-deadcode",
+  "mise run devtools:lint-dup-code",
+  "mise run devtools:lint-bandit",
+]
+
+["devtools:lint-ruff-format"]
+description = "Check Python formatting via ruff's formatter in --check mode"
+run = "uv run ruff format --check"
+
+["devtools:lint-ruff"]
+description = "Lint Python against the full ruff ruleset"
+run = "uv run ruff check"
+
+["devtools:lint-types"]
+description = "Type check with pyrefly"
+run = '''
+#!/usr/bin/env bash
+set -eu
+bash "$DEVTOOLS_DIR/scripts/lint-types.sh" "$@"
+'''
+
+["devtools:lint-complexity"]
+description = "Measure per-function cognitive complexity against the ceiling"
+run = '''
+#!/usr/bin/env bash
+set -eu
+uv run complexipy ${DEVTOOLS_PYTHON_DIRS:-src} "$@"
+'''
+
+["devtools:lint-deadcode"]
+description = "Find dead Python code with vulture"
+run = '''
+#!/usr/bin/env bash
+set -eu
+uv run vulture ${DEVTOOLS_PYTHON_DIRS:-src} "$@"
+'''
+
+["devtools:lint-dup-code"]
+description = "Detect copy-pasted Python code with pylint"
+run = '''
+#!/usr/bin/env bash
+set -eu
+uv run pylint ${DEVTOOLS_PYTHON_DIRS:-src} "$@"
+'''
+
+["devtools:lint-bandit"]
+description = "Scan the Python source for insecure code patterns with bandit"
+run = '''
+#!/usr/bin/env bash
+set -eu
+uv run bandit -r ${DEVTOOLS_PYTHON_SOURCE_DIRS:-src} -q "$@"
+'''
+
+["devtools:test-py"]
+description = "Run the Python tests"
+run = "uv run pytest"
+
+["devtools:mutate-py"]
+description = "Run mutation testing over the Python packages"
+run = [
+  '''
+#!/usr/bin/env bash
+set -eu
+mkdir -p .cosmic-ray "$@"
+''',
+  "uv run cosmic-ray init cosmic-ray.toml .cosmic-ray/session.sqlite",
+  "uv run cosmic-ray exec cosmic-ray.toml .cosmic-ray/session.sqlite",
+  "uv run cr-report .cosmic-ray/session.sqlite --show-pending",
+]
+
+["devtools:fuzz-py"]
+description = "Run the Python property tests under coverage-guided fuzzing"
+run = '''
+#!/usr/bin/env bash
+set -eu
+uv run hypothesis fuzz "$@" -- ${DEVTOOLS_PYTHON_PROPERTY_DIRS:-tests/property}
+'''
+
+["devtools:cover-py"]
+description = "Run the Python tests with branch coverage and enforce the 100% floor"
+run = '''
+#!/usr/bin/env bash
+set -eu
+uv run pytest --cov-branch $(printf -- "--cov=%s " ${DEVTOOLS_PYTHON_SOURCE_DIRS:-src}) "$@"
+'''
+
+["devtools:cover-py-check"]
+description = "Re-check the Python coverage threshold without rerunning the suite"
+run = "uv run coverage report"
+
+["devtools:audit"]
+description = "Audit the locked Python dependencies against the advisory database"
+run = '''
+#!/usr/bin/env bash
+set -eu
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+uv export --quiet --format pylock.toml --no-emit-project -o "$work/pylock.toml"
+uv run pip-audit --cache-dir "$work/cache" --locked "$work"
+'''
+
+["devtools:lock-check"]
+description = "Check that uv.lock is in sync with pyproject.toml"
+run = "uv lock --check"
