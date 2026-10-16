@@ -29,7 +29,7 @@ log=$(mktemp)
 trap 'rm -f "$log"' EXIT
 
 status=0
-gitleaks git --verbose . >"$log" 2>&1 || status=$?
+gitleaks git --verbose --redact . >"$log" 2>&1 || status=$?
 cat "$log"
 
 if ! grep -qE '[1-9][0-9]* commits scanned' "$log"; then
