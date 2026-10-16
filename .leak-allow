@@ -1,0 +1,5 @@
+# Synthetic networking examples in upstream Go dependencies.
+^vendor/
+# Shared scanner source and synthetic regression fixtures spell out leak shapes.
+^\.devtools/scripts/check-leaks\.sh$
+^\.devtools/scripts/check-leaks\.bats$

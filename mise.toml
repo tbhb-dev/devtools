@@ -98,6 +98,7 @@ includes = [
   ".devtools/tasks/lint.toml",
   ".devtools/tasks/preapproval.toml",
   ".devtools/tasks/security.toml",
+  ".devtools/tasks/leaks.toml",
   ".devtools/tasks/toolchain.toml",
 ]
 
@@ -299,6 +300,7 @@ if [ -n "$files" ]; then shellcheck $files; fi
 [tasks.lint]
 extends = "devtools:lint"
 run = [
+  "mise run devtools:lint-leaks",
   "mise run lint-go-all",
   "mise run lint-py-all",
   "mise run lint-prose",
@@ -596,7 +598,12 @@ fi
 
 [tasks.test]
 description = "Run every test suite"
-run = ["mise run test-go", "mise run test-py", "mise run test-hooks"]
+run = [
+  "mise run test-go",
+  "mise run test-py",
+  "mise run test-hooks",
+  "mise run test-leaks",
+]
 
 # Extra invocation args append to the run string, so `mise run test-go
 # -- -run TestFoo` reaches `go test` unchanged.
@@ -623,6 +630,10 @@ run = "go test -race ./..."
 # rule puts a script's suite beside the directory it tests, so naming
 # them individually means a new mirror never runs at all. Directories
 # holding Python suites carry no .bats file and are skipped.
+[tasks.test-leaks]
+description = "Run the shared leak scanner and hook regression suite"
+run = "bats .devtools/scripts/check-leaks.bats"
+
 [tasks.test-hooks]
 description = "Run the bats suites for the shell scripts under scripts/ and tools/"
 usage = 'arg "<path>" default="tests"'

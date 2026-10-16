@@ -1,0 +1,11 @@
+# Quiet output is part of the privacy contract: mise must not echo arguments.
+["devtools:lint-leaks"]
+description = "Check for private identifiers without printing their values"
+quiet = true
+run = "bash $DEVTOOLS_DIR/scripts/check-leaks.sh"
+
+# prek consumes Git ref lines itself; the wrapper must scan before prek.
+["devtools:check-leak-hook"]
+description = "Check that the leak scan runs before prek at pre-push"
+quiet = true
+run = "bash $DEVTOOLS_DIR/scripts/install-pre-push.sh --check"

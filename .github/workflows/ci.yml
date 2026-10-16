@@ -76,6 +76,13 @@ jobs:
       - name: Sync Vale styles and Python dependencies
         run: mise run install-tools
 
+      - name: Check private identifiers in the PR range
+        if: github.event_name == 'pull_request'
+        env:
+          LEAK_BASE: ${{ github.event.pull_request.base.sha }}
+          LEAK_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: mise run --quiet devtools:lint-leaks -- --range "$LEAK_BASE..$LEAK_HEAD"
+
       - name: Run lint gates
         run: mise run lint
 
