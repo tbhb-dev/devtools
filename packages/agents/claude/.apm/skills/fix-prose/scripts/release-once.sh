@@ -39,7 +39,11 @@ git_dir=$(command git rev-parse --absolute-git-dir 2>/dev/null) || {
 }
 
 lock="$git_dir/fix-prose.lock"
-release="$git_dir/fix-prose.release"
+
+# The token goes inside the worktree, where a session isolated in a linked
+# worktree can write. guard-target.sh reads it from there.
+top=$(command git rev-parse --show-toplevel)
+release="$top/.fix-prose/release"
 
 if [ ! -s "$lock" ]; then
   printf 'No lock is held, so nothing needs releasing. The edit is yours.\n'
@@ -55,6 +59,8 @@ if [ ! -e "$locked" ]; then
   exit 0
 fi
 
+mkdir -p "$top/.fix-prose"
+[ -f "$top/.fix-prose/.gitignore" ] || printf '*\n' >"$top/.fix-prose/.gitignore"
 : >"$release"
 
 printf 'Released for one edit:\n  %s\n\n' "$locked"
@@ -64,4 +70,4 @@ meets the guard again, so a second hand edit means running this again.
 Where the finding is a rewording rather than a decision, hand it back
 instead and let the fixer spend its own context on it:
 
-  Skill(fix-prose, args: \"${locked##*/} <lint command>  <the finding>\")"
+  Skill(fix-prose, args: \"${locked##*/} <lint command>\")"

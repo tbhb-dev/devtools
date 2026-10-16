@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 # context — everything a prose fix needs, and nothing else.
 #
-# The delegated writer runs this explicitly, so it starts with the
-# findings and document while the parent context stays clear.
-#
-# That split is why the work belongs to a delegated agent.
+# The writer runs this at the start of its own context, so it holds the
+# findings and the document before it makes a single call. The caller
+# never sees any of it, which is why the work belongs to a separate agent.
 #
 # Read-only throughout. The orchestrator's preflight owns the
 # preconditions; this gathers material.
@@ -35,7 +34,7 @@ state=${2:-}
 shift 2 2>/dev/null || true
 
 # Everything after the target and state, up to a --, is the command. Review
-# notes live in the workflow state rather than in the delegation arguments.
+# notes live in the workflow state rather than in the arguments.
 lint=""
 for word in "$@"; do
   [ "$word" = "--" ] && break
@@ -66,7 +65,14 @@ if [ ! -f "$target" ]; then
   exit 0
 fi
 
+# The caller saves decisions and review findings in the run's own state,
+# which sits inside the worktree so a sandboxed session can write there.
+# Earlier versions wrote a file in the git directory, which stays readable
+# as a fallback.
 notes="$state/notes"
+if [ ! -s "$notes" ]; then
+  notes="$(git rev-parse --absolute-git-dir 2>/dev/null)/fix-prose.notes"
+fi
 if [ -s "$notes" ]; then
   section "what the caller asked you to address"
   cat "$notes"

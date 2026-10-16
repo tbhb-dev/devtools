@@ -18,18 +18,19 @@ The gates already ran. Repeating them wastes the round, and a clean vale run is 
 
 `$ARGUMENTS`
 
-Treat the first word as the repository. A second word, when present, is the target file. Bind them once:
+The words are the repository root, the target file, and the workflow state. Bind them once:
 
 ```bash
-REPO="${ARGUMENTS%% *}"
+set -- $ARGUMENTS
+REPO=$1 TARGET=$2 STATE=$3
 ```
 
 ## Gather the inputs
 
 From `$REPO`, run these before judging anything:
 
-- `bash .claude/skills/fix-prose/scripts/check-suppressions.sh --diff` for what changed
-- `bash .claude/skills/fix-prose/scripts/check-suppressions.sh --verify` for edits outside the target
+- `bash .claude/skills/fix-prose/scripts/check-suppressions.sh --diff $STATE $TARGET` for what changed
+- `bash .claude/skills/fix-prose/scripts/check-suppressions.sh --verify $STATE $TARGET` for edits outside the target
 - `cat` the target for the result in one piece
 
 The diff is the review. Where it comes back empty, the fixer didn't change anything, and that's a finding unless its report said so.
@@ -65,7 +66,7 @@ The rule set lists a few figurative verbs and misses the category around them.
 
 ### Silenced checkers
 
-The mechanical check already reports this, so read its output rather than re-deriving it. A `linter-config-changed` or `suppression-comment` finding there is automatically `CHANGES REQUIRED`.
+The mechanical check already reports this, so read its output rather than re-deriving it. A `linter-config-changed`, `suppression-comment`, or `stray-edit` finding there is automatically `CHANGES REQUIRED`. The diff output lists each dictionary line the operator sanctioned, and those aren't findings.
 
 ## Sweep before you write the verdict
 

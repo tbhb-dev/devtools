@@ -18,6 +18,11 @@ COMMIT_AGENTMSG
 PR_AGENTDESC.md
 SQUASH_AGENTMSG
 
+# The fix-prose skill keeps each run's baseline, original copy, and notes
+# inside the worktree, because a session isolated in a linked worktree
+# can't write into the git directory. The directory also ignores itself.
+.fix-prose/
+
 # Go build output
 bin/
 /agentcontext

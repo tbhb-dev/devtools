@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # preflight — settle what this run can and can't do, before anything
-# spawns an agent.
+# delegates to an agent.
 #
 # It answers three questions the caller would otherwise pay a subagent
 # to discover: does the target exist, does the lint command's rule set
@@ -8,10 +8,8 @@
 # BLOCKED outcome, and reaching one here costs a Bash call rather than
 # an agent.
 #
-# It deliberately prints no finding text. The fix-prose body loads into
-# the caller's context rather than a fork, because a forked skill can't
-# register the guard hook, so anything printed here lands in the exact
-# context the skill exists to keep clear. Counts and verdicts only.
+# It deliberately prints no finding text. Counts and verdicts keep the
+# calling context clear; the writer reads the full findings.
 #
 # The scoping check is the important one. Vale matches a path against
 # the sections in .vale.ini, the match is exact, and a path no section
@@ -113,7 +111,16 @@ if [ -n "$lint" ]; then
 fi
 
 # --- leftovers -------------------------------------------------------
+# An abandoned run leaves its state behind, and the baseline step refuses
+# a second run on the same target until that state is cleared. Say so now,
+# while finding out costs one line.
 git_dir=$(git rev-parse --absolute-git-dir 2>/dev/null || true)
+key=$(printf '%s' "$rel" | shasum -a 256 | cut -d' ' -f1)
+for dir in "$root/.fix-prose/run.$key" "$git_dir/fix-prose/run.$key"; do
+  if [ -d "$dir" ]; then
+    printf 'state:    a previous run left %s; clear it with check-suppressions.sh --cleanup\n' "$dir"
+  fi
+done
 if [ -n "$git_dir" ] && [ -s "$git_dir/fix-prose.lock" ]; then
   printf 'guard:    a previous run left a lock on %s\n' "$(head -1 "$git_dir/fix-prose.lock")"
 fi

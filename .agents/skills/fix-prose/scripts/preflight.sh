@@ -9,7 +9,7 @@
 # an agent.
 #
 # It deliberately prints no finding text. Counts and verdicts keep the
-# parent context clear; the delegated writer reads the full findings.
+# calling context clear; the writer reads the full findings.
 #
 # The scoping check is the important one. Vale matches a path against
 # the sections in .vale.ini, the match is exact, and a path no section
@@ -108,6 +108,21 @@ if [ -n "$lint" ]; then
     exit 0
   fi
   printf 'gates:    FAILING (there is work to do)\n'
+fi
+
+# --- leftovers -------------------------------------------------------
+# An abandoned run leaves its state behind, and the baseline step refuses
+# a second run on the same target until that state is cleared. Say so now,
+# while finding out costs one line.
+git_dir=$(git rev-parse --absolute-git-dir 2>/dev/null || true)
+key=$(printf '%s' "$rel" | shasum -a 256 | cut -d' ' -f1)
+for dir in "$root/.fix-prose/run.$key" "$git_dir/fix-prose/run.$key"; do
+  if [ -d "$dir" ]; then
+    printf 'state:    a previous run left %s; clear it with check-suppressions.sh --cleanup\n' "$dir"
+  fi
+done
+if [ -n "$git_dir" ] && [ -s "$git_dir/fix-prose.lock" ]; then
+  printf 'guard:    a previous run left a lock on %s\n' "$(head -1 "$git_dir/fix-prose.lock")"
 fi
 
 printf 'verdict:  PROCEED\n'

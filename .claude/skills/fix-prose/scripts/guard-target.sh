@@ -94,21 +94,28 @@ esac
 # rejected by the harness validation never reaches PreToolUse at all,
 # and safe against a batch, because PreToolUse fires once per call and
 # in sequence rather than concurrently.
-release="$git_dir/fix-prose.release"
-if [ -e "$release" ]; then
-  rm -f "$release"
-  exit 0
-fi
+#
+# The token sits inside the worktree, under .fix-prose/, because a session
+# isolated in a linked worktree can't write into the git directory where
+# earlier versions kept it. Both places are honored.
+top=$(command git -C "$cwd" rev-parse --show-toplevel 2>/dev/null || true)
+for release in "$top/.fix-prose/release" "$git_dir/fix-prose.release"; do
+  if [ -e "$release" ]; then
+    rm -f "$release"
+    exit 0
+  fi
+done
 
 printf 'Blocked by the fix-prose guard.\n\n%s\n' \
   "Clearing the prose findings on this file belongs to the fix-prose
 skill, which runs the lint rounds in a subagent so their output stays
 out of this session:
 
-  Skill(fix-prose, args: \"${locked##*/} <lint command>  <what to address>\")
+  Skill(fix-prose, args: \"${locked##*/} <lint command>\")
 
-To hand it a decision, pass it in the arguments rather than applying it
-here.
+To hand it a decision, write it to the notes file in the run's state
+directory (<state>/notes, printed by check-suppressions.sh --baseline)
+rather than applying it here.
 
 Where a finding needs a change of meaning, or a rule is misfiring on
 correct prose, editing by hand is the right answer. Release one edit,

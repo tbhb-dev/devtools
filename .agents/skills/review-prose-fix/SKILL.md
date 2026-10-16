@@ -6,29 +6,85 @@ description: >-
 
 # Review a prose fix
 
-The caller supplies the repository root, target, and workflow state. Work read-only. Run:
+Judge what a copy edit did to a document. You didn't make these edits and you didn't see the findings that prompted them, so read what the text now says rather than what somebody meant to preserve. Work read-only, and don't edit any file.
+
+The gates already ran. Repeating them wastes the round, and a clean vale run is the premise of this review rather than its subject. Your subject is everything vale can't score.
+
+## The repository
+
+The caller supplies the repository root, the target file, and the workflow state in the delegation prompt.
+
+## Gather the inputs
+
+From the repository root, run these before judging anything:
+
+- `bash .agents/skills/fix-prose/scripts/check-suppressions.sh --diff <state> <target>` for what changed
+- `bash .agents/skills/fix-prose/scripts/check-suppressions.sh --verify <state> <target>` for edits outside the target
+- read the target in full for the result in one piece
+
+The diff is the review. Where it comes back empty, the fixer didn't change anything, and that's a finding unless its report said so.
+
+Where the caller passed the fixer's report, read it too. A claim there that the diff doesn't support is a finding in itself.
+
+## What to check
+
+Quote the exact text in each finding and give the correction.
+
+### Meaning
+
+The document says what it said before.
+
+- Flag any claim that changed. A dropped qualifier, an added hedge, or an absolute turned conditional edits the argument while looking like a reword.
+- Flag any number, path, identifier, filename, flag, or proper noun that differs. These are never a style matter.
+- Flag precision traded for a clean run. Replacing a dependency name with `the fuzzing dependency` clears a spelling rule and costs the reader the fact.
+- Flag a clause or sentence that the edit deleted. Deleting text clears a distributional rule and takes content with it.
+
+### Language the linter can't score
+
+The rule set lists a few figurative verbs and misses the category around them.
+
+- Flag metaphor, idiom, and personification that the edit introduced. Rules don't fight, checks don't bite, and a document doesn't sail anywhere.
+- Flag a sentence that got longer without getting clearer. A reword that doubles a sentence to avoid a rule trades a measured problem for one nothing measures.
+- Flag register that drifted upward: a plain word swapped for a formal one to clear a rule about a different word entirely.
+- Flag anything the document didn't say before. Counts, hedges, praise, and mentions of tools or sessions all belong to nobody.
+
+### The unresolved list
+
+- Flag a finding reported as unresolvable that a plain reword clears. Say what the reword is.
+- Accept an unresolvable finding that holds up. A rule that wrongly matches correct text is a real outcome, and demanding a fix for one is how documents get worse.
+
+### Silenced checkers
+
+The mechanical check already reports this, so read its output rather than re-deriving it. A `linter-config-changed`, `suppression-comment`, or `stray-edit` finding there is automatically `CHANGES REQUIRED`. The diff output lists each dictionary line the operator sanctioned, and those aren't findings.
+
+## Sweep before you write the verdict
+
+One editing pass produces one class of damage in more than one place at once, because the writer cleared a rule the same way everywhere it matched. Take each finding you have and read the rest of the diff for the same damage. A pronoun the reorder left without its referent, a clause a reword reattached to the wrong thing, an identifier paraphrased away, a parallel the edit broke on one item and kept on the next. Where the diff holds one, look for the second.
+
+Report every instance. Handing back one at a time costs a fixing round and a review round to say what this verdict could have said, and the writer only sweeps the list you give it.
+
+## What to return
+
+Return the verdict block and stop there. Skip the preamble, the summary of the diff, and the praise. Write nothing to disk, and don't edit the document to make it pass. Reporting the finding is the job.
 
 ```text
-bash .agents/skills/fix-prose/scripts/check-suppressions.sh --diff <state> <target>
-bash .agents/skills/fix-prose/scripts/check-suppressions.sh --verify <state> <target>
+VERDICT: PASS
 ```
 
-Read the resulting target in full. Don't repeat the prose lint command. Its clean result is the premise of this review.
-
-Flag any changed claim, qualifier, number, path, identifier, proper noun, or omitted content. Flag precision traded for generic wording, new metaphor or idiom, inflated register, unnecessary length, and any new count, hedge, praise, or provenance. A mechanical `linter-config-changed`, `suppression-comment`, or `stray-edit` result always requires changes. Leave a linter finding uncleared only when preserving correct meaning requires it.
-
-Sweep the whole diff for every class of issue you find, then return exactly:
+or
 
 ```text
-REVIEW: CLEAN
+VERDICT: CHANGES REQUIRED
+
+1. [meaning] <what is wrong>
+   text: <the exact offending text>
+   fix:  <the specific correction>
+
+2. [language] <what is wrong>
+   text: <the exact offending text>
+   fix:  <the specific correction>
 ```
 
-or:
+Tag each finding `meaning`, `language`, `unresolved`, or `suppression`.
 
-```text
-REVIEW: CHANGES REQUIRED
-
-1. `<exact text>` — <problem>. Fix: <specific correction>.
-```
-
-Don't edit any file.
+Return `PASS` when the edit holds up. A copy edit that changed only wording is the expected outcome, and inventing a finding to look thorough costs a round for nothing. Report only what you can point at in the diff.
