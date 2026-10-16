@@ -137,6 +137,20 @@ cp "$draft" "$message"
 # git records.
 set -- -c commit.cleanup=whitespace commit -F "$message"
 [ "$mode" = normal ] || set -- "$@" --amend
+
+# snapshot prints one line naming the index, the tracked edits in the
+# worktree, and the untracked files. Taken before and after the attempt,
+# it separates a hook that failed from a hook that changed something: the
+# two need different advice, and a failure that changed nothing is not an
+# autofixer.
+snapshot() {
+  {
+    gitr write-tree
+    gitr diff --no-ext-diff
+    gitr status --porcelain --untracked-files=all
+  } | gitr hash-object --stdin
+}
+before=$(snapshot)
 status=0
 command git "$@" || status=$?
 
@@ -150,9 +164,16 @@ if [ "$status" != 0 ]; then
     printf '\nStage them again before retrying, or the retry commits a subset of\n' >&2
     printf 'the group without saying so.\n' >&2
   fi
-  printf '\nA hook that fixed a file in place fails the commit on purpose. Stage the\n' >&2
-  printf 'fix by name, then run review.sh again: the staged tree changed, so the\n' >&2
-  printf 'stamp no longer covers it.\n' >&2
+  if [ "$(snapshot)" = "$before" ]; then
+    printf '\nA hook failed, and nothing in the index or the worktree changed. Its\n' >&2
+    printf 'output is above. Fix what it reported; the staged change and the stamp\n' >&2
+    printf 'are untouched, so a fix to a staged file means staging it and running\n' >&2
+    printf 'review.sh again.\n' >&2
+  else
+    printf '\nA hook changed files during the attempt, which fails the commit on\n' >&2
+    printf 'purpose. Stage the change by name, then run review.sh again: the\n' >&2
+    printf 'staged tree changed, so the stamp no longer covers it.\n' >&2
+  fi
   exit "$status"
 fi
 
