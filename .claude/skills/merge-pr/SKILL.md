@@ -2,7 +2,7 @@
 name: merge-pr
 license: Apache-2.0
 description: >-
-  Squash merge a pull request. The commit message comes from this workflow rather than from GitHub, whose own version concatenates every commit on the branch into text no linter ever reads. A briefing script prints the published description, every commit the squash collapses, and the diffstat, then leaves a SQUASH_AGENTMSG skeleton whose body the caller writes. Review, the commit-msg gates, and an operator confirmation all run before the merge. Use this whenever the user asks to merge or land a pull request, including one nobody here authored such as a dependency bump.
+  Squash merge a pull request. The commit message comes from this workflow rather than from GitHub, whose own version concatenates every commit on the branch into text no linter ever reads. A briefing script prints the published description, every commit the squash collapses, and the diffstat, then leaves a SQUASH_AGENTMSG skeleton whose body the caller writes. The commit-msg gates, an independent review, and an operator confirmation all run before the merge. Use this whenever the user asks to merge or land a pull request, including one nobody here authored such as a dependency bump.
 hooks:
   PreToolUse:
     - matcher: Write|Edit
@@ -13,16 +13,13 @@ hooks:
       hooks:
         - type: command
           command: "${CLAUDE_PROJECT_DIR}/.claude/skills/merge-pr/scripts/guard-merge.sh"
-  PostToolUse:
-    - matcher: Skill
-      hooks:
-        - type: command
-          command: "${CLAUDE_PROJECT_DIR}/.claude/skills/merge-pr/scripts/stamp-review.sh"
 ---
 
 # Merge a pull request
 
-Work the steps in order. A pair of hooks runs alongside them and refuses the shortcut: a direct `gh pr merge`, and any merge whose message the reviewer hasn't seen in its current form.
+Work the steps in order. Scripts enforce every gate here. Step 5's review script stamps what an independent reviewer cleared, bound to the pull request's head and base. Step 7's merge script refuses a message the stamp doesn't cover, a pull request that moved or isn't ready, and a merge nobody confirmed, then merges pinned to the reviewed head. Both hold in any session, including a subagent's.
+
+A guard hook runs alongside them as a rail, refusing a direct `gh pr merge` and every other `gh pr` verb that changes a pull request. Reading remains permitted.
 
 Left alone, GitHub writes the squash message by concatenating every commit on the branch. That text has never passed a commit-msg hook, and it arrives on the default branch where the rest of the toolchain assumes those hooks ran. The toolchain never lints it after the merge, either. This workflow writes the message itself and puts it through the same checks a commit must pass.
 
@@ -37,8 +34,8 @@ Track these steps with the session's task-list tools where the session provides 
 1. Confirm the pull request is mergeable
 2. Settle the published description
 3. Write the squash message in SQUASH_AGENTMSG
-4. Review the message with review-squash-message
-5. Run the commit-msg gates
+4. Run the commit-msg gates
+5. Review the message with the review script
 6. Confirm the message with the operator
 7. Merge and clean up
 
@@ -46,13 +43,15 @@ Stop before any of it where preflight reports a missing precondition, a draft pu
 
 ## Step 1: confirm the pull request is mergeable
 
-Preflight printed the state, the check rollup, and the review decision. Merging needs an open pull request that nobody marked as a draft, with every check green.
+Preflight printed the state, the checks, and the review decision. Merging needs an open pull request that nobody marked as a draft, with every check green.
+
+Preflight judges each check by its latest run. A workflow that started twice on one head and cancelled the first run leaves those cancelled jobs behind, and preflight leaves them out and says how many it left out. A cancelled run with no later run still counts as failing.
 
 A failing check goes to `fix-pr`, and a running one goes to `watch-pr`. Neither belongs here, and the merge script refuses both anyway.
 
 A `mergeStateStatus` of `BEHIND` or `DIRTY` is the third case. The branch needs the base underneath it before anything merges, so run the `rebase` skill and push the result. Don't reach for GitHub's own update button: it merges the base into the branch, which leaves a merge commit this workflow never wrote a message for.
 
-Where the repository requires a review decision, respect it. `CHANGES_REQUESTED` means the merge waits, whatever the checks say.
+Where the repository requires a review decision, respect it. `CHANGES_REQUESTED` means the merge waits, whatever the checks say, and the merge script refuses anything but an approval where the repository requires one.
 
 ## Step 2: settle the description first
 
@@ -66,9 +65,9 @@ That rebuilds `PR_AGENTDESC.md` from what the pull request currently says, reass
 
 Merging is the last moment the description can change, and you write the squash message from it, so a wrong description propagates that error into history.
 
-Read what preflight printed under `== description as published ==` against the commits it collapses. Where it no longer describes the branch, invoke `write-pr-description` with the repository root and a note on what drifted, then `review-pr-description`, then republish with `bash .claude/skills/pr/scripts/create-pr.sh`.
+Read what preflight printed under `== description as published ==` against the commits it collapses. Most merges skip the rest of this step. A description that still fits doesn't need a pass, and a pull request nobody here authored has none of this machinery behind it, so take its description as it stands.
 
-Most merges skip this. A description that still fits doesn't need a pass, and a pull request nobody here authored has none of this machinery behind it, so take its description as it stands.
+Where it no longer describes the branch, invoke `write-pr-description` with the repository root and a note on what drifted, then `review-pr-description`, then republish with `bash .claude/skills/pr/scripts/create-pr.sh`.
 
 ## Step 3: write the squash message
 
@@ -114,21 +113,19 @@ Hard wrap the body at 72 characters and the trailers at 100.
 
 ### Footer
 
-The script fills this in. `Closes` lines come from the description's Related section, and the trailers come from the commits themselves, ordered with attribution first and sign-off last.
+The script fills this in. The trailers come from the commits themselves, ordered with attribution first and sign-off last. `Closes` lines come from the description's Related section, and only for a number GitHub reports as an open issue. A pull request, a closed issue, or a number GitHub wouldn't describe gets a `# Not closed:` line printed under the skeleton instead, outside the message.
 
-Check the closing references before going on. Related lists whatever the author put there, so a number that refers to a pull request or a document rather than an issue this branch closes comes out of the footer.
+Read those lines, then check the `Closes` lines that remain against the branch. An open issue listed under Related isn't always one this branch closes, and a closing keyword acts on merge without asking.
 
-## Step 4: review the message
+## Step 4: run the commit-msg gates
 
-Invoke the `review-squash-message` skill, passing the repository root as its argument. It runs as an independent agent that hasn't watched you work, and it reads the message against every commit the squash collapses. Its first question is the one you can no longer ask yourself by this point: whether the message left out anything that mattered in those commits.
+Fix the prose findings with the `fix-prose` skill first, passing the draft and the task that judges it:
 
-This step is mandatory, and the merge script enforces it. A clean verdict signs the exact bytes of the draft, a finding erases any earlier signature, and editing the draft afterward voids it the same way.
+```text
+Skill(fix-prose, args: "SQUASH_AGENTMSG mise run lint-squash-msg")
+```
 
-Fix everything it returns. Push back only where it's demonstrably wrong about the commits, and say why.
-
-A finding cites one instance rather than the fault itself. Fix the instance, then read the rest of the message for the same fault, because a reviewer that found one instance finds the next one on the next round.
-
-## Step 5: run the commit-msg gates
+Then run the task yourself:
 
 ```text
 mise run lint-squash-msg
@@ -141,7 +138,32 @@ The same four hooks a commit must pass:
 - commitlint for the Conventional Commits shape
 - commit-trailers for trailer order
 
-Resolve every finding. Edited the draft to clear them? Then step 4 runs again, because the gate compares bytes rather than intentions.
+Order matters here. The review in the next step stamps the exact bytes it read, so a lint fix after it voids the stamp and costs another review round over a comma. The merge script runs this task again before it merges, and refuses when the task is absent rather than skipping it.
+
+## Step 5: review the message
+
+```text
+bash .claude/skills/merge-pr/scripts/review.sh <number>
+```
+
+Pass `--note <file>` to include a decision the operator actually made, with the operator's reason. Never use it for the agent's own preference.
+
+The script snapshots the draft and the pull request, then starts a fresh, read-only reviewer as a headless process of the harness's own CLI, with the `review-squash-message` skill as its instructions. That reviewer hasn't watched you work. It reads the message against every commit the squash collapses, and its first question is the one you can no longer ask yourself by this point: whether the message left out anything that mattered in those commits. The script reads the verdict itself. On a clean verdict it writes a stamp binding the draft's exact bytes, the pull request, its head, its base branch, and the commit that base pointed at. Findings remove any earlier stamp, and so does editing the draft, a push to the branch, or a move of the base.
+
+This step is mandatory, and the merge script enforces it.
+
+| Exit | Meaning |
+| --- | --- |
+| 0 | Passed and stamped |
+| 2 | Changes required: the output lists the findings |
+| 4 | The reviewer failed or replied without a readable verdict |
+| 5 | The draft or the pull request moved while the review ran |
+
+Fix everything it returns and run it again. Push back only where it's demonstrably wrong about the commits, and say why.
+
+A finding cites one instance rather than the fault itself. Fix the instance, then read the rest of the message for the same fault.
+
+`DEVTOOLS_REVIEW_CMD`, `DEVTOOLS_REVIEW_MODEL`, and `DEVTOOLS_REVIEW_EFFORT`, or the same keys in `~/.config/devtools/<repository>.conf`, replace the default reviewer. No repository file can, so a branch never chooses who reviews its own merge.
 
 ## Step 6: confirm with the operator
 
@@ -155,15 +177,23 @@ Commits: <count> collapsing into one
 <the entire SQUASH_AGENTMSG contents, verbatim>
 ```
 
-Preflight answered this under `== pre-approval ==`. Where it reported `merge: GRANTED`, the operator answered this question for the whole session in advance, through `mise run preapprove merge`. Print the preceding block so the operator still sees the message, state the grant this merge goes under, and move to step 7 without calling `AskUserQuestion`.
+The merge script settles who confirmed the merge, in this order, and prints which one it took:
 
-The grant answers one question, merge under this message. Ask anyway where any of these holds:
+1. `--confirmed`, which you pass only after the operator answered yes to this message in this session
+2. a merge pre-approval for this session, which the operator granted through `mise run preapprove merge` and preflight reported as `merge: GRANTED`
+3. the machine's delegation check, when preflight reported one configured: it answers for the repository and the action `merge`, and a refusal stops the merge
+
+A bare `mise run preapprove` grants commit and pr and never merge, because a merge is the one action here no later step can undo. With none of them the script exits 75 and merges nothing. Ask the operator, then run it again with `--confirmed`.
+
+A grant or a delegation answers one question, merge under this message. Ask the operator anyway where any of these holds:
 
 - the review returned a finding nobody acted on
 - the checks aren't green
 - this pull request isn't the one the session set out to merge, which covers a dependency bump nobody here authored unless the operator named it
 
-Where preflight reported `merge: not granted`, call `AskUserQuestion` with `question` set to `Squash merge with this message?`, `header` set to `Merge`, `multiSelect` set to `false`, and these four options in order:
+Where preflight reported `merge: GRANTED` or a delegation check, print the preceding block so the operator still sees the message, state which one this merge goes under, and move to step 7 without calling `AskUserQuestion`.
+
+Otherwise call `AskUserQuestion` with `question` set to `Squash merge with this message?`, `header` set to `Merge`, `multiSelect` set to `false`, and these four options in order:
 
 | Label | Description |
 | --- | --- |
@@ -172,15 +202,19 @@ Where preflight reported `merge: not granted`, call `AskUserQuestion` with `ques
 | `Wait on the checks` | `Hand this to watch-pr first, and merge once it reports green.` |
 | `Stop here` | `Leave the pull request, the draft, and the branch untouched.` |
 
-Follow the answer. Revising sends you back through the review, because the gate compares bytes.
+Follow the answer. `Merge it` is what `--confirmed` stands for in step 7. Revising sends you back through the review, because the stamp binds bytes.
 
 ## Step 7: merge and clean up
 
 ```text
-bash .claude/skills/merge-pr/scripts/squash-merge.sh <number>
+bash .claude/skills/merge-pr/scripts/squash-merge.sh [--confirmed] <number>
 ```
 
-That script re-runs every gate before it touches anything. It checks that the message references this pull request, that the signature matches the bytes on disk, that the linters pass, and that the pull request is open, ready, and green. Then it merges, removes `SQUASH_AGENTMSG` and `PR_AGENTDESC.md` along with their signatures, and deletes the merged branch.
+Pass `--confirmed` only when the operator chose `Merge it` in step 6. Merge only through this script. The guard hook refuses a `gh pr merge` you write out yourself, because a direct call skips every gate below and nothing lints a squash commit afterwards.
+
+That script runs every gate again before it touches anything. It checks that the message references this pull request, and that the stamp covers the bytes on disk, the live head, the base branch, and the commit that base points at. Where the configuration specifies `gh_login`, the GitHub CLI has to authenticate as that account. Otherwise, the script says it skipped the check. The pull request has to be open, ready, mergeable with a merge state of `CLEAN`, approved where the repository requires a review, and green by the latest run of every check. GitHub reports whether a pull request can merge as `UNKNOWN` for a few seconds after the base moves, so the second of two merges in a row meets it in most cases. The script waits that out for up to a minute before judging, and refuses `CONFLICTING` at once. Then the linters run, and then the confirmation resolves.
+
+The merge specifies the reviewed head, so a commit pushed while the final checks run makes GitHub refuse the merge rather than squash it in. Then the script removes `SQUASH_AGENTMSG` and `PR_AGENTDESC.md` along with their stamps, and deletes the merged branch only when it belongs to this repository. It leaves a fork's branch untouched.
 
 Cleanup falls to the script that watched the merge succeed, because there's no post-merge hook to run it from.
 
@@ -188,7 +222,7 @@ Report the merged commit. Where this worktree stands on the branch that merged, 
 
 ## Preconditions
 
-- `gh` installed and authenticated
+- `gh` installed and authenticated, and `jq`
 - a `mise run lint-squash-msg` task
 - a gitignore entry for `SQUASH_AGENTMSG`
 - the `review-squash-message` skill deployed alongside this one

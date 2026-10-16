@@ -59,12 +59,14 @@ esac
 deny "\`gh pr ${verb}\` changes the pull request, and merging runs through one
 entry point:
 
-  bash .claude/skills/merge-pr/scripts/squash-merge.sh <number>
+  bash .claude/skills/merge-pr/scripts/squash-merge.sh [--confirmed] <number>
 
-That script checks that the message names this pull request, that
-review-squash-message cleared the exact bytes on disk, that the message
-passes the commit-msg gates, and that the pull request is open, ready,
-and green. It then merges, removes the drafts, and deletes the branch.
+That script checks that the message names this pull request, that the
+independent review cleared the exact bytes on disk at the head about to
+merge, that the message passes the commit-msg gates, that the pull
+request is open, ready, mergeable, and green, and that somebody
+confirmed the merge. It then merges pinned to the reviewed head,
+removes the drafts, and deletes the branch.
 
 Calling gh directly writes a message onto the default branch that
 nothing reviewed, and nothing lints a squash commit afterwards.
