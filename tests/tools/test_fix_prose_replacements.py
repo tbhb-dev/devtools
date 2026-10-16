@@ -35,14 +35,18 @@ def workspace(tmp_path: Path) -> tuple[Path, Path]:
     return tmp_path, bin_dir
 
 
-def install_vale(bin_dir: Path, findings: str) -> None:
+def install_vale(
+    bin_dir: Path, findings: str, status: int | None = None, stderr: str = ""
+) -> None:
     stub = bin_dir / "vale"
     stub.write_text(
         textwrap.dedent(f"""\
             #!{sys.executable}
             import sys
             sys.stdout.write({findings!r})
-            sys.exit(1 if {findings!r} else 0)
+            sys.stderr.write({stderr!r})
+            code = {status!r}
+            sys.exit(code if code is not None else (1 if {findings!r} else 0))
         """),
         encoding="utf-8",
     )
@@ -50,10 +54,14 @@ def install_vale(bin_dir: Path, findings: str) -> None:
 
 
 def run(
-    workspace: tuple[Path, Path], target: Path, findings: str
+    workspace: tuple[Path, Path],
+    target: Path,
+    findings: str,
+    status: int | None = None,
+    stderr: str = "",
 ) -> subprocess.CompletedProcess[str]:
     root, bin_dir = workspace
-    install_vale(bin_dir, findings)
+    install_vale(bin_dir, findings, status, stderr)
     return subprocess.run(
         [sys.executable, str(SCRIPT), str(target)],
         capture_output=True,
@@ -154,8 +162,34 @@ class TestRefusing:
         target.write_text("We do not ship it.\n", encoding="utf-8")
         findings = '1:4-9 [error] Contractions match="do not" replace_with="\\q"\n'
         proc = run(workspace, target, findings)
+        assert proc.returncode == SKIPPED
         assert "unparsable-quoting" in proc.stdout
         assert target.read_text(encoding="utf-8") == "We do not ship it.\n"
+
+    def test_unparsable_quoting_beside_an_applied_edit_still_counts_as_a_skip(
+        self, workspace: tuple[Path, Path]
+    ) -> None:
+        root, _ = workspace
+        target = root / "doc.md"
+        target.write_text("We do not ship it. They do not stop.\n", encoding="utf-8")
+        findings = (
+            '1:4-9 [error] Contractions match="do not" replace_with="don\'t"\n'
+            '1:25-30 [error] Contractions match="do not" replace_with="\\q"\n'
+        )
+        proc = run(workspace, target, findings)
+        assert proc.returncode == SKIPPED
+        assert "TOTAL: 1 applied, 1 skipped" in proc.stdout
+
+    def test_a_vale_that_fails_to_run_is_reported_not_read_as_clean(
+        self, workspace: tuple[Path, Path]
+    ) -> None:
+        root, _ = workspace
+        target = root / "doc.md"
+        target.write_text("Clean prose.\n", encoding="utf-8")
+        proc = run(workspace, target, "", status=2, stderr="config error\n")
+        assert proc.returncode == SKIPPED
+        assert "vale-failed" in proc.stderr
+        assert "config error" in proc.stderr
 
 
 class TestInvocation:

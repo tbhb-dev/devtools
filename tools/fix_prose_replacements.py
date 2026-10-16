@@ -37,7 +37,8 @@ Usage:
 
 Exit:
     0  every replacement that carried one was applied, and nothing was skipped
-    1  at least one finding was skipped, or the file does not exist
+    1  at least one finding was skipped, vale failed to run, or the file
+       does not exist
     2  the invocation was wrong
 
 A nonzero exit is the normal end of a run with skips, not a failure of this
@@ -123,17 +124,17 @@ def repo_root() -> Path:
     return Path(proc.stdout.strip())
 
 
-def findings(path: Path, cwd: Path) -> list[str]:
-    """Run vale over the file and return its report lines.
+def findings(path: Path, cwd: Path) -> tuple[int, list[str], str]:
+    """Run vale over the file and return its status, report lines, and stderr.
 
     Runs from the repository root, because vale resolves .vale.ini and the
     template named below relative to the working directory.
 
     The environment is pinned for the same reason the shell version pinned
     it: the agent reads this output, so an operator's locale or grep
-    preferences must not reshape it. Vale exits nonzero whenever it has
-    findings, which is the ordinary case here, so the status is deliberately
-    not consulted.
+    preferences must not reshape it. Vale exits 1 whenever it has findings,
+    which is the ordinary case here, so the caller accepts 0 and 1 and treats
+    any other status as a failed run.
     """
     env = {**os.environ, "LC_ALL": "C"}
     env.pop("GREP_OPTIONS", None)
@@ -145,12 +146,13 @@ def findings(path: Path, cwd: Path) -> list[str]:
         cwd=cwd,
         env=env,
     )
-    return proc.stdout.splitlines()
+    return proc.returncode, proc.stdout.splitlines(), proc.stderr
 
 
-def parse(lines: list[str], path: Path) -> list[Edit]:
-    """Return the edits carrying a replacement, reporting forms that will not parse."""
+def parse(lines: list[str], path: Path) -> tuple[list[Edit], int]:
+    """Return the edits carrying a replacement and the count of unparsable forms."""
     edits = []
+    unparsable = 0
     for raw in lines:
         m = LINE.match(raw)
         if not m or not m.group("repl"):
@@ -160,6 +162,7 @@ def parse(lines: list[str], path: Path) -> list[Edit]:
             repl = json.loads(m.group("repl"))
         except ValueError:
             print(f"{path}:{m.group('line')} [error] unparsable-quoting  {raw.strip()}")
+            unparsable += 1
             continue
         edits.append(
             (
@@ -171,7 +174,7 @@ def parse(lines: list[str], path: Path) -> list[Edit]:
                 repl,
             )
         )
-    return edits
+    return edits, unparsable
 
 
 def breaks_clause(text: str, start: int, match: str) -> bool:
@@ -231,14 +234,20 @@ def main(argv: list[str]) -> int:
         print(f"{path}:1 [error] missing-file  no such file")
         return 1
 
-    report = findings(path, repo_root())
+    status, report, stderr = findings(path, repo_root())
+    if status not in (0, 1):
+        sys.stderr.write(
+            f"{path}:1 [error] vale-failed  vale exited {status}: {stderr.strip()}\n"
+        )
+        return 1
     if not report:
         return 0
-    edits = parse(report, path)
+    edits, unparsable = parse(report, path)
     if not edits:
-        return 0
+        return 1 if unparsable else 0
 
     applied, skipped = apply(path, edits)
+    skipped += unparsable
     print(f"TOTAL: {applied} applied, {skipped} skipped")
     return 1 if skipped else 0
 
