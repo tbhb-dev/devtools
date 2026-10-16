@@ -115,6 +115,31 @@ check_uv_lock() {
   compare uv.lock "$want" <<<"$hits"
 }
 
+# Local lock entries carry the manifest version rather than a Git ref.
+# Match by local_path so dependency ordering and deployed-file lists do
+# not affect which version we read.
+check_apm_lock() {
+  local package manifest_version hits number text
+  for package in common claude codex agy; do
+    manifest_version=$(awk '/^version: / { print $2 }' "packages/agents/$package/apm.yml")
+    hits=$(awk -v path="./packages/agents/$package" '
+      /^- repo_url:/ { version = ""; number = 0 }
+      /^  version: / { version = $2; number = NR }
+      /^  local_path: / && $2 == path { print number ":version: " version }
+    ' apm.lock.yaml)
+    if [ -z "$hits" ]; then
+      report apm.lock.yaml 1 "no local package entry for packages/agents/$package"
+    else
+      while IFS=: read -r number text; do
+        if [ "$text" != "version: $manifest_version" ]; then
+          report apm.lock.yaml "$number" "packages/agents/$package expected \`version: $manifest_version\`, found \`$text\`"
+        fi
+      done <<<"$hits"
+    fi
+  done
+}
+
+check_apm_lock
 check_site apm.yml '^version: ' "version: $version"
 check_site packages/agents/common/apm.yml '^version: ' "version: $version"
 check_site packages/agents/claude/apm.yml '^version: ' "version: $version"

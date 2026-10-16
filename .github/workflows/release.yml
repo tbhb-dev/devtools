@@ -112,6 +112,15 @@ jobs:
           git config gpg.format ssh
           git config user.signingkey "$HOME/.ssh/signing_key"
 
+      # The final pre-bump hook refreshes the APM lockfile inside cog's
+      # commit, so the API replay includes it in its changed-path list.
+      - name: Set up APM
+        uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
+        with:
+          # renovate: datasource=github-releases depName=jdx/mise
+          version: 2026.10.3
+          install_args: apm
+
       # This commit stays on the runner. The next step reads it and
       # nothing pushes it, so the identity below reaches no history.
       - name: Bump version and tag
