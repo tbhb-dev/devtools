@@ -3,28 +3,60 @@
 
 ["devtools:build"]
 description = "Build every binary into the bin directory"
-run = 'CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags "$(bash "$DEVTOOLS_DIR/scripts/go-ldflags.sh")" -o bin/ ${DEVTOOLS_GO_BIN_PACKAGES:-./cmd/...}'
+run = '''
+#!/usr/bin/env bash
+set -eu
+CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags "$(bash "$DEVTOOLS_DIR/scripts/go-ldflags.sh")" -o bin/ ${DEVTOOLS_GO_BIN_PACKAGES:-./cmd/...} "$@"
+'''
 
 ["devtools:install"]
 description = "Install every binary to GOPATH/bin"
-run = 'CGO_ENABLED=0 go install -trimpath -buildvcs=false -ldflags "$(bash "$DEVTOOLS_DIR/scripts/go-ldflags.sh")" ${DEVTOOLS_GO_BIN_PACKAGES:-./cmd/...}'
+run = '''
+#!/usr/bin/env bash
+set -eu
+CGO_ENABLED=0 go install -trimpath -buildvcs=false -ldflags "$(bash "$DEVTOOLS_DIR/scripts/go-ldflags.sh")" ${DEVTOOLS_GO_BIN_PACKAGES:-./cmd/...} "$@"
+'''
 
 ["devtools:format-go"]
 description = "Format Go code via golangci-lint's formatters"
-run = "golangci-lint fmt ${DEVTOOLS_GO_PACKAGES:-./...}"
+run = '''
+#!/usr/bin/env bash
+set -eu
+golangci-lint fmt ${DEVTOOLS_GO_PACKAGES:-./...} "$@"
+'''
 
 ["devtools:fix-go"]
 description = "Fix Go linting issues"
 run = [
-  "go fix ${DEVTOOLS_GO_PACKAGES:-./...}",
-  "go fix ${DEVTOOLS_GO_PACKAGES:-./...}",
-  "golangci-lint fmt ${DEVTOOLS_GO_PACKAGES:-./...}",
-  "golangci-lint run --fix --modules-download-mode=${DEVTOOLS_GO_MODULES_MODE:-readonly} ${DEVTOOLS_GO_PACKAGES:-./...}",
+  '''
+#!/usr/bin/env bash
+set -eu
+go fix ${DEVTOOLS_GO_PACKAGES:-./...} "$@"
+''',
+  '''
+#!/usr/bin/env bash
+set -eu
+go fix ${DEVTOOLS_GO_PACKAGES:-./...} "$@"
+''',
+  '''
+#!/usr/bin/env bash
+set -eu
+golangci-lint fmt ${DEVTOOLS_GO_PACKAGES:-./...} "$@"
+''',
+  '''
+#!/usr/bin/env bash
+set -eu
+golangci-lint run --fix --modules-download-mode=${DEVTOOLS_GO_MODULES_MODE:-readonly} ${DEVTOOLS_GO_PACKAGES:-./...} "$@"
+''',
 ]
 
 ["devtools:lint-go"]
 description = "Run Go linters via golangci-lint"
-run = "golangci-lint run --modules-download-mode=${DEVTOOLS_GO_MODULES_MODE:-readonly} ${DEVTOOLS_GO_PACKAGES:-./...}"
+run = '''
+#!/usr/bin/env bash
+set -eu
+golangci-lint run --modules-download-mode=${DEVTOOLS_GO_MODULES_MODE:-readonly} ${DEVTOOLS_GO_PACKAGES:-./...} "$@"
+'''
 
 ["devtools:lint-go-arch"]
 description = "Enforce intra-project layering rules from .go-arch-lint.yml"
@@ -80,25 +112,45 @@ fi
 
 ["devtools:test-go"]
 description = "Run the Go tests"
-run = "go test ${DEVTOOLS_GO_PACKAGES:-./...}"
+run = '''
+#!/usr/bin/env bash
+set -eu
+go test ${DEVTOOLS_GO_PACKAGES:-./...} "$@"
+'''
 
 ["devtools:test-go-race"]
 description = "Run the Go tests with the race detector"
-run = "go test -race ${DEVTOOLS_GO_PACKAGES:-./...}"
+run = '''
+#!/usr/bin/env bash
+set -eu
+go test -race ${DEVTOOLS_GO_PACKAGES:-./...} "$@"
+'''
 
 ["devtools:mutate-go"]
 description = "Run mutation testing via gremlins"
 usage = 'arg "<path>" default="."'
-run = 'go tool gremlins unleash --timeout-coefficient "${GREMLINS_TIMEOUT_COEFFICIENT:-100}" $usage_path'
+run = '''
+#!/usr/bin/env bash
+set -eu
+go tool gremlins unleash --timeout-coefficient "${GREMLINS_TIMEOUT_COEFFICIENT:-100}" $usage_path "$@"
+'''
 
 ["devtools:mutate-go-all"]
 description = "Mutate the whole module from the repository root"
-run = 'go tool gremlins unleash --timeout-coefficient "${GREMLINS_TIMEOUT_COEFFICIENT:-100}" .'
+run = '''
+#!/usr/bin/env bash
+set -eu
+go tool gremlins unleash --timeout-coefficient "${GREMLINS_TIMEOUT_COEFFICIENT:-100}" . "$@"
+'''
 
 ["devtools:fuzz-go"]
 description = "Run native Go fuzz targets under [path] (default the entire module)"
 usage = 'arg "<path>" default="./..."'
-run = 'bash "$DEVTOOLS_DIR/scripts/fuzz.sh" $usage_path'
+run = '''
+#!/usr/bin/env bash
+set -eu
+bash "$DEVTOOLS_DIR/scripts/fuzz.sh" $usage_path "$@"
+'''
 
 ["devtools:cover-go"]
 description = "Run the Go tests with coverage, print the per-function breakdown, and enforce the .testcoverage.yml thresholds"
@@ -115,15 +167,27 @@ go tool go-test-coverage --config .testcoverage.yml
 ["devtools:cover-go-html"]
 description = "Open the HTML coverage report"
 run = [
-  "go test -coverprofile=coverage.out ${DEVTOOLS_GO_PACKAGES:-./...}",
+  '''
+#!/usr/bin/env bash
+set -eu
+go test -coverprofile=coverage.out ${DEVTOOLS_GO_PACKAGES:-./...} "$@"
+''',
   "go tool cover -html=coverage.out",
 ]
 
 ["devtools:cover-go-cobertura"]
 description = "Emit a Cobertura XML report from one local text profile"
 run = [
-  "go test -coverprofile=coverage.out ${DEVTOOLS_GO_PACKAGES:-./...}",
-  "go tool gocover-cobertura < coverage.out > coverage.xml",
+  '''
+#!/usr/bin/env bash
+set -eu
+go test -coverprofile=coverage.out ${DEVTOOLS_GO_PACKAGES:-./...} "$@"
+''',
+  '''
+#!/usr/bin/env bash
+set -eu
+go tool gocover-cobertura < coverage.out > coverage.xml "$@"
+''',
 ]
 
 ["devtools:cover-go-binary"]
@@ -159,12 +223,20 @@ run = "go tool go-test-coverage --config .testcoverage.yml"
 
 ["devtools:vuln"]
 description = "Scan the module for known vulnerabilities reachable from the binary entry points"
-run = "go tool govulncheck ${DEVTOOLS_GO_PACKAGES:-./...}"
+run = '''
+#!/usr/bin/env bash
+set -eu
+go tool govulncheck ${DEVTOOLS_GO_PACKAGES:-./...} "$@"
+'''
 
 ["devtools:vuln-sarif"]
 description = "Emit the govulncheck results as SARIF to <file> for the security.yml upload"
 usage = 'arg "<file>"'
-run = 'go tool govulncheck -format sarif ${DEVTOOLS_GO_PACKAGES:-./...} > "$usage_file"'
+run = '''
+#!/usr/bin/env bash
+set -eu
+go tool govulncheck -format sarif ${DEVTOOLS_GO_PACKAGES:-./...} > "$usage_file" "$@"
+'''
 
 ["devtools:gomodscan"]
 description = "Scan each vendored module for supply-chain concerns in one pass"

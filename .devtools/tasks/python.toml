@@ -31,23 +31,43 @@ run = "uv run ruff check"
 
 ["devtools:lint-types"]
 description = "Type check with pyrefly"
-run = 'bash "$DEVTOOLS_DIR/scripts/lint-types.sh"'
+run = '''
+#!/usr/bin/env bash
+set -eu
+bash "$DEVTOOLS_DIR/scripts/lint-types.sh" "$@"
+'''
 
 ["devtools:lint-complexity"]
 description = "Measure per-function cognitive complexity against the ceiling"
-run = "uv run complexipy ${DEVTOOLS_PYTHON_DIRS:-src}"
+run = '''
+#!/usr/bin/env bash
+set -eu
+uv run complexipy ${DEVTOOLS_PYTHON_DIRS:-src} "$@"
+'''
 
 ["devtools:lint-deadcode"]
 description = "Find dead Python code with vulture"
-run = "uv run vulture ${DEVTOOLS_PYTHON_DIRS:-src}"
+run = '''
+#!/usr/bin/env bash
+set -eu
+uv run vulture ${DEVTOOLS_PYTHON_DIRS:-src} "$@"
+'''
 
 ["devtools:lint-dup-code"]
 description = "Detect copy-pasted Python code with pylint"
-run = "uv run pylint ${DEVTOOLS_PYTHON_DIRS:-src}"
+run = '''
+#!/usr/bin/env bash
+set -eu
+uv run pylint ${DEVTOOLS_PYTHON_DIRS:-src} "$@"
+'''
 
 ["devtools:lint-bandit"]
 description = "Scan the Python source for insecure code patterns with bandit"
-run = "uv run bandit -r ${DEVTOOLS_PYTHON_SOURCE_DIRS:-src} -q"
+run = '''
+#!/usr/bin/env bash
+set -eu
+uv run bandit -r ${DEVTOOLS_PYTHON_SOURCE_DIRS:-src} -q "$@"
+'''
 
 ["devtools:test-py"]
 description = "Run the Python tests"
@@ -56,7 +76,11 @@ run = "uv run pytest"
 ["devtools:mutate-py"]
 description = "Run mutation testing over the Python packages"
 run = [
-  "mkdir -p .cosmic-ray",
+  '''
+#!/usr/bin/env bash
+set -eu
+mkdir -p .cosmic-ray "$@"
+''',
   "uv run cosmic-ray init cosmic-ray.toml .cosmic-ray/session.sqlite",
   "uv run cosmic-ray exec cosmic-ray.toml .cosmic-ray/session.sqlite",
   "uv run cr-report .cosmic-ray/session.sqlite --show-pending",
@@ -72,7 +96,11 @@ uv run hypothesis fuzz "$@" -- ${DEVTOOLS_PYTHON_PROPERTY_DIRS:-tests/property}
 
 ["devtools:cover-py"]
 description = "Run the Python tests with branch coverage and enforce the 100% floor"
-run = 'uv run pytest --cov-branch $(printf -- "--cov=%s " ${DEVTOOLS_PYTHON_SOURCE_DIRS:-src})'
+run = '''
+#!/usr/bin/env bash
+set -eu
+uv run pytest --cov-branch $(printf -- "--cov=%s " ${DEVTOOLS_PYTHON_SOURCE_DIRS:-src}) "$@"
+'''
 
 ["devtools:cover-py-check"]
 description = "Re-check the Python coverage threshold without rerunning the suite"
