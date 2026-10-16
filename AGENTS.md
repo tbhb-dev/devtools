@@ -131,6 +131,8 @@ Never a bare `git stash pop` around any of this. `.claude/rules/worktree-wip.md`
 
 That template is a published interface rather than a convenience. The scoping probes in `fix-prose` and `write-prose-fix` count its finding lines with `grep -c '^[0-9]'`, and the replacement probe reads its `replace_with=` field, so reshaping either one is a breaking change for this repository and for every consumer reading the output. Nothing here should reintroduce a repo-local template under a different name. The earlier private copy resolved only in this tree, which left those probes broken wherever that name was absent.
 
+All three of `fix-prose`, `write-prose-fix`, and `review-prose-fix` generate from one source each, with one verdict vocabulary on both harnesses: `PROSE: CLEAN`, `PARTIAL`, or `BLOCKED` from the writer, and `VERDICT: PASS` or `VERDICT: CHANGES REQUIRED` from the reviewer. A run keeps its state in `.fix-prose/run.<key>/` inside the worktree, which ignores itself, so a session isolated in a linked worktree can hand the writer a decision through `<state>/notes`. Old runs may have left `fix-prose.notes` under the git directory, and the context script reads that as a fallback. Running `check-suppressions.sh --allow <state> <path> <line>` records a dictionary word the operator added mid-run. `--verify` then passes on exactly those added lines for `.cspell-words.txt` and a vale `accept.txt`, and it still fails on removed words, extra words, and rule edits.
+
 ## Never hard-wrap Markdown
 
 Every Markdown paragraph in this repository occupies one line, and the renderer places its line breaks. Hard wrapping belongs to commit messages and to comments in code or config, each with its own gate.

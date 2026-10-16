@@ -69,15 +69,7 @@ git_dir=$(command git -C "$cwd" rev-parse --absolute-git-dir 2>/dev/null) || exi
 
 printf '%s\n' "$abs" >"$git_dir/fix-prose.lock"
 
-# Record what the linter configuration looks like before the fixer runs.
-# The fixer works unguarded inside its fork, so nothing in the harness
-# stops it from clearing a finding by editing a style file instead of
-# the prose. check-suppressions.sh --verify reads this afterwards, on
-# the caller's side, and a missing baseline reads as a finding there
-# rather than as a pass.
-#
-# Failure stays silent for the same reason the rest of this hook does.
-# Obstructing the invocation would cost more than the check is worth,
-# and the absent baseline already surfaces at verify time.
-script_dir=$(cd -- "$(dirname -- "$0")" && pwd)
-(cd "$cwd" && "$script_dir/check-suppressions.sh" --baseline "$abs") 2>/dev/null || true
+# The linter baseline is no longer taken here. It prints the run's state
+# directory, and the hook has no way to hand that back to the caller, so
+# the skill body runs check-suppressions.sh --baseline itself, in the
+# caller's own shell, where the output can be read.

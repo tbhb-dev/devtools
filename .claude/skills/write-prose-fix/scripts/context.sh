@@ -1,21 +1,14 @@
 #!/usr/bin/env bash
 # context — everything a prose fix needs, and nothing else.
 #
-# The write-prose-fix SKILL.md inlines this through the !`...`
-# preprocessor, so the fixer starts holding the findings rather than
-# spending its first call discovering them. The fork is what makes that
-# affordable: this text lands in the fixer's context, and the caller
-# never sees a line of it.
-#
-# That split is the whole reason the work sits in a forked skill instead
-# of the orchestrator. The orchestrator has to stay a plain skill to register
-# its guard hook, so anything printed there would land in the context
-# this skill exists to protect. Here it costs nothing anyone minds.
+# The writer runs this at the start of its own context, so it holds the
+# findings and the document before it makes a single call. The caller
+# never sees any of it, which is why the work belongs to a separate agent.
 #
 # Read-only throughout. The orchestrator's preflight owns the
 # preconditions; this gathers material.
 #
-# Usage: context.sh <target> [lint command...]
+# Usage: context.sh <target> <workflow-state> [lint command...]
 set -uo pipefail
 
 # --- environment hardening -------------------------------------------
@@ -37,10 +30,11 @@ cd "$root" || exit 1
 root=$(pwd -P)
 
 target=${1:-}
-shift 2>/dev/null || true
+state=${2:-}
+shift 2 2>/dev/null || true
 
-# Everything up to a -- is the command. Anything after it is a note for
-# the fixer, which reads it from $ARGUMENTS rather than from here.
+# Everything after the target and state, up to a --, is the command. Review
+# notes live in the workflow state rather than in the arguments.
 lint=""
 for word in "$@"; do
   [ "$word" = "--" ] && break
@@ -50,6 +44,16 @@ done
 case $target in
 "$root"/*) target=${target#"$root"/} ;;
 esac
+
+if [ -z "$state" ] || [ ! -s "$state/target" ]; then
+  printf 'No fix-prose workflow state was supplied. Report BLOCKED and stop.\n'
+  exit 0
+fi
+expected=$(head -1 "$state/target")
+if [ "$target" != "$expected" ]; then
+  printf 'Workflow state belongs to %s, not %s. Report BLOCKED and stop.\n' "$expected" "$target"
+  exit 0
+fi
 
 section "target"
 printf 'path: %s\n' "$target"
@@ -61,7 +65,14 @@ if [ ! -f "$target" ]; then
   exit 0
 fi
 
-notes="$(git rev-parse --absolute-git-dir 2>/dev/null)/fix-prose.notes"
+# The caller saves decisions and review findings in the run's own state,
+# which sits inside the worktree so a sandboxed session can write there.
+# Earlier versions wrote a file in the git directory, which stays readable
+# as a fallback.
+notes="$state/notes"
+if [ ! -s "$notes" ]; then
+  notes="$(git rev-parse --absolute-git-dir 2>/dev/null)/fix-prose.notes"
+fi
 if [ -s "$notes" ]; then
   section "what the caller asked you to address"
   cat "$notes"

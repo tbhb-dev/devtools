@@ -16,6 +16,12 @@ Reword one file until its linters pass. Someone has already decided what the doc
 
 !`bash ${CLAUDE_SKILL_DIR}/scripts/context.sh $ARGUMENTS`
 
+## Your inputs
+
+`$ARGUMENTS` contains the target first, then the workflow state, then the command that judges them. The caller's decisions and, on a second pass, the findings `review-prose-fix` returned arrive in the notes the context prints under the heading `what the caller asked you to address`. Treat those as the work: resolve each and say so.
+
+The context already ran the command and printed the document, so the findings and the text are both in front of you. Don't re-run the command to see them again.
+
 ## The one rule
 
 Leave the meaning alone. Every claim the document makes remains intact after your pass, and so does every number, path, identifier, and name in it.
@@ -24,15 +30,9 @@ A finding you can only clear by saying something different is a finding you leav
 
 Reword. Don't rewrite.
 
-## Your inputs
-
-`$ARGUMENTS` contains the target first, then the command that judges it. Anything after a `--` is what the caller wants addressed, which on a second pass is the findings `review-prose-fix` returned. Treat those as the work: resolve each and say so.
-
-The context below already ran the command and printed the document, so the findings and the text are both in front of you. Don't re-run the command to see them again.
-
 ## The loop
 
-1. Read the findings in the preceding context. Count them.
+1. Read the findings in the context script's output. Count them.
 2. Fix the whole list in one editing pass, cheapest findings first, editing only the target.
 3. Run the lint command again. Compare the count.
 
@@ -53,7 +53,7 @@ A checker that never ran and a document with nothing wrong print exactly the sam
 
 Vale matches a path against the sections in `.vale.ini`, and the match is exact. A path that matches no section doesn't load any styles, so vale reads the file and applies nothing to it. Vale's output is then empty and it exits zero. Measured against this repository, one paragraph of deliberately bad prose draws 13 findings as `probe.md` and draws zero as `probe.txt`, zero under a different filename, and zero at the same filename one directory down.
 
-The preceding context answered this before you started. It pushed known-bad text through vale under this document's own path and reported whether the rules are live, so read that line rather than reasoning about it. Where it says `UNSCOPED`, report `BLOCKED` and stop. For a run where that line is absent, your first lint run is what answers the question:
+The context script answered this before you started. It pushed known-bad text through vale under this document's own path and reported whether the rules are live, so read that line rather than reasoning about it. Where it says `UNSCOPED`, report `BLOCKED` and stop. For a run where that line is absent, your first lint run is what answers the question:
 
 - The first run reports findings. The command demonstrably fires, so a later silence is real, and clearing the list gives you `CLEAN`.
 - The first run is silent. You can't conclude anything from it yet. Report `BLOCKED` and say the document may already be clean or the command may not cover this path. Never report `CLEAN` off a silence you haven't seen the command break.
@@ -75,7 +75,7 @@ These hold even though nothing enforces them:
 - Don't reorder or delete content for a distributional rule. Splitting a sentence is structural. Cutting a clause edits meaning.
 - Don't add what the document didn't say. That covers counts, hedges, praise, and any mention of tools, sessions, or requests.
 
-No linter checks these. An independent reviewer does, reading your before and after against each other, and its findings come back to you in `also:` for another pass. Getting them right the first time is what keeps that loop to one round.
+No linter checks these. An independent reviewer does, reading your before and after against each other, and its findings come back to you in the notes for another pass. Getting them right the first time is what keeps that loop to one round.
 
 ## Reading the output
 
@@ -135,7 +135,7 @@ Treat any rule this way once you've established that nothing clears it. Report i
 
 Correct a real misspelling. That's the easy half.
 
-The other half is a token cspell doesn't know but the document is right to use, such as a dependency name, a proper noun, or an acronym. Adding it to `.cspell-words.txt` edits a shared project file, which isn't yours to decide. Where naming the concept instead keeps the claim exactly as strong, prefer that: `the fuzzing dependency` clears both the spelling and the acronym rules. Where the claim depends on the specific token, report the finding along with the line somebody would add.
+The other half is a token cspell doesn't know but the document is right to use, such as a dependency name, a proper noun, or an acronym. Adding it to `.cspell-words.txt` edits a shared project file, which isn't yours to decide. Where naming the concept instead keeps the claim exactly as strong, prefer that: `the fuzzing dependency` clears both the spelling and the acronym rules. Where the claim depends on the specific token, report the finding along with the line somebody would add. The caller records the operator's decision and hands it back through the notes.
 
 ## Never
 
@@ -143,9 +143,9 @@ The other half is a token cspell doesn't know but the document is right to use, 
 - Add an inline vale exception, or turn a rule off anywhere. Suppressing a rule so its finding goes away is the one thing that must never happen here.
 - Change the target's wrapping convention. Markdown in this repository puts each paragraph on one line and a hook enforces it. A commit message wraps its body at 72 columns and its trailers at 100.
 - Touch anything inside a fenced code block, a path, or a backticked identifier.
-- Edit the target through `sed`, `awk`, or a shell redirect. Use the file editing tools. This machine runs a hybrid toolchain: `sed` is GNU, `cat` is BSD, and `timeout` is absent. The session behind this skill spent four round trips on commands whose variant it guessed wrong.
+- Edit the target through `sed`, `awk`, or a shell redirect. Use the harness's file editing tool. This machine runs a hybrid toolchain: `sed` is GNU, `cat` is BSD, and `timeout` is absent. The session behind this skill spent four round trips on commands whose variant it guessed wrong.
 
-A script verifies these after you return, comparing the working tree against a baseline recorded before you started. It hashes the style packages directly rather than asking git, so an edit to one git never tracks shows up the same as any other. Reporting a finding you couldn't clear takes one line. Suppressing it forces the caller to revert your edit and answer the finding regardless.
+A script verifies these after you return, comparing the working tree against a baseline recorded before you started. The caller can sanction a dictionary word on the operator's say-so, and that sanction covers the exact line it names and nothing else. It hashes the style packages directly rather than asking git, so an edit to one git never tracks shows up the same as any other. Reporting a finding you couldn't clear takes one line. Suppressing it forces the caller to revert your edit and answer the finding regardless.
 
 ## What to return
 

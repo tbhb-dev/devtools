@@ -14,7 +14,7 @@
 # runs from the parent after delegation: an agent certifying its own
 # work certifies nothing.
 #
-# Two modes, one definition of the guarded set, so the two halves stay
+# One definition of the guarded set serves every mode, so the halves stay
 # consistent:
 #
 #   --baseline <target>   record the state before the fixer runs and print
@@ -23,7 +23,23 @@
 #                         compare against that baseline afterwards.
 #   --diff <state> <target>
 #                         print what the fixer changed, for the reviewer.
+#   --allow <state> <path> <line>
+#                         sanction one added line in a dictionary file.
 #   --cleanup <state>     remove a completed workflow's state.
+#
+# The state directory lives inside the worktree, under .fix-prose/, and
+# carries its own .gitignore. A session isolated in a linked worktree
+# can write there but can't write into the git directory, and the
+# operator hands decisions to the writer through <state>/notes. A state
+# directory under the git directory, where earlier versions kept it, is
+# still accepted.
+#
+# A word the operator deliberately adds to a dictionary mid-run would
+# otherwise read as linter-config-changed. --allow records that exact
+# line against the run. --verify then lets the file differ from its
+# baseline by those added lines and nothing else, so a removed word, an
+# extra word, or an edit to a rule still fails. Only .cspell-words.txt
+# and a vale vocabulary's accept.txt can be sanctioned.
 #
 # The synced vale style packages are why the configuration half hashes
 # files directly rather than asking git. .gitignore excludes .vale/* apart
@@ -82,7 +98,54 @@ git_dir=$(git rev-parse --absolute-git-dir)
 cd "$root"
 root=$(pwd -P)
 
-readonly BASE_ROOT="$git_dir/fix-prose"
+readonly TAB=$'\t'
+readonly BASE_ROOT="$root/.fix-prose"
+readonly LEGACY_ROOT="$git_dir/fix-prose"
+
+# The dictionary files an operator may extend mid-run. Everything else in
+# the guarded set stays unsanctionable, a rule file above all.
+sanctionable() {
+  case $1 in
+  .cspell-words.txt | .vale/config/vocabularies/*/accept.txt) return 0 ;;
+  esac
+  return 1
+}
+
+# snapshot_dictionaries copies the sanctionable files that exist, so
+# --verify can compare line by line against what the fixer started with.
+snapshot_dictionaries() {
+  local dest=$1 f
+  for f in .cspell-words.txt .vale/config/vocabularies/*/accept.txt; do
+    [ -f "$f" ] || continue
+    mkdir -p "$dest/$(dirname -- "$f")"
+    cp "$f" "$dest/$f"
+  done
+}
+
+# unsanctioned_changes prints one reason per way $2 departs from its
+# baseline beyond the lines the operator allowed. Silence means the
+# departure is exactly the sanctioned additions.
+unsanctioned_changes() {
+  local state=$1 path=$2 snap="$1/watched/$2" empty line
+  [ -f "$snap" ] || {
+    empty=$(mktemp)
+    snap=$empty
+  }
+  if [ -f "$path" ]; then
+    diff "$snap" "$path" || true
+  else
+    diff "$snap" /dev/null || true
+  fi | while IFS= read -r line; do
+    case $line in
+    '< '*) printf 'removed the line: %s\n' "${line#< }" ;;
+    '> '*)
+      grep -qxF -- "$path$TAB${line#> }" "$state/allow" 2>/dev/null ||
+        printf 'added a line the operator did not allow: %s\n' "${line#> }"
+      ;;
+    esac
+  done
+  [ -z "${empty:-}" ] || rm -f "$empty"
+}
 
 canonical_target() {
   local target=$1 target_dir
@@ -99,7 +162,10 @@ canonical_target() {
 load_state() {
   local state=${1:-}
   case $state in
-  "$BASE_ROOT"/run.*) ;;
+  .fix-prose/run.*) state=$root/$state ;;
+  esac
+  case $state in
+  "$BASE_ROOT"/run.* | "$LEGACY_ROOT"/run.*) ;;
   *)
     printf 'check-suppressions: invalid workflow state: %s\n' "${state:-(none)}" >&2
     exit 2
@@ -154,7 +220,7 @@ digest() {
       fi
     done
   } | sort -u -k2 |
-    awk -v t="$target" '{p = $0; sub(/^[0-9a-f]+  /, "", p); if (p != t) print}'
+    awk -v t="$target" '{p = $0; sub(/^[0-9a-f]+  /, "", p); if (p != t && p !~ /^\.fix-prose\//) print}'
 }
 
 # directives prints the suppression comments already in the target, so
@@ -176,15 +242,20 @@ case $mode in
   }
   target=$(canonical_target "$target")
   mkdir -p "$BASE_ROOT"
+  # The directory ignores itself, so a repository that has never heard of
+  # .fix-prose still sees nothing untracked and the run's own state can't
+  # read as a stray edit.
+  [ -f "$BASE_ROOT/.gitignore" ] || printf '*\n' >"$BASE_ROOT/.gitignore"
   target_key=$(printf '%s' "$target" | shasum -a 256 | cut -d' ' -f1)
   BASE="$BASE_ROOT/run.$target_key"
   mkdir "$BASE" 2>/dev/null || {
-    printf 'check-suppressions: an active workflow already owns %s\n' "$target" >&2
+    printf 'check-suppressions: an active workflow already owns %s; if that run is abandoned, clear it with: check-suppressions.sh --cleanup %s\n' "$target" "$BASE" >&2
     exit 2
   }
   printf '%s\n' "$target" >"$BASE/target"
   digest "$target" >"$BASE/digest"
   directives "$target" >"$BASE/directives"
+  snapshot_dictionaries "$BASE/watched"
   # A copy of the document before the fixer touched it. The reviewer
   # judges whether the meaning survived, which takes both versions, and
   # the file is gitignored often enough that git can't supply the first.
@@ -220,8 +291,18 @@ case $mode in
     [ -n "$path" ] || continue
     case $path in
     .vale/* | .vale.ini | .cspell* | .pre-commit-config.yaml | mise.toml | Justfile)
-      report "$path" 1 linter-config-changed \
-        "the fixer changed linter configuration, which clears findings by changing the rules rather than the prose; revert it and record the finding as unresolved"
+      # A dictionary the operator sanctioned lines in is judged line by
+      # line. Without a record for the path, any change fails as before.
+      if sanctionable "$path" && grep -qF -- "$path$TAB" "$BASE/allow" 2>/dev/null; then
+        while IFS= read -r reason; do
+          [ -n "$reason" ] || continue
+          report "$path" 1 linter-config-changed \
+            "beyond the lines the operator sanctioned, the dictionary $reason; revert that part and record the finding as unresolved"
+        done < <(unsanctioned_changes "$BASE" "$path")
+      else
+        report "$path" 1 linter-config-changed \
+          "the fixer changed linter configuration, which clears findings by changing the rules rather than the prose; revert it and record the finding as unresolved"
+      fi
       ;;
     *)
       report "$path" 1 stray-edit \
@@ -264,6 +345,34 @@ case $mode in
     exit 2
   }
   diff -u "$BASE/original" "$target" || true
+  # The reviewer should know which dictionary additions the operator
+  # sanctioned, because --verify stays quiet about exactly those.
+  if [ -s "$BASE/allow" ]; then
+    printf '\nsanctioned by the operator:\n'
+    sed 's/\t/: /' "$BASE/allow"
+  fi
+  ;;
+
+--allow)
+  BASE=$(load_state "${2:-}")
+  path=${3:-}
+  line=${4:-}
+  [ -n "$path" ] && [ -n "$line" ] || {
+    printf 'check-suppressions: --allow needs a state, a dictionary path and the exact line\n' >&2
+    exit 2
+  }
+  path=$(canonical_target "$path")
+  sanctionable "$path" || {
+    printf 'check-suppressions: %s cannot be sanctioned; only .cspell-words.txt and a vale vocabulary accept.txt can\n' "$path" >&2
+    exit 2
+  }
+  case $line in
+  *"$TAB"* | *$'\n'*)
+    printf 'check-suppressions: the line must be a single line without a tab\n' >&2
+    exit 2
+    ;;
+  esac
+  printf '%s\t%s\n' "$path" "$line" >>"$BASE/allow"
   ;;
 
 --cleanup)
@@ -272,7 +381,7 @@ case $mode in
   ;;
 
 *)
-  printf 'usage: check-suppressions.sh --baseline <target> | --verify <state> <target> | --diff <state> <target> | --cleanup <state>\n' >&2
+  printf 'usage: check-suppressions.sh --baseline <target> | --verify <state> <target> | --diff <state> <target> | --allow <state> <path> <line> | --cleanup <state>\n' >&2
   exit 2
   ;;
 esac

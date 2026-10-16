@@ -384,6 +384,7 @@ underef
 unparam
 unparseable
 unreviewed
+unsanctionable
 unsets
 usestdlibvars
 usetesting
