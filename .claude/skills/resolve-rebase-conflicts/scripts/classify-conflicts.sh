@@ -51,12 +51,20 @@ gitr() {
 
 readonly SIDE_DIFF_CAP=${RESOLVE_SIDE_DIFF_LINES:-60}
 
+# Resolved before the cd: BASH_SOURCE may be relative to the caller.
+script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 root=$(git rev-parse --show-toplevel)
 cd "$root"
 git_dir=$(git rev-parse --absolute-git-dir)
 
-if [ ! -d "$git_dir/rebase-merge" ] && [ ! -d "$git_dir/rebase-apply" ]; then
-  printf 'classify-conflicts: no rebase in progress.\n' >&2
+command -v uv >/dev/null 2>&1 || {
+  printf 'classify-conflicts: uv is not installed.\n' >&2
+  exit 1
+}
+
+if [ ! -d "$git_dir/rebase-merge" ] && [ ! -d "$git_dir/rebase-apply" ] &&
+  [ ! -f "$git_dir/CHERRY_PICK_HEAD" ]; then
+  printf 'classify-conflicts: no rebase or cherry-pick in progress.\n' >&2
   exit 1
 fi
 
@@ -121,7 +129,7 @@ while IFS= read -r path; do
     printf 'This file is generated, so neither side is authoritative and merging\n'
     printf 'them means nothing. Take one whole and let the generator rewrite it\n'
     printf 'once the rebase ends:\n\n'
-    printf '  bash .claude/skills/resolve-rebase-conflicts/scripts/take-side.sh %s base-side\n\n' "$path"
+    printf '  bash %s/take-side.sh %s base-side\n\n' "$script_dir" "$path"
     printf 'verify-rebase.sh names this path again at the end so the regeneration\n'
     printf 'does not get forgotten.\n'
     continue
@@ -146,7 +154,7 @@ while IFS= read -r path; do
   # classify mode has no refusal path, so any nonzero here is the tool
   # breaking rather than a verdict. Named explicitly so this call does not
   # rest on a property of the other mode.
-  DECLARED="$declared" uv run --script "${BASH_SOURCE%/*}/conflict_shape.py" \
+  DECLARED="$declared" uv run --script "$script_dir/conflict_shape.py" \
     classify "$path" "$scratch/1" "$scratch/2" "$scratch/3" || {
     printf 'conflict_shape.py failed with status %s while classifying %s.\n' "$?" "$path"
     exit 1
@@ -179,5 +187,5 @@ EOF
 printf '\n== next ==\n'
 printf 'Resolve every mechanical path with the script named beside it. Read the\n'
 printf 'rest. Stage each resolved path, then advance the rebase with\n'
-printf '.claude/skills/rebase/scripts/continue-rebase.sh, which refuses to\n'
+printf '%s/../../rebase/scripts/continue-rebase.sh, which refuses to\n' "$script_dir"
 printf 'commit a staged file that still carries markers.\n'

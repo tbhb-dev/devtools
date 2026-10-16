@@ -69,8 +69,9 @@ root=$(git rev-parse --show-toplevel)
 cd "$root"
 git_dir=$(git rev-parse --absolute-git-dir)
 
-[ -d "$git_dir/rebase-merge" ] ||
-  refuse "no rebase in progress under the merge backend."
+[ -d "$git_dir/rebase-merge" ] || [ -d "$git_dir/rebase-apply" ] ||
+  [ -f "$git_dir/CHERRY_PICK_HEAD" ] ||
+  refuse "no rebase or cherry-pick in progress."
 
 stages=$(git ls-files -u -- "$path" | awk '{ printf "%s", $3 }')
 [ -n "$stages" ] || refuse "$path is not unmerged."

@@ -129,7 +129,7 @@ fi
 if [ -d "$git_dir/rebase-merge" ] || [ -d "$git_dir/rebase-apply" ]; then
   printf '\n== stopped ==\n'
   printf 'The rebase stopped. Run rebase-status.sh for the detail, then hand the\n'
-  printf 'conflict to resolve-rebase-conflicts.\n'
+  printf 'conflict to the resolve-rebase-conflicts skill.\n'
   exit 1
 fi
 

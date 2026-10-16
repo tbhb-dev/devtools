@@ -15,7 +15,7 @@ hooks:
 
 Settle every conflicted path and stage it, so the rebase can advance. This skill ends there. Continuing the replay and verifying the result belong to the `rebase` skill.
 
-A guard hook runs alongside. It refuses `--ours` and `--theirs`, which mean the opposite of what they read during a rebase, and it refuses staging a file with markers still in it.
+A guard hook runs alongside. It refuses `--ours` and `--theirs`, which mean the opposite of what they read during a rebase, and it refuses staging a file with markers still in it. It also refuses whole-tree staging.
 
 ## The inversion, once
 
@@ -127,7 +127,9 @@ Stage what you resolved, by name:
 git add -- path/one path/two
 ```
 
-Never `git add -A` or `git add .`. During a rebase those sweep in whatever an earlier commit in the replay left behind. The guard refuses both, along with any file with markers still in it.
+Never `git add -A` or `git add .`. During a rebase those sweep in whatever an earlier commit in the replay left behind.
+
+The guard refuses both forms, along with any file with markers still in it.
 
 ## Step 5: hand back
 
@@ -143,7 +145,8 @@ Where `rerere.enabled` is on, git replays resolutions it recorded during earlier
 
 ## Preconditions
 
-- a rebase in progress under the merge backend, which is git's default
-- `python3` on the path, which the classifier and the union resolver both use
+- a rebase or cherry-pick stopped on a conflict, under either rebase backend
+- `uv` on the path for the shared conflict classifier
+- `python3` on the path for independent union verification
 
-The scripts check both and stop with a plain message when either is missing.
+The scripts check these prerequisites and stop with a plain message when one is missing.

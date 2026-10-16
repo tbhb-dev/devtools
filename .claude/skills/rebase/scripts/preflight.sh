@@ -10,8 +10,9 @@
 #
 # Output is plain text under `== section ==` headers, each self-contained
 # so a partially-read report still answers something. Nothing here
-# mutates the repository or the index. The one network call fetches the
-# base branch; REBASE_PREFLIGHT_FETCH=0 skips it.
+# touches the worktree or index. It persists verification state when it
+# meets a rebase another workflow started. The one network call fetches
+# the base branch; REBASE_PREFLIGHT_FETCH=0 skips it.
 set -euo pipefail
 
 # --- environment hardening -------------------------------------------
@@ -106,6 +107,7 @@ printf 'root:     %s\n' "$root"
 printf 'branch:   %s\n' "$branch"
 case $root in
 */.claude/worktrees/*) printf 'layout:   agent worktree under .claude/worktrees\n' ;;
+*/.codex/worktrees/*) printf 'layout:   agent worktree under .codex/worktrees\n' ;;
 *) printf 'layout:   primary checkout\n' ;;
 esac
 printf 'head:     %s\n' "$(git rev-parse --short HEAD)"
@@ -115,6 +117,36 @@ printf 'upstream: %s\n' "$upstream"
 # A rebase already in progress changes which step of this skill applies:
 # the workflow resumes at the conflict rather than starting one.
 git_dir=$(git rev-parse --absolute-git-dir)
+state_file="$git_dir/rebase-agent-state"
+completed_file="$git_dir/rebase-agent-state.completed"
+state_note=""
+
+# A rebase started by another workflow, notably commit, has no agent
+# state of its own. Preserve git's in-progress metadata now, before a final
+# continue removes rebase-merge and leaves verification with no old range.
+if [ -d "$git_dir/rebase-merge" ]; then
+  rm -f "$completed_file"
+  rebase_state="$git_dir/rebase-merge"
+  active_before=$(tr -d '\n' <"$rebase_state/orig-head" 2>/dev/null || true)
+  active_base=$(tr -d '\n' <"$rebase_state/onto" 2>/dev/null || true)
+  active_branch=$(tr -d '\n' <"$rebase_state/head-name" 2>/dev/null || true)
+  active_branch=${active_branch##refs/heads/}
+  saved_before=$(awk -F= '$1 == "before" { print $2 }' "$state_file" 2>/dev/null || true)
+  saved_base=$(awk -F= '$1 == "base_sha" { print $2 }' "$state_file" 2>/dev/null || true)
+  if [ -n "$active_before" ] && [ -n "$active_base" ] &&
+    { [ "$saved_before" != "$active_before" ] || [ "$saved_base" != "$active_base" ]; }; then
+    state_tmp="$state_file.$$"
+    printf 'branch=%s\nbase=%s\nbase_sha=%s\nbefore=%s\n' \
+      "${active_branch:-unknown}" "$active_base" "$active_base" "$active_before" >"$state_tmp"
+    mv "$state_tmp" "$state_file"
+    rm -f "$completed_file"
+    state_note="reconstructed from the active rebase for post-rebase verification"
+  fi
+elif [ -f "$state_file" ] && [ ! -f "$completed_file" ]; then
+  rm -f "$state_file"
+  state_note="cleared an incomplete state record left by an aborted rebase"
+fi
+
 in_progress=none
 if [ -d "$git_dir/rebase-merge" ] || [ -d "$git_dir/rebase-apply" ]; then
   in_progress="rebase (this skill resumes it at step 3; do not start another)"
@@ -124,6 +156,7 @@ elif [ -f "$git_dir/CHERRY_PICK_HEAD" ]; then
   in_progress="cherry-pick (finish or abort it before rebasing)"
 fi
 printf 'in progress: %s\n' "$in_progress"
+if [ -n "$state_note" ]; then printf 'agent state: %s\n' "$state_note"; fi
 
 if [ "$branch" = "$default_branch" ]; then
   printf 'NOTE: HEAD is the default branch itself. There is nothing to replay;\n'

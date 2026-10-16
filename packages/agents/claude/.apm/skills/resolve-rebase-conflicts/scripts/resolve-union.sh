@@ -48,12 +48,24 @@ gitr() {
   exit 1
 }
 
+# Resolved before the cd: BASH_SOURCE may be relative to the caller.
+script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 root=$(git rev-parse --show-toplevel)
 cd "$root"
 git_dir=$(git rev-parse --absolute-git-dir)
 
-[ -d "$git_dir/rebase-merge" ] || {
-  printf 'resolve-union: no rebase in progress under the merge backend.\n' >&2
+command -v uv >/dev/null 2>&1 || {
+  printf 'resolve-union: uv is not installed.\n' >&2
+  exit 1
+}
+command -v python3 >/dev/null 2>&1 || {
+  printf 'resolve-union: python3 is not installed.\n' >&2
+  exit 1
+}
+
+[ -d "$git_dir/rebase-merge" ] || [ -d "$git_dir/rebase-apply" ] ||
+  [ -f "$git_dir/CHERRY_PICK_HEAD" ] || {
+  printf 'resolve-union: no rebase or cherry-pick in progress.\n' >&2
   exit 1
 }
 
@@ -82,7 +94,7 @@ for path in "$@"; do
   # routine "read this one yourself", which is the wrong instruction and
   # hides the defect that produced it.
   set +e
-  DECLARED="$declared" uv run --script "${BASH_SOURCE%/*}/conflict_shape.py" \
+  DECLARED="$declared" uv run --script "$script_dir/conflict_shape.py" \
     union "$path" "$scratch/1" "$scratch/2" "$scratch/3" >"$scratch/out"
   shape=$?
   set -e

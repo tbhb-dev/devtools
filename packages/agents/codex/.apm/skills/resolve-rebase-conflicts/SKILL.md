@@ -1,7 +1,7 @@
 ---
 name: resolve-rebase-conflicts
 description: >-
-  Settle the conflicts a merge-backend rebase left behind. Mechanical ones resolve without asking and the rest arrive with the evidence in front of you. It classifies each conflicted path first. An append-only sorted list becomes the verified union of both sides. A generated file takes one side whole and waits for its generator. Everything else is a real disagreement with what each side changed printed beside it. The rebase skill calls this at every stop. Use it directly whenever a merge-backend rebase stops on a conflict and the user asks to resolve it.
+  Settle the conflicts a stopped rebase left behind. Mechanical ones resolve without asking and the rest arrive with the evidence in front of you. It classifies each conflicted path first. An append-only sorted list becomes the verified union of both sides. A generated file takes one side whole and waits for its generator. Everything else is a real disagreement with what each side changed printed beside it. The rebase skill calls this at every stop. Use it directly whenever a rebase or cherry-pick stops on a conflict and the user asks to resolve it.
 ---
 
 # Resolve rebase conflicts
@@ -43,9 +43,9 @@ That `|||||||` section is the common ancestor, and it's the most useful part of 
 
 A bare `=======` line isn't a marker on its own. Because it underlines a setext heading in ordinary Markdown, the scripts here match only `<<<<<<<`, `|||||||`, and `>>>>>>>`.
 
-## Step 0: open the task list
+## Step 0: the checklist
 
-Create these with `update_plan`, keeping exactly one item `in_progress` at a time.
+Where the harness provides `update_plan`, track these with it, keeping exactly one item `in_progress` at a time. Otherwise work the list in order as written.
 
 1. Classify every conflicted path
 2. Resolve the mechanical ones
@@ -53,7 +53,7 @@ Create these with `update_plan`, keeping exactly one item `in_progress` at a tim
 4. Read the rest, and stage what you resolved
 5. Hand back
 
-Where a class turns out empty, close its task and say so rather than deleting it. Which classes the stop produced is part of the report at the end.
+Where a class turns out empty, mark its step done and say so rather than dropping it. Which classes the stop produced is part of the report at the end.
 
 The scripts stop with a plain message when no rebase is in progress. Say that and hand back, because nothing here applies outside one.
 
@@ -136,7 +136,7 @@ Where `rerere.enabled` is on, git replays resolutions it recorded during earlier
 
 ## Preconditions
 
-- a rebase in progress under the merge backend, which is git's default
+- a rebase or cherry-pick stopped on a conflict, under either rebase backend
 - `uv` on the path for the shared conflict classifier
 - `python3` on the path for independent union verification
 

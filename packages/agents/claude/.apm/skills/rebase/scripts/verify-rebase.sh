@@ -49,6 +49,8 @@ readonly RANGE_DIFF_CAP=${REBASE_VERIFY_RANGE_DIFF_LINES:-400}
 root=$(git rev-parse --show-toplevel)
 cd "$root"
 git_dir=$(git rev-parse --absolute-git-dir)
+state_file="$git_dir/rebase-agent-state"
+completed_file="$git_dir/rebase-agent-state.completed"
 flagged=0
 
 if [ -d "$git_dir/rebase-merge" ] || [ -d "$git_dir/rebase-apply" ]; then
@@ -62,9 +64,15 @@ fi
 # as a branch full of unexplained changes.
 before=${1:-}
 base=""
-if [ -z "$before" ] && [ -f "$git_dir/rebase-agent-state" ]; then
-  before=$(awk -F= '$1 == "before" { print $2 }' "$git_dir/rebase-agent-state")
-  base=$(awk -F= '$1 == "base_sha" { print $2 }' "$git_dir/rebase-agent-state")
+if [ -z "$before" ] && [ -f "$state_file" ] && [ ! -f "$completed_file" ]; then
+  rm -f "$state_file"
+  printf 'The saved rebase state was never marked complete, so it belonged to an\n' >&2
+  printf 'aborted or failed replay. It was removed instead of being used.\n' >&2
+  exit 1
+fi
+if [ -z "$before" ] && [ -f "$state_file" ]; then
+  before=$(awk -F= '$1 == "before" { print $2 }' "$state_file")
+  base=$(awk -F= '$1 == "base_sha" { print $2 }' "$state_file")
   origin=state
 fi
 if [ -z "$before" ]; then
@@ -246,6 +254,10 @@ if command -v mise >/dev/null 2>&1; then
     "$(git rev-parse --short "${base:-HEAD}" 2>/dev/null || printf '<base>')"
 else
   printf 'mise is not installed; there is nothing to run here.\n'
+fi
+
+if [ "$flagged" = 0 ]; then
+  rm -f "$state_file" "$completed_file"
 fi
 
 exit "$flagged"

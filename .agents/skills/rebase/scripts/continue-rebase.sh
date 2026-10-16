@@ -52,6 +52,9 @@ case ${1:-} in
 *) refuse "unknown argument ${1}. Usage: continue-rebase.sh [--skip-empty]" ;;
 esac
 
+# The scripts live under a different directory per harness, so messages
+# that name a sibling derive the path from this file.
+script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 root=$(git rev-parse --show-toplevel)
 cd "$root"
 git_dir=$(git rev-parse --absolute-git-dir)
@@ -71,7 +74,7 @@ $unmerged"
     refuse "the index carries changes against HEAD, so this commit is not empty.
 Skipping would discard them. Continue instead:
 
-  bash .agents/skills/rebase/scripts/continue-rebase.sh"
+  bash $script_dir/continue-rebase.sh"
   fi
   stopped=$(tr -d '\n' <"$git_dir/rebase-merge/stopped-sha" 2>/dev/null || true)
   printf 'Skipping a commit whose change is already present:\n'
@@ -87,7 +90,7 @@ else
 
 $unmerged
 
-Resolve them through resolve-rebase-conflicts, stage each one,
+Resolve them through the resolve-rebase-conflicts skill, stage each one,
 then run this again."
   fi
 
@@ -143,7 +146,7 @@ if [ -d "$git_dir/rebase-merge" ]; then
   if printf '%s\n' "$output" | grep -qiE 'is now empty|nothing to commit'; then
     printf 'git reports this commit as empty. Where that is because the base already\n'
     printf 'carries the change, drop it:\n\n'
-    printf '  bash .agents/skills/rebase/scripts/continue-rebase.sh --skip-empty\n\n'
+    printf '  bash %s/continue-rebase.sh --skip-empty\n\n' "$script_dir"
     printf 'Where it is because a resolution threw the commit away by accident, do\n'
     printf 'not skip. Abort and start again.\n'
   else

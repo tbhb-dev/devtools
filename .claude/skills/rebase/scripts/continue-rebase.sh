@@ -52,9 +52,14 @@ case ${1:-} in
 *) refuse "unknown argument ${1}. Usage: continue-rebase.sh [--skip-empty]" ;;
 esac
 
+# The scripts live under a different directory per harness, so messages
+# that name a sibling derive the path from this file.
+script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 root=$(git rev-parse --show-toplevel)
 cd "$root"
 git_dir=$(git rev-parse --absolute-git-dir)
+state_file="$git_dir/rebase-agent-state"
+completed_file="$git_dir/rebase-agent-state.completed"
 
 [ -d "$git_dir/rebase-merge" ] ||
   refuse "no rebase in progress under the merge backend. Nothing to continue."
@@ -69,7 +74,7 @@ $unmerged"
     refuse "the index carries changes against HEAD, so this commit is not empty.
 Skipping would discard them. Continue instead:
 
-  bash .claude/skills/rebase/scripts/continue-rebase.sh"
+  bash $script_dir/continue-rebase.sh"
   fi
   stopped=$(tr -d '\n' <"$git_dir/rebase-merge/stopped-sha" 2>/dev/null || true)
   printf 'Skipping a commit whose change is already present:\n'
@@ -141,7 +146,7 @@ if [ -d "$git_dir/rebase-merge" ]; then
   if printf '%s\n' "$output" | grep -qiE 'is now empty|nothing to commit'; then
     printf 'git reports this commit as empty. Where that is because the base already\n'
     printf 'carries the change, drop it:\n\n'
-    printf '  bash .claude/skills/rebase/scripts/continue-rebase.sh --skip-empty\n\n'
+    printf '  bash %s/continue-rebase.sh --skip-empty\n\n' "$script_dir"
     printf 'Where it is because a resolution threw the commit away by accident, do\n'
     printf 'not skip. Abort and start again.\n'
   else
@@ -151,11 +156,13 @@ if [ -d "$git_dir/rebase-merge" ]; then
 fi
 
 if [ "$status" -ne 0 ]; then
+  rm -f "$state_file" "$completed_file"
   printf '\n== failed ==\n'
   printf 'git exited %s and left no rebase in progress. Report the message above.\n' "$status"
   exit 2
 fi
 
 printf '\n== finished ==\n'
+: >"$completed_file"
 printf 'The replay applied. Whether the result is correct is a separate\n'
 printf 'question: run verify-rebase.sh next.\n'
