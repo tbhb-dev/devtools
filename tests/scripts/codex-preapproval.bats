@@ -126,3 +126,19 @@ run_task() {
   run_task check-preapproval apply
   [ "$status" -eq 0 ]
 }
+
+@test "empty consumer scopes work under system bash with unset-variable checks" {
+  run env DEVTOOLS_PREAPPROVAL_SCOPES= /bin/bash -uc '
+    source "$1/.devtools/scripts/preapproval.sh"
+    preapproval_scopes commit pr merge all
+  ' bash "$ROOT"
+  [ "$status" -eq 0 ]
+  [ "$output" = $'commit\npr\nmerge\ncommit\npr\nmerge' ]
+
+  run env DEVTOOLS_PREAPPROVAL_SCOPES= /bin/bash -uc '
+    source "$1/.devtools/scripts/preapproval.sh"
+    preapproval_scopes undeclared
+  ' bash "$ROOT"
+  [ "$status" -eq 1 ]
+  [ "$output" = "unknown scope 'undeclared'" ]
+}
