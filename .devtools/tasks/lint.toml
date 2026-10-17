@@ -1,7 +1,7 @@
 # Shared lint tasks. Same task-file syntax, namespace, selection, and
 # pin rules as format.toml in this directory. Only gates whose bodies
 # are identical between the consuming repos live here; a gate whose
-# scope or idiom is repo-specific (lint-prose's glob,
+# scope or idiom is repo-specific (lint-prose's glob via DEVTOOLS_PROSE_GLOB,
 # lint-editorconfig's file listing) stays in the consumer's root
 # mise.toml.
 
@@ -105,7 +105,7 @@ run = "mise fmt --check"
 # DEVTOOLS_GENERATED_PATHS adds newline-separated repository-relative path patterns.
 ["devtools:lint-source-files"]
 hide = true
-description = "Select owned source files for shell and Markdown gates"
+description = "Select owned source files for shell, Markdown, and prose gates"
 run = '''
 #!/usr/bin/env bash
 set -euo pipefail
@@ -121,11 +121,17 @@ done <<< "${DEVTOOLS_GENERATED_PATHS:-}"
 case "$mode" in
   shell) pattern='*.sh'; command=(shellcheck) ;;
   shell-fmt) pattern='*.sh'; command=(shfmt -d) ;;
+  prose) pattern='*'; command=(vale --output=ai-tells-agent.tmpl --glob="${DEVTOOLS_PROSE_GLOB:-*}") ;;
   markdown-wrap) pattern='*.md'; command=(guard-markdown) ;;
 esac
 selected=$(mktemp)
 trap 'rm -f "$selected"' EXIT
-git ls-files -z --cached --others --exclude-standard -- "$pattern" "${excludes[@]}" >"$selected"
+patterns=("$pattern")
+if [[ "$mode" == prose && $# -gt 0 ]]; then
+  patterns=("$@")
+  shift "$#"
+fi
+git ls-files -z --cached --others --exclude-standard -- "${patterns[@]}" "${excludes[@]}" >"$selected"
 files=()
 while IFS= read -r -d '' file; do
   files+=("$file")
