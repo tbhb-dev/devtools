@@ -6,6 +6,14 @@ description: >-
 context: fork
 agent: general-purpose
 background: false
+allowed-tools:
+  - Read
+  - Edit
+  - Write
+  - Bash(bash ${CLAUDE_SKILL_DIR}/scripts/context.sh*)
+  - Bash(echo *)
+  - Bash(mise run lint-*)
+  - Bash(mise run fix-prose-replacements *)
 ---
 
 # Reword until the prose lint passes, and change nothing else

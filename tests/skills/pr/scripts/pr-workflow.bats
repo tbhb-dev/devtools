@@ -493,3 +493,48 @@ publish_with_milestone() {
   grep -q 'issueOrPullRequest' "$GH_LOG"
   refute_grep '^api repos/' "$GH_LOG"
 }
+
+@test "delegated pr checks its script-owned stamp and checker refusal then grant (#137)" {
+  printf 'printf "widget\\n"\n' >widget.txt
+  git add -- widget.txt
+  git commit --quiet --amend -m 'feat: provide a runnable widget example'
+  write_draft "" 'feat: provide a runnable widget example' 'Run it with bash widget.txt.'
+  sed -e 's/The widget needs a home./Users need a minimal command that prints the widget name./' \
+    -e 's/Ran `true`./Ran `bash widget.txt`; it printed the widget name./' \
+    PR_AGENTDESC.md >draft.tmp
+  mv draft.tmp PR_AGENTDESC.md
+  [ "$(bash widget.txt)" = widget ]
+  mkdir -p .claude/skills
+  cp -R "$ROOT/packages/agents/claude/.apm/skills/pr" \
+    "$ROOT/packages/agents/claude/.apm/skills/review-pr-description" .claude/skills/
+  SCRIPTS="$PWD/.claude/skills/pr/scripts"
+  # Opt-in CLI smoke test; ordinary runs keep the deterministic reviewer.
+  if [ "${RUN_HEADLESS_REVIEWS:-0}" = 1 ]; then
+    unset DEVTOOLS_REVIEW_CMD
+    export DEVTOOLS_HARNESS=claude
+  fi
+  # No skill hooks, operator flag, or session pre-approval participates.
+  [ -z "${CLAUDE_CODE_SESSION_ID:-}${CODEX_THREAD_ID:-}" ]
+  export DEVTOOLS_DELEGATION_CHECK="${BATS_TEST_TMPDIR}/checker"
+  export CHECK_ARGS="${BATS_TEST_TMPDIR}/checker.args"
+  cat >"$DEVTOOLS_DELEGATION_CHECK" <<'CHECKER'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >>"$CHECK_ARGS"
+exit "${CHECK_STATUS:-1}"
+CHECKER
+  chmod +x "$DEVTOOLS_DELEGATION_CHECK"
+  bash "$SCRIPTS/review.sh"
+  [ -s "$(stamp_file)" ]
+
+  CHECK_STATUS=1 run bash -c 'source "$1/lib.sh"; dt_confirm pr false && bash "$1/create-pr.sh" --dry-run' _ "$SCRIPTS"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *REFUSED* ]]
+  [ -s "$(stamp_file)" ]
+
+  CHECK_STATUS=0 run bash -c 'source "$1/lib.sh"; dt_confirm pr false && bash "$1/create-pr.sh" --dry-run' _ "$SCRIPTS"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"confirmation: delegation_check granted pr in repo"* ]]
+  [ "$(cat "$CHECK_ARGS")" = $'check repo pr\ncheck repo pr' ]
+  [ -z "$(remote_topic)" ]
+  refute_grep '^pr create' "$GH_LOG"
+}
