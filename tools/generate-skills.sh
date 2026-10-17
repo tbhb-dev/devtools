@@ -109,6 +109,7 @@ build() {
   done
   if [ -d "$out/scripts" ] && grep -rqF 'lib.sh' "$out/scripts"; then
     cp -p "$LIB" "$out/scripts/lib.sh"
+    cp -p "$SOURCE/lib/gates.py" "$out/scripts/gates.py"
   fi
 }
 

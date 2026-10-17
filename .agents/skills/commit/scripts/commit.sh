@@ -28,7 +28,7 @@
 # staged tree no longer matches the stamp, so the change goes back
 # through review before it can commit at all.
 #
-# Usage: commit.sh [--amend] [--confirmed]
+# Usage: commit.sh [--amend] [--confirmed] [--dry-run] [--rerun-gates]
 #   --amend      fold the staged change into the commit at HEAD
 #   --confirmed  the operator answered yes to this commit in this session
 # Exit:  0 committed and verified
@@ -55,17 +55,21 @@ fail() {
   exit 1
 }
 
-# Only --amend and --confirmed pass. Everything else this workflow needs
+# Only the workflow flags pass. Everything else this workflow needs
 # is supplied here, and an allowlist keeps a caller from carrying
 # --no-verify or another unsafe flag through the wrapper.
 mode=normal
 confirmed=false
+dry_run=false
+rerun_gates=false
 for arg in "$@"; do
   case $arg in
   --amend) mode=amend ;;
   --confirmed) confirmed=true ;;
+  --dry-run) dry_run=true ;;
+  --rerun-gates) rerun_gates=true ;;
   *)
-    fail "commit.sh takes --amend and --confirmed and nothing else. It supplies the
+    fail "commit.sh takes --amend, --confirmed, --dry-run, and --rerun-gates. It supplies the
 message file and the cleanup mode itself, and the flags refused elsewhere
 in this workflow are refused here for the same reasons.
 
@@ -115,6 +119,18 @@ the same. Run the review again against the current draft and index:
   bash $here/review.sh$review_suffix"
 }
 require_reviewed
+dt_gate lint-commit-msg "$draft" "$rerun_gates" mise run lint-commit-msg
+mise run devtools:lint-leaks
+mise run devtools:gitleaks
+dt_gate lint "" "$rerun_gates" mise run lint
+dt_gate test "" "$rerun_gates" mise run test
+if [ "$mode" = amend ]; then
+  bash "$here/review.sh" --amend
+else
+  bash "$here/review.sh"
+fi
+require_reviewed
+[ "$dry_run" = false ] || exit 0
 tree=$(gitr write-tree)
 
 status=0

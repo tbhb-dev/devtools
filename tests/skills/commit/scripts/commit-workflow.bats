@@ -8,6 +8,7 @@
 setup() {
   source "${BATS_TEST_DIRNAME}/../../../test_helper.bash"
   isolate_git
+  stub_gates
   ROOT="${BATS_TEST_DIRNAME}/../../../.."
   SCRIPTS="${ROOT}/packages/agents/claude/.apm/skills/commit/scripts"
   REPO="${BATS_TEST_TMPDIR}/repo"
@@ -383,4 +384,32 @@ STUB
   chmod +x "$BATS_TEST_TMPDIR/bin/git"
   PATH="$BATS_TEST_TMPDIR/bin:$PATH" run bash "$SCRIPTS/commit.sh" --confirmed
   [ "$status" -eq 9 ]
+}
+
+@test "commit dry run then clean amend reuses gates and rerun overrides (#161)" {
+  printf 'COMMIT_AGENTMSG\n' >.gitignore
+  git add -- .gitignore
+  initial_commit
+  bash "$SCRIPTS/review.sh" --amend
+  before=$(git rev-parse HEAD)
+  bash "$SCRIPTS/commit.sh" --amend --dry-run
+  [ "$(git rev-parse HEAD)" = "$before" ]
+  bash "$SCRIPTS/commit.sh" --amend --dry-run --rerun-gates
+  run bash "$SCRIPTS/commit.sh" --amend --confirmed
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"mise run test passed at"*"(reused)"* ]]
+  [ "$(cat "$GATE_LOG")" = $'lint-commit-msg\ndevtools:lint-leaks\ndevtools:gitleaks\nlint\ntest\nlint-commit-msg\ndevtools:lint-leaks\ndevtools:gitleaks\nlint\ntest\ndevtools:lint-leaks\ndevtools:gitleaks' ]
+}
+
+@test "commit always reviews after gates, including a cached dry run (#161)" {
+  printf 'COMMIT_AGENTMSG\n' >.gitignore
+  git add -- .gitignore
+  initial_commit
+  export DEVTOOLS_REVIEW_CMD='cat >/dev/null; echo review >>"$GATE_LOG"; echo "VERDICT: PASS"'
+  bash "$SCRIPTS/review.sh" --amend
+  : >"$GATE_LOG"
+  bash "$SCRIPTS/commit.sh" --amend --dry-run
+  run bash "$SCRIPTS/commit.sh" --amend --confirmed
+  [ "$status" -eq 0 ]
+  [ "$(cat "$GATE_LOG")" = $'lint-commit-msg\ndevtools:lint-leaks\ndevtools:gitleaks\nlint\ntest\nreview\ndevtools:lint-leaks\ndevtools:gitleaks\nreview' ]
 }

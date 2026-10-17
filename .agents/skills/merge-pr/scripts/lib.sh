@@ -698,3 +698,9 @@ dt_gh_repo() {
   shift
   dt_gh api graphql -F owner='{owner}' -F name='{repo}' -f "query=$query" "$@"
 }
+
+# dt_gate <name> <draft-or-empty> <rerun:true|false> <command> [args...].
+# Only successful commands on a tree that stays clean can leave a pass.
+dt_gate() {
+  python3 "$DT_LIB_DIR/gates.py" "$@"
+}
