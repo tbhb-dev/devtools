@@ -312,12 +312,14 @@ report() {
   done
 }
 
+version_count=$(printf '%s\n' "$versions" | wc -l)
+sha_count=$(printf '%s\n' "$shas" | wc -l)
 rc=0
-if [ "$(printf '%s\n' "$versions" | wc -l)" -ne 1 ] || [ "$versions" = "?" ]; then
+if [ "$version_count" -ne 1 ] || [ "$versions" = "?" ]; then
   report 1 version "$versions"
   rc=1
 fi
-if [ -n "$shas" ] && [ "$(printf '%s\n' "$shas" | wc -l)" -ne 1 ]; then
+if [ -n "$shas" ] && [ "$sha_count" -ne 1 ]; then
   report 2 commit "$shas"
   rc=1
 fi

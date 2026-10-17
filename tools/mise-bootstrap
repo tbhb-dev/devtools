@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -eu
+set -euo pipefail
 
 __mise_bootstrap() {
     local cache_home="${XDG_CACHE_HOME:-$HOME/.cache}/mise"
@@ -9,7 +9,7 @@ __mise_bootstrap() {
     install() {
         local initial_working_dir="$PWD"
         #!/bin/sh
-        set -eu
+        set -euo pipefail
 
         #region logging setup
         if [ "${MISE_DEBUG-}" = "true" ] || [ "${MISE_DEBUG-}" = "1" ]; then
@@ -54,7 +54,7 @@ __mise_bootstrap() {
 
         #region environment setup
         get_os() {
-          os="$(uname -s)"
+          os="$(uname -s)" || return
           if [ "$os" = Darwin ]; then
             echo "macos"
           elif [ "$os" = Linux ]; then
@@ -69,17 +69,22 @@ __mise_bootstrap() {
           if type ldd >/dev/null 2>/dev/null; then
             if [ "${MISE_INSTALL_MUSL-}" = "1" ] || [ "${MISE_INSTALL_MUSL-}" = "true" ]; then
               musl="-musl"
-            elif [ "$(uname -o)" = "Android" ]; then
-              # Android (Termux) always uses musl
-              musl="-musl"
             else
-              libc=$(ldd /bin/ls | grep 'musl' | head -1 | cut -d ' ' -f1)
-              if [ -n "$libc" ]; then
+              kernel_os=$(uname -o) || return
+              if [ "$kernel_os" = "Android" ]; then
+                # Android (Termux) always uses musl
                 musl="-musl"
+              else
+                libc=$(ldd /bin/ls) || return
+                # grep may find no musl loader on a glibc system.
+                libc=$(printf '%s\n' "$libc" | awk '/musl/ { print $1; exit }') || return
+                if [ -n "$libc" ]; then
+                  musl="-musl"
+                fi
               fi
             fi
           fi
-          arch="$(uname -m)"
+          arch="$(uname -m)" || return
           if [ "$arch" = x86_64 ]; then
             echo "x64$musl"
           elif [ "$arch" = aarch64 ] || [ "$arch" = arm64 ]; then
@@ -105,18 +110,19 @@ __mise_bootstrap() {
         }
 
         tar_supports_zstd() {
+          tar_version=$(tar --version) || return
           if ! command -v zstd >/dev/null 2>&1; then
             false
           # tar is bsdtar
-          elif tar --version | grep -q 'bsdtar'; then
+          elif printf '%s\n' "$tar_version" | grep -q 'bsdtar'; then
             true
           # busybox tar reports a "1.3x" version that matches the GNU check below, but it
           # cannot decompress .tar.zst itself. Detect it so we fall back to the zstd pipe
           # (or a .tar.gz download) instead of running `tar -xf` on a zstd tarball.
-          elif tar --version 2>&1 | grep -qi 'busybox'; then
+          elif printf '%s\n' "$tar_version" | grep -qi 'busybox'; then
             false
           # tar version is >= 1.31
-          elif tar --version | grep -q '1\.\(3[1-9]\|[4-9][0-9]\)'; then
+          elif printf '%s\n' "$tar_version" | grep -q '1\.\(3[1-9]\|[4-9][0-9]\)'; then
             true
           else
             false
@@ -260,7 +266,10 @@ __mise_bootstrap() {
             if command -v wget >/dev/null 2>&1; then
               debug ">" wget -qO "$file" "$url"
               stderr=$(mktemp)
-              wget -O "$file" "$url" >"$stderr" 2>&1 || error "wget failed: $(cat "$stderr")"
+              if ! wget -O "$file" "$url" >"$stderr" 2>&1; then
+                # shellcheck disable=SC2312 # cat only adds detail to an unconditional failure
+                error "wget failed: $(cat "$stderr")"
+              fi
               rm "$stderr"
             else
               error "mise standalone install requires curl or wget but neither is installed. Aborting."
@@ -276,7 +285,8 @@ __mise_bootstrap() {
         installed_mise_version() {
           bin="$1"
           if [ -x "$bin" ]; then
-            installed_version="$("$bin" version 2>/dev/null | head -n1 | cut -d' ' -f1)"
+            installed_version=$("$bin" version 2>/dev/null) || return
+            installed_version=$(printf '%s\n' "$installed_version" | awk 'NR == 1 { print $1 }') || return
             echo "${installed_version#v}"
           fi
         }
@@ -319,7 +329,10 @@ __mise_bootstrap() {
           debug "mise-setup: tarball=$cache_file"
 
           debug "validating checksum"
-          cd "$(dirname "$cache_file")" && get_checksum "$version" "$os" "$arch" "$ext" | "$(shasum_bin)" -c >/dev/null
+          cache_dir=$(dirname "$cache_file") || return
+          checksum_bin=$(shasum_bin) || return
+          cd "$cache_dir"
+          get_checksum "$version" "$os" "$arch" "$ext" | "$checksum_bin" -c >/dev/null
 
           # extract tarball
           if [ -d "$install_path" ]; then
@@ -334,7 +347,8 @@ __mise_bootstrap() {
           else
             tar --no-same-owner -xf "$cache_file"
           fi
-          if [ "$(id -u)" = "0" ]; then
+          uid=$(id -u) || return
+          if [ "$uid" = "0" ]; then
             chown 0:0 mise/bin/mise
             chmod 755 mise/bin/mise
           fi

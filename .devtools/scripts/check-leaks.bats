@@ -155,11 +155,13 @@ run_check() {
 		echo "see 10.1.2.3 and op:$op_slashes/a/b/c and /volume1/x" >"$dir/vendored.md"
 	done
 	echo "pattern 10.1.2.3" >tools/check-leaks.bats
-	git ls-files --others --exclude-standard -z | xargs -0 git add --
+	git ls-files --others --exclude-standard -z >"$BATS_TEST_TMPDIR/files"
+	xargs -0 git add -- <"$BATS_TEST_TMPDIR/files"
 	run_check
 	[ "$status" -eq 0 ]
 	echo "host zebra-host-01" >.devtools/literal.md
-	git ls-files --others --exclude-standard -z | xargs -0 git add --
+	git ls-files --others --exclude-standard -z >"$BATS_TEST_TMPDIR/files"
+	xargs -0 git add -- <"$BATS_TEST_TMPDIR/files"
 	run_check
 	[ "$status" -eq 1 ]
 	[[ $output == *".devtools/literal.md:1: private literal O11Y_PRIVATE_STRINGS entry 1"* ]]
@@ -499,7 +501,8 @@ run_check() {
 	git add .
 	run_check --staged
 	[ "$status" -eq 1 ]
-	[ "$(grep -c 'private literal' <<<"$output")" -eq 1 ]
+	count=$(grep -c 'private literal' <<<"$output")
+	[ "$count" -eq 1 ]
 	rm -f a* b*
 	git rm -q --cached -f a* b* 2>/dev/null || true
 	run_check --staged
@@ -728,7 +731,8 @@ leaky_history() {
 	echo "another host zebra-host-01" >new2.md
 	git add new2.md
 	git commit -q -m "chore: new leak"
-	lines "refs/heads/f $(git rev-parse HEAD) refs/heads/f $zero"
+	ref=$(git rev-parse HEAD)
+	lines "refs/heads/f $ref refs/heads/f $zero"
 	[ "$status" -eq 1 ]
 	[[ $output == *"new2.md:1: private literal O11Y_PRIVATE_STRINGS entry 1"* ]]
 }
@@ -760,7 +764,8 @@ leaky_history() {
 	echo ok >a.md
 	git add a.md
 	git commit -q -m "chore: ok"
-	lines "refs/heads/zebra-host-01-fix $(git rev-parse HEAD) refs/heads/zebra-host-01-fix $zero"
+	ref=$(git rev-parse HEAD)
+	lines "refs/heads/zebra-host-01-fix $ref refs/heads/zebra-host-01-fix $zero"
 	[ "$status" -eq 1 ]
 	[[ $output =~ path#[0-9a-f]{8}:path:\ private\ literal\ O11Y_PRIVATE_STRINGS\ entry\ 1 ]]
 }
@@ -786,7 +791,8 @@ leaky_history() {
 	git add c.md
 	git commit -q -m "chore: c"
 	oid=$(git rev-parse HEAD:c.md)
-	rm "$(git rev-parse --git-path "objects/${oid:0:2}/${oid:2}")"
+	object=$(git rev-parse --git-path "objects/${oid:0:2}/${oid:2}")
+	rm "$object"
 	run_check --range "$base..HEAD"
 	[ "$status" -eq 2 ]
 	[[ $output == *"incomplete"* ]]
@@ -798,7 +804,8 @@ leaky_history() {
 	git commit -q -m "chore: ok"
 	git tag -a -m "outer zebra-host-01" t1
 	git tag -a -m "nested" t2 t1 2>/dev/null
-	lines "refs/tags/t2 $(git rev-parse t2) refs/tags/t2 $zero"
+	ref=$(git rev-parse t2)
+	lines "refs/tags/t2 $ref refs/tags/t2 $zero"
 	[ "$status" -eq 1 ]
 	[[ $output == *"tag "*"private literal O11Y_PRIVATE_STRINGS entry 1"* ]]
 }
@@ -814,7 +821,8 @@ hook_repo() {
 	cp "$checker" .devtools/scripts/check-leaks.sh
 	cp "$BATS_TEST_DIRNAME/install-pre-push.sh" .devtools/scripts/install-pre-push.sh
 	# The real task definition, so the hook runs the entry the repository ships.
-	awk '/^\["devtools:lint-leaks"\]/ { f = 1 } f && /^$/ { exit } f { print }' "$repo_root/.devtools/tasks/leaks.toml" | sed 's/^\["devtools:/[tasks."devtools:/' >mise.toml
+	task=$(awk '/^\["devtools:lint-leaks"\]/ { f = 1 } f && /^$/ { exit } f { print }' "$repo_root/.devtools/tasks/leaks.toml")
+	sed 's/^\["devtools:/[tasks."devtools:/' <<<"$task" >mise.toml
 	[[ -s mise.toml ]]
 	export DEVTOOLS_DIR="$work/.devtools"
 	mise trust -q "$work/mise.toml"
@@ -831,7 +839,8 @@ repos:
         always_run: true
         pass_filenames: false
 YAML
-	git ls-files --others --exclude-standard -z | xargs -0 git add --
+	git ls-files --others --exclude-standard -z >"$BATS_TEST_TMPDIR/files"
+	xargs -0 git add -- <"$BATS_TEST_TMPDIR/files"
 	git commit -q -m "chore: hook"
 	git init -q --bare "$work/A.git"
 	git init -q --bare "$work/B.git"
@@ -854,7 +863,8 @@ push_blocked() {
 	[ "$status" -ne 0 ]
 	# Only the check's own lines are ours; git prints ref names itself.
 	# A negated command that isn't the last line asserts nothing in bats.
-	if grep -E 'check-leaks|private literal|pattern:' <<<"$output" | grep -qF -e zebra-host-01 -e kestrel99; then
+	matches=$(grep -E 'check-leaks|private literal|pattern:' <<<"$output" || true)
+	if grep -qF -e zebra-host-01 -e kestrel99 <<<"$matches"; then
 		return 1
 	fi
 }
@@ -882,7 +892,8 @@ push_blocked() {
 	push_blocked origin clean leaky
 	[[ $output == *"private literal O11Y_PRIVATE_STRINGS entry 1"* ]]
 	push_blocked origin leaky clean
-	[ -z "$(git ls-remote origin refs/heads/clean refs/heads/leaky)" ]
+	refs=$(git ls-remote origin refs/heads/clean refs/heads/leaky)
+	[ -z "$refs" ]
 	[ ! -f "$BATS_TEST_TMPDIR/prek-ran" ]
 }
 
@@ -891,7 +902,8 @@ push_blocked() {
 	git tag -a -m "release for zebra-host-01" v1
 	push_blocked origin v1
 	[[ $output == *"private literal O11Y_PRIVATE_STRINGS entry 1"* ]]
-	[ -z "$(git ls-remote origin refs/tags/v1)" ]
+	refs=$(git ls-remote origin refs/tags/v1)
+	[ -z "$refs" ]
 	git tag -d v1 >/dev/null
 	git tag -a -m "clean release" v1
 	push_ok origin v1
@@ -921,7 +933,8 @@ push_blocked() {
 	git commit -q -m "chore: clean child"
 	git remote set-url origin "$work/B.git"
 	push_blocked origin work
-	[ -z "$(git ls-remote "$work/B.git")" ]
+	refs=$(git ls-remote "$work/B.git")
+	[ -z "$refs" ]
 }
 
 @test "the hook covers every push URL of a remote" {
@@ -937,7 +950,8 @@ push_blocked() {
 	git remote set-url --push origin "$work/A.git"
 	git remote set-url --add --push origin "$work/B.git"
 	push_blocked origin work
-	[ -z "$(git ls-remote "$work/B.git")" ]
+	refs=$(git ls-remote "$work/B.git")
+	[ -z "$refs" ]
 }
 
 @test "the hook scans author and committer lines" {
@@ -973,7 +987,8 @@ push_blocked() {
 	git add c.md
 	git commit -q -m "chore: c"
 	oid=$(git rev-parse HEAD:c.md)
-	rm "$(git rev-parse --git-path "objects/${oid:0:2}/${oid:2}")"
+	object=$(git rev-parse --git-path "objects/${oid:0:2}/${oid:2}")
+	rm "$object"
 	push_blocked origin work
 	[[ $output == *"incomplete"* ]]
 }
@@ -1001,7 +1016,8 @@ push_blocked() {
 	git switch -q -c old
 	rm .devtools/scripts/check-leaks.sh
 	echo "host zebra-host-01" >l.md
-	git ls-files --others --exclude-standard -z | xargs -0 git add --
+	git ls-files --others --exclude-standard -z >"$BATS_TEST_TMPDIR/files"
+	xargs -0 git add -- <"$BATS_TEST_TMPDIR/files"
 	git commit -q -m "chore: no checker here"
 	push_ok origin old
 	[[ $output == *"leak check is not present on this branch and was skipped"* ]]
@@ -1016,7 +1032,8 @@ push_blocked() {
 
 @test "the check doesn't echo the arguments mise is given" {
 	command -v mise >/dev/null
-	awk '/^\["devtools:lint-leaks"\]/ { f = 1 } f && /^$/ { exit } f { print }' "$repo_root/.devtools/tasks/leaks.toml" | sed 's/^\["devtools:/[tasks."devtools:/' >mise.toml
+	task=$(awk '/^\["devtools:lint-leaks"\]/ { f = 1 } f && /^$/ { exit } f { print }' "$repo_root/.devtools/tasks/leaks.toml")
+	sed 's/^\["devtools:/[tasks."devtools:/' <<<"$task" >mise.toml
 	sed -i.bak "s|\$DEVTOOLS_DIR/scripts/check-leaks.sh|$checker|" mise.toml
 	export DEVTOOLS_DIR="$repo_root/.devtools"
 	mise trust -q "$work/mise.toml"
@@ -1093,7 +1110,8 @@ push_blocked() {
 	mkdir -p .agents
 	echo "connect 10.21.32.43" >.agents/example.txt
 	cp .agents/example.txt deployment.txt
-	git ls-files --others --exclude-standard -z | xargs -0 git add --
+	git ls-files --others --exclude-standard -z >"$BATS_TEST_TMPDIR/files"
+	xargs -0 git add -- <"$BATS_TEST_TMPDIR/files"
 	git commit -q -m "chore: reuse"
 	run_check --range "$base..HEAD"
 	[ "$status" -eq 1 ]
@@ -1104,7 +1122,8 @@ push_blocked() {
 	mkdir -p .agents .devtools
 	echo "connect 10.21.32.43" >.agents/example.txt
 	cp .agents/example.txt .devtools/example.txt
-	git ls-files --others --exclude-standard -z | xargs -0 git add --
+	git ls-files --others --exclude-standard -z >"$BATS_TEST_TMPDIR/files"
+	xargs -0 git add -- <"$BATS_TEST_TMPDIR/files"
 	git commit -q -m "chore: exempt only"
 	run_check --range "$base..HEAD"
 	[ "$status" -eq 0 ]
@@ -1116,7 +1135,8 @@ push_blocked() {
 	git switch -q -c work
 	echo "connect 10.21.32.43" >.agents/example.txt
 	cp .agents/example.txt deployment.txt
-	git ls-files --others --exclude-standard -z | xargs -0 git add --
+	git ls-files --others --exclude-standard -z >"$BATS_TEST_TMPDIR/files"
+	xargs -0 git add -- <"$BATS_TEST_TMPDIR/files"
 	git commit -q -m "chore: reuse"
 	push_blocked origin work
 	[[ $output == *"pattern: private IPv4 address"* ]]
@@ -1165,7 +1185,8 @@ fake() {
 	fake cat "$real_cat >/dev/null; exit 1"
 	push_blocked origin work
 	[[ $output == *"could not read the push from git"* ]]
-	[ -z "$(git ls-remote "$work/A.git" refs/heads/work)" ]
+	refs=$(git ls-remote "$work/A.git" refs/heads/work)
+	[ -z "$refs" ]
 }
 
 @test "an unreadable private-literals file fails the scan instead of passing it" {
@@ -1199,7 +1220,8 @@ fake() {
 	printf 'unrelated\n' >"$hooks/pre-push.prek"
 	run bash .devtools/scripts/install-pre-push.sh
 	[ "$status" -eq 1 ]
-	[ "$(cat "$hooks/pre-push.prek")" = unrelated ]
+	hook=$(cat "$hooks/pre-push.prek")
+	[ "$hook" = unrelated ]
 }
 
 @test "private key headers are findings without their text" {

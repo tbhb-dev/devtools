@@ -126,7 +126,7 @@ net() {
     count_codex <"$1"
     return
   fi
-  raw=$(count_claude <"$1")
+  raw=$(count_claude <"$1") || return
   printf '%s\n' "$((raw - claude_baseline))"
 }
 
@@ -200,6 +200,7 @@ PY
   # tracked binary. A count is only meaningful for something the agent
   # could read, and nothing else belongs in the total.
   bundled=""
+  bundled_files=$(command git -c core.quotePath=false ls-files --cached --others --exclude-standard -- "$dir" | sort)
   while IFS= read -r file; do
     [ -n "$file" ] || continue
     case $file in
@@ -209,14 +210,17 @@ PY
       printf 'skip %s: not text, so no reader ever pays for it\n' "$file" >&2
       continue
     fi
-    bundled="${bundled}${file}	$(net "$file")	$(wc -c <"$file" | tr -d ' ')
+    file_tokens=$(net "$file")
+    file_bytes=$(wc -c <"$file" | tr -d ' ')
+    bundled="${bundled}${file}	${file_tokens}	${file_bytes}
 "
   done <<EOF
-$(command git -c core.quotePath=false ls-files --cached --others --exclude-standard -- "$dir" | sort)
+$bundled_files
 EOF
 
+  manifest_bytes=$(wc -c <"$manifest" | tr -d ' ')
   MODEL="$MODEL" TOKENIZER="$TOKENIZER" SKILL="$skill" SKILL_DIR="$dir" TOTAL="$total" FM="$fm" DESC="$desc" BODY="$body" \
-    BUNDLED="$bundled" MANIFEST_BYTES="$(wc -c <"$manifest" | tr -d ' ')" \
+    BUNDLED="$bundled" MANIFEST_BYTES="$manifest_bytes" \
     python3 - "$dir/tokens.json" <<'PY'
 import json, os, sys
 
@@ -264,9 +268,10 @@ PY
     over="  OVER the ${BODY_BUDGET}-token body budget"
     budget_exceeded=1
   fi
+  bundled_total=$(printf '%s' "$bundled" | awk -F'\t' '{ s += $2 } END { print s + 0 }')
   printf '%-24s description %5s   manifest %6s   bundled %6s%s\n' \
     "$skill" "$desc" "$total" \
-    "$(printf '%s' "$bundled" | awk -F'\t' '{ s += $2 } END { print s + 0 }')" "$over"
+    "$bundled_total" "$over"
 
 done
 

@@ -59,11 +59,12 @@ if [ ${#files[@]} -eq 0 ]; then
   # script is the one this check exists for, and reading the index
   # alone would reach it only once somebody staged it. Gitignored
   # scratch scripts stay out through --exclude-standard.
-  while IFS= read -r f; do
-    files+=("$f")
-  done < <(command git -c core.quotePath=false ls-files \
+  owned_files=$(command git -c core.quotePath=false ls-files \
     --cached --others --exclude-standard \
     'packages/agents/*/.apm/skills/*/scripts/*.sh' 'hooks/*.sh' 'scripts/*.sh' 'tools/*.sh')
+  while IFS= read -r f; do
+    [ -n "$f" ] && files+=("$f")
+  done <<<"$owned_files"
 
   # Then the skills that live under .claude/ alone. A repo-local skill
   # has no packaged source, so the glob above cannot reach its scripts,
@@ -71,13 +72,15 @@ if [ ${#files[@]} -eq 0 ]; then
   # already scanned and would report every finding twice. Asking whether
   # any agent package holds a skill of the same name separates the two,
   # and keeps the next local skill covered without an edit here.
+  local_files=$(command git -c core.quotePath=false ls-files \
+    --cached --others --exclude-standard '.claude/skills/*/scripts/*.sh')
   while IFS= read -r f; do
+    [ -n "$f" ] || continue
     skill=${f#.claude/skills/}
     skill=${skill%%/*}
     packaged "$skill" && continue
     files+=("$f")
-  done < <(command git -c core.quotePath=false ls-files \
-    --cached --others --exclude-standard '.claude/skills/*/scripts/*.sh')
+  done <<<"$local_files"
 fi
 
 # The files the structural pass below scans: everything that exists and
@@ -154,12 +157,13 @@ if [ ${#scan_files[@]} -gt 0 ]; then
   # one of these messages quotes a shell escape. Sorted by file then
   # line, because ast-grep streams grouped by rule and the reader wants
   # a script's findings together and in source order.
+  diagnostics=$(printf '%s' "$ast_json" |
+    jq -r 'select(.file) | [.file, (.range.start.line + 1 | tostring), .ruleId, .message] | join("\t")' |
+    sort -t$'\t' -k1,1 -k2,2n)
   while IFS=$'\t' read -r file line rule message; do
     [ -n "$file" ] || continue
     report "$file" "$line" "$rule" "$message"
-  done < <(printf '%s' "$ast_json" |
-    jq -r 'select(.file) | [.file, (.range.start.line + 1 | tostring), .ruleId, .message] | join("\t")' |
-    sort -t"$(printf '\t')" -k1,1 -k2,2n)
+  done <<<"$diagnostics"
 fi
 
 if [ "$findings" -gt 0 ]; then

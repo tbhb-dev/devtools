@@ -227,6 +227,7 @@ if [ "$tag" = "$latest" ]; then
   if literals=$(bash tools/check-versions.sh "$tag" 2>&1); then
     ok "version literals name $tag"
   else
+    # shellcheck disable=SC2312 # tr only formats diagnostic text after the verdict is settled
     fail "version literals name $tag" "$(printf '%s' "$literals" | tr '\n' ' ')"
   fi
 else

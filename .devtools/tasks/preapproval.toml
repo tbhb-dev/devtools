@@ -93,7 +93,8 @@ requested=$(preapproval_scopes "$@")
 
 method=unconfirmed
 if [ "$biometrics" = "1" ]; then
-  if [ "$(uname -s)" != Darwin ] || ! command -v swiftc >/dev/null 2>&1; then
+  os=$(uname -s)
+  if [ "$os" != Darwin ] || ! command -v swiftc >/dev/null 2>&1; then
     echo "no Touch ID available here: this needs macOS and the Xcode command line tools" >&2
     echo "         run 'mise run preapprove --no-biometrics ...' to grant without one" >&2
     exit 1
@@ -173,9 +174,10 @@ mkdir -p "$dir"
 find "$dir" -maxdepth 1 -type f -mtime +7 -delete 2>/dev/null || true
 stamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 if [ ! -f "$file" ]; then
+  repository=$(git rev-parse --show-toplevel)
   {
     printf '# Pre-approval record for %s %s.\n' "$session_label" "$session"
-    printf '# Repository: %s\n' "$(git rev-parse --show-toplevel)"
+    printf '# Repository: %s\n' "$repository"
     printf '# Written by `mise run preapprove`. Withdraw it with\n'
     printf '# `mise run revoke-preapproval`, or by deleting this file.\n'
   } >"$file"

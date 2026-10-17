@@ -89,20 +89,23 @@ render() {
 
 # build <source-dir> <harness> <out>: assemble one output directory.
 build() {
-  local src=$1 harness=$2 out=$3 tree f rel
+  local src=$1 harness=$2 out=$3 tree f rel parent source_files
   mkdir -p "$out"
   render "$src/SKILL.$harness.md" "$src" >"$out/SKILL.md"
   for tree in shared "$harness"; do
     [ -d "$src/$tree" ] || continue
+    source_files=$(find "$src/$tree" -type f | sort) || return
     while IFS= read -r f; do
+      [ -n "$f" ] || continue
       rel=${f#"$src/$tree/"}
       if [ -e "$out/$rel" ]; then
         printf 'generate-skills: %s exists in both shared/ and %s/ of %s\n' "$rel" "$harness" "$src" >&2
         exit 1
       fi
-      mkdir -p "$(dirname "$out/$rel")"
+      parent=$(dirname "$out/$rel") || return
+      mkdir -p "$parent"
       cp -p "$f" "$out/$rel"
-    done < <(find "$src/$tree" -type f | sort)
+    done <<<"$source_files"
   done
   if [ -d "$out/scripts" ] && grep -rqF 'lib.sh' "$out/scripts"; then
     cp -p "$LIB" "$out/scripts/lib.sh"
@@ -116,7 +119,8 @@ listing() {
     cd "$1"
     find . -type f ! -path ./tokens.json | sort | while IFS= read -r f; do
       if [ -x "$f" ]; then mode=755; else mode=644; fi
-      printf '%s %s %s\n' "${f#./}" "$mode" "$(git hash-object --no-filters -- "$f")"
+      digest=$(git hash-object --no-filters -- "$f") || exit
+      printf '%s %s %s\n' "${f#./}" "$mode" "$digest"
     done
   )
 }
@@ -136,10 +140,17 @@ for src in "$SOURCE"/skills/*/; do
         report "$out" not-generated "missing; run mise run generate-skills"
         continue
       fi
+      listing "$want" >"$scratch/want.list"
+      listing "$out" >"$scratch/out.list"
+      diff_status=0
+      diff "$scratch/want.list" "$scratch/out.list" >"$scratch/diff" || diff_status=$?
+      [ "$diff_status" -le 1 ] || exit "$diff_status"
+      changed=$(sed -n 's/^[<>] //p' "$scratch/diff" | cut -d' ' -f1 | sort -u)
       while IFS= read -r line; do
+        [ -n "$line" ] || continue
         report "$out/${line%% *}" generated-drift \
           "differs from what $src generates; edit the source, then run mise run generate-skills"
-      done < <(diff <(listing "$want") <(listing "$out") | sed -n 's/^[<>] //p' | cut -d' ' -f1 | sort -u)
+      done <<<"$changed"
     else
       mkdir -p "$out"
       find "$out" -mindepth 1 -maxdepth 1 ! -name tokens.json -exec rm -rf {} +
