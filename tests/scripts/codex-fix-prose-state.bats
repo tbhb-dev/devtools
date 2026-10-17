@@ -1,6 +1,8 @@
 #!/usr/bin/env bats
 
 setup() {
+  source "${BATS_TEST_DIRNAME}/../test_helper.bash"
+  isolate_git
   ROOT="${BATS_TEST_DIRNAME}/../.."
   CHECK="${ROOT}/packages/agents/codex/.apm/skills/fix-prose/scripts/check-suppressions.sh"
   REPO="${BATS_TEST_TMPDIR}/repo"

@@ -6,6 +6,8 @@
 # cases also withdraw write access to the git directory where they can.
 
 setup() {
+  source "${BATS_TEST_DIRNAME}/../../../test_helper.bash"
+  isolate_git
   ROOT="${BATS_TEST_DIRNAME}/../../../.."
   SKILL="${ROOT}/packages/agents/claude/.apm/skills/fix-prose/scripts"
   WRITER="${ROOT}/packages/agents/claude/.apm/skills/write-prose-fix/scripts"

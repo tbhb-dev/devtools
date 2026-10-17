@@ -3,6 +3,8 @@
 # source tree, so the cases can break the output on purpose.
 
 setup() {
+  source "${BATS_TEST_DIRNAME}/../test_helper.bash"
+  isolate_git
   GEN="${BATS_TEST_DIRNAME}/../../tools/generate-skills.sh"
   REPO="${BATS_TEST_TMPDIR}/repo"
   export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1

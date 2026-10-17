@@ -24,6 +24,8 @@
 # asserting a pass.
 
 setup() {
+  source "${BATS_TEST_DIRNAME}/../test_helper.bash"
+  isolate_git
   SCRIPT="${BATS_TEST_DIRNAME}/../../tools/release-readiness.sh"
   REPO="${BATS_TEST_TMPDIR}/repo"
   ORIGIN="${BATS_TEST_TMPDIR}/origin.git"

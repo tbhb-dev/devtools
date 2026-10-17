@@ -7,6 +7,8 @@
 # scratch repository under a scratch HOME with the session variables cleared.
 
 setup() {
+  source "${BATS_TEST_DIRNAME}/../../../test_helper.bash"
+  isolate_git
   ROOT="${BATS_TEST_DIRNAME}/../../../.."
   CLAUDE_SCRIPTS="${ROOT}/packages/agents/claude/.apm/skills/analyze-session/scripts"
   CODEX_SCRIPTS="${ROOT}/packages/agents/codex/.apm/skills/analyze-session/scripts"

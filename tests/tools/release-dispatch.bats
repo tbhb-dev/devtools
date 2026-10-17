@@ -13,6 +13,8 @@
 # exercise both the pass and the refuse arm.
 
 setup() {
+  source "${BATS_TEST_DIRNAME}/../test_helper.bash"
+  isolate_git
   SCRIPT="${BATS_TEST_DIRNAME}/../../tools/release-dispatch.sh"
   REPO="${BATS_TEST_TMPDIR}/repo"
   BIN="${BATS_TEST_TMPDIR}/bin"

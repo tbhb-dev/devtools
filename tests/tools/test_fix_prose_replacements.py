@@ -7,6 +7,9 @@ together, which is where the safety argument for applying an edit unattended
 actually lives.
 """
 
+# cspell:ignore delenv
+
+import os
 import subprocess
 import sys
 import textwrap
@@ -26,9 +29,19 @@ SKIPPED = 1
 MISUSE = 2
 
 
+def isolate_git(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep scratch repositories independent of the invoking Git environment."""
+    for name in os.environ:
+        if name.startswith(("GIT_CONFIG_", "GIT_AUTHOR_", "GIT_COMMITTER_")):
+            monkeypatch.delenv(name)
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", "/dev/null")
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+
+
 @pytest.fixture
-def workspace(tmp_path: Path) -> tuple[Path, Path]:
+def workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path]:
     """A git repo with a stub vale on PATH, since the script cds to the root."""
+    isolate_git(monkeypatch)
     subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
@@ -228,3 +241,26 @@ class TestScriptHeader:
     def test_the_shebang_runs_it_through_uv(self) -> None:
         first = SCRIPT.read_text(encoding="utf-8").splitlines()[0]
         assert first == "#!/usr/bin/env -S uv run --script"
+
+
+def test_git_environment_isolation(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Environment config and identities must not reach scratch repositories."""
+    inherited = {
+        "GIT_CONFIG_COUNT": "1",
+        "GIT_CONFIG_KEY_0": "commit.gpgSign",
+        "GIT_CONFIG_VALUE_0": "true",
+        "GIT_CONFIG_KEY_9": "unused",
+        "GIT_CONFIG_VALUE_9": "unused",
+        "GIT_AUTHOR_NAME": "Inherited",
+        "GIT_AUTHOR_EMAIL": "inherited@example.com",
+        "GIT_AUTHOR_DATE": "invalid",
+        "GIT_COMMITTER_NAME": "Inherited",
+        "GIT_COMMITTER_EMAIL": "inherited@example.com",
+        "GIT_COMMITTER_DATE": "invalid",
+    }
+    for name, value in inherited.items():
+        monkeypatch.setenv(name, value)
+    isolate_git(monkeypatch)
+    assert not inherited.keys() & os.environ.keys()
+    assert os.environ["GIT_CONFIG_GLOBAL"] == "/dev/null"
+    assert os.environ["GIT_CONFIG_NOSYSTEM"] == "1"

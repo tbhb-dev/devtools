@@ -6,6 +6,8 @@
 # The reviewer and the delegation checker are stubs.
 
 setup() {
+  source "${BATS_TEST_DIRNAME}/../../../test_helper.bash"
+  isolate_git
   ROOT="${BATS_TEST_DIRNAME}/../../../.."
   LIB="${ROOT}/packages/agents/claude/.apm/skills/commit/scripts/lib.sh"
   REPO="${BATS_TEST_TMPDIR}/repo"

@@ -24,6 +24,8 @@
 # tag is what exercises those halves.
 
 setup() {
+  source "${BATS_TEST_DIRNAME}/../test_helper.bash"
+  isolate_git
   SCRIPT="${BATS_TEST_DIRNAME}/../../tools/release-verify.sh"
   REPO="${BATS_TEST_TMPDIR}/repo"
 

@@ -11,6 +11,8 @@ readonly HEAD_OID=1111111111111111111111111111111111111111
 readonly BASE_OID=2222222222222222222222222222222222222222
 
 setup() {
+  source "${BATS_TEST_DIRNAME}/../../../test_helper.bash"
+  isolate_git
   ROOT="${BATS_TEST_DIRNAME}/../../../.."
   SCRIPTS="${ROOT}/packages/agents/claude/.apm/skills/merge-pr/scripts"
   REPO="${BATS_TEST_TMPDIR}/repo"

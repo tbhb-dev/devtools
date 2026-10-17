@@ -5,6 +5,11 @@
 # cspell:ignore compgen gpgsign btrfs servicesx nothex repointed gitlink cacheinfo
 
 setup() {
+	local name
+	for name in ${!GIT_CONFIG_@} ${!GIT_AUTHOR_@} ${!GIT_COMMITTER_@}; do
+		unset "$name"
+	done
+	export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
 	checker="$BATS_TEST_DIRNAME/check-leaks.sh"
 	# The scheme separator, kept out of the source so a search for it finds only real uses.
 	op_slashes=/
