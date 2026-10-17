@@ -845,6 +845,9 @@ hook_repo() {
 	if [[ ${1-} != without-leaks ]]; then printf ', ".devtools/tasks/leaks.toml"' >>mise.toml; fi
 	printf ']\n[tools]\n' >>mise.toml
 	awk '/^prek =/ { print }' "$repo_root/.config/mise/conf.d/10-devtools-tools.toml" >>mise.toml
+	# The fixture's pin needs the published lock even when CI requires locked tools.
+	cp "$repo_root/.config/mise/mise.lock" mise.lock
+	export MISE_LOCKED=1
 	export DEVTOOLS_DIR="$work/.devtools"
 	mise trust -q "$work/mise.toml"
 	cat >.pre-commit-config.yaml <<YAML

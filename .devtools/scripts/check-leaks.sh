@@ -63,7 +63,8 @@ export LC_ALL=C
 exec 3>&2
 
 # git runs quietly: its own messages can repeat a path or a ref.
-git() { command git "$@" 2>/dev/null; }
+# Bash 3.2 applies errexit to `command` even when the caller tests its status.
+git() { env git "$@" 2>/dev/null; }
 
 # Repository-owned ERE allow list: patterns only, never private literals.
 # Read relative to the repository root in every mode.
