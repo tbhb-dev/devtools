@@ -201,11 +201,14 @@ get_ext() { echo tar.gz; }
 download_file() { echo "$PWD/archive"; }
 debug() { :; }
 info() { :; }
-get_checksum() { echo ignored; }
-shasum_bin() { echo true; }
+get_checksum() { printf '%65536s\n' ignored; }
+shasum_bin() { echo checksum; }
 tar() { mkdir -p mise/bin; touch mise/bin/mise; }
 install_mise
 SH
+  # A checksum verifier must drain its input before it exits. Keep the
+  # producer larger than a pipe buffer to expose an early-exiting stub.
+  stub checksum 'cat >/dev/null'
   real_dirname=$(command -v dirname)
   stub dirname "if [[ \$1 == */archive ]]; then echo \"\$PWD\"; exit 23; fi; exec '$real_dirname' \"\$@\""
   export MISE_INSTALL_PATH="$PWD/installed-mise"
