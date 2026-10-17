@@ -351,7 +351,7 @@ lone_cancel() {
 
   run bash "$SCRIPTS/squash-merge.sh" --confirmed 7
 
-  [ "$status" -eq 1 ]
+  [ "$status" -eq 75 ]
   [[ "$output" == *"review decision is CHANGES_REQUESTED"* ]]
   [ ! -e "$GH_FIXTURES/merged" ]
 }
@@ -429,4 +429,44 @@ STUB
   [ "$status" -eq 0 ]
   [[ "$output" == *"origin/topic was already deleted"* ]]
   [[ "$output" != *"could not delete"* ]]
+}
+
+@test "required reviews wait before preflight or reviewer work (#170)" {
+  for decision in REVIEW_REQUIRED CHANGES_REQUESTED; do
+    pr ".reviewDecision = \"$decision\" | .mergeStateStatus = \"BLOCKED\""
+    for script in preflight review; do
+      DEVTOOLS_REVIEW_CMD='touch "$GH_FIXTURES/reviewer-started"; echo "VERDICT: PASS"' \
+        run bash "$SCRIPTS/$script.sh" 7
+      [ "$status" -eq 75 ]
+      [[ "$output" == *"WAITING_REVIEW: #7"* ]]
+      [ ! -e "$GH_FIXTURES/reviewer-started" ]
+      [ ! -e "$(stamp_file)" ]
+    done
+  done
+}
+
+@test "required review reason takes priority over BLOCKED at merge (#170)" {
+  pr '.reviewDecision = "APPROVED"'
+  bash "$SCRIPTS/review.sh" 7
+  pr '.reviewDecision = "REVIEW_REQUIRED" | .mergeStateStatus = "BLOCKED"'
+  run bash "$SCRIPTS/squash-merge.sh" --confirmed 7
+  [ "$status" -eq 75 ]
+  [[ "$output" == *"WAITING_REVIEW: #7"* ]]
+  [ ! -e "$GH_FIXTURES/merged" ]
+}
+
+@test "approved required review merges with the reviewed head (#170)" {
+  pr '.reviewDecision = "APPROVED"'
+  bash "$SCRIPTS/review.sh" 7
+  run bash "$SCRIPTS/squash-merge.sh" --confirmed 7
+  [ "$status" -eq 0 ]
+  grep -q -- "--match-head-commit $HEAD_OID" "$GH_FIXTURES/merged"
+}
+
+@test "review does not stamp when required approval changes during review (#170)" {
+  DEVTOOLS_REVIEW_CMD='cat >/dev/null; jq ".reviewDecision = \"REVIEW_REQUIRED\"" "$GH_FIXTURES/pr.json" >"$GH_FIXTURES/x" && mv "$GH_FIXTURES/x" "$GH_FIXTURES/pr.json"; echo "VERDICT: PASS"' \
+    run bash "$SCRIPTS/review.sh" 7
+  [ "$status" -eq 75 ]
+  [[ "$output" == *"WAITING_REVIEW: #7"* ]]
+  [ ! -e "$(stamp_file)" ]
 }

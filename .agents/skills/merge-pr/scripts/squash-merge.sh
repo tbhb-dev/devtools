@@ -172,14 +172,10 @@ pr_state=$(mp_field "$view" state)
 [ "$(mp_field "$view" isDraft)" = false ] || die "#${number} is a draft. Mark it ready before merging."
 mergeable=$(mp_field "$view" mergeable)
 [ "$mergeable" = MERGEABLE ] || die "#${number} is not mergeable (${mergeable:-unknown})."
+mp_require_reviews "$view" "$number"
 merge_state=$(mp_field "$view" mergeStateStatus)
 [ "$merge_state" = CLEAN ] ||
   die "#${number} is not ready to merge (${merge_state:-unknown}). BEHIND or DIRTY goes to the rebase skill."
-review_decision=$(mp_field "$view" reviewDecision)
-case ${review_decision:-NONE} in
-APPROVED | NONE) ;;
-*) die "#${number} review decision is ${review_decision}, not approved." ;;
-esac
 cross_repo=$(mp_field "$view" isCrossRepository)
 case $cross_repo in
 true | false) ;;

@@ -77,9 +77,10 @@ esac
 # response, which names the head and the base it describes.
 inputs=$(dt_new_inputs squash)
 view=$inputs/pull-request.json
-mp_view "$number" "$view" number,title,body,state,baseRefName,headRefName,headRefOid,commits,files ||
+mp_view "$number" "$view" number,title,body,state,baseRefName,headRefName,headRefOid,commits,files,reviewDecision ||
   dt_die "Could not read pull request #$number."
 [ "$(mp_field "$view" state)" = OPEN ] || dt_die "#$number is $(mp_field "$view" state), not OPEN."
+mp_require_reviews "$view" "$number"
 head=$(mp_field "$view" headRefOid)
 base=$(mp_field "$view" baseRefName)
 [ -n "$head" ] && [ -n "$base" ] || dt_die "#$number names no head or no base."
@@ -118,7 +119,8 @@ fi
 still_as_gathered() {
   local live
   live=$(dt_state_dir)/squash.live.json
-  mp_view "$number" "$live" headRefOid,baseRefName || return 1
+  mp_view "$number" "$live" headRefOid,baseRefName,reviewDecision || return 1
+  mp_require_reviews "$live" "$number"
   [ "$(mp_field "$live" headRefOid)" = "$head" ] &&
     [ "$(mp_field "$live" baseRefName)" = "$base" ] &&
     [ "$(mp_base_oid "$base")" = "$base_oid" ] &&

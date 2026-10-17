@@ -45,13 +45,13 @@ Stop before any of it where preflight reports a missing precondition, a draft pu
 
 Preflight printed the state, the checks, and the review decision. Merging needs an open pull request that nobody marked as a draft, with every check green.
 
-Preflight judges each check by its latest run. A workflow that started twice on one head and cancelled the first run leaves those cancelled jobs behind, and preflight leaves them out and says how many it left out. A cancelled run with no later run still counts as failing.
+For each check, preflight judges its latest run. A workflow that started twice on one head and cancelled the first run leaves those cancelled jobs behind, and preflight leaves them out and says how many it left out. Without a later run, a cancelled run still counts as failing.
 
 A failing check goes to `fix-pr`, and a running one goes to `watch-pr`. Neither belongs here, and the merge script refuses both anyway.
 
 A `mergeStateStatus` of `BEHIND` or `DIRTY` is the third case. The branch needs the base underneath it before anything merges, so run the `rebase` skill and push the result. Don't reach for GitHub's own update button: it merges the base into the branch, which leaves a merge commit this workflow never wrote a message for.
 
-Where the repository requires a review decision, respect it. `CHANGES_REQUESTED` means the merge waits, whatever the checks say, and the merge script refuses anything but an approval where the repository requires one.
+For `REVIEW_REQUIRED` or `CHANGES_REQUESTED`, preflight exits 75 with `WAITING_REVIEW`. Resolve the required approvals, then rerun. Review checks before invoking the reviewer. Merge checks again before the merge state.
 
 ## Step 2: settle the description first
 
@@ -155,6 +155,7 @@ This step is mandatory, and the merge script enforces it.
 | Exit | Meaning |
 | --- | --- |
 | 0 | Passed and stamped |
+| 75 | Waiting for an approving review GitHub requires |
 | 2 | Changes required: the output lists the findings |
 | 4 | The reviewer failed or replied without a readable verdict |
 | 5 | The draft or the pull request moved while the review ran |

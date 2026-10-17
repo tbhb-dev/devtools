@@ -103,3 +103,19 @@ mp_superseded() {
     | length - (group_by([(.workflowName // ""), .name]) | length)
   ' "$1"
 }
+
+# mp_require_reviews <file> <number>: distinguish waiting on GitHub's
+# required approvals from a broken merge. No approval is also valid
+# when the repository requires none.
+mp_require_reviews() {
+  local decision
+  decision=$(mp_field "$1" reviewDecision)
+  case ${decision:-NONE} in
+  APPROVED | NONE) ;;
+  REVIEW_REQUIRED | CHANGES_REQUESTED)
+    printf 'WAITING_REVIEW: #%s review decision is %s; GitHub still requires an approving review (for example, a code owner). Resolve the review requests, then rerun.\n' "$2" "$decision" >&2
+    exit 75
+    ;;
+  *) dt_die "#$2 has an unknown review decision: $decision" ;;
+  esac
+}
