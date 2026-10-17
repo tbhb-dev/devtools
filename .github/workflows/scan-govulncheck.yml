@@ -20,7 +20,7 @@ jobs:
       security-events: write
     steps:
       - name: Harden the runner
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
         with:
           egress-policy: audit
 
@@ -33,7 +33,7 @@ jobs:
         uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
         with:
           # renovate: datasource=github-releases depName=jdx/mise
-          version: 2026.10.3
+          version: 2026.10.8
           install_args: go
 
       - name: Run govulncheck (SARIF)
@@ -41,7 +41,7 @@ jobs:
 
       - name: Retain raw govulncheck SARIF
         if: ${{ !cancelled() && hashFiles('govulncheck.sarif') != '' }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: govulncheck-raw-sarif
           path: govulncheck.sarif
@@ -52,7 +52,7 @@ jobs:
         run: bash .devtools/scripts/filter-govulncheck-sarif.sh govulncheck.sarif govulncheck-reachable.sarif
 
       - name: Upload govulncheck SARIF
-        uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4
+        uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4
         with:
           sarif_file: govulncheck-reachable.sarif
           category: govulncheck
