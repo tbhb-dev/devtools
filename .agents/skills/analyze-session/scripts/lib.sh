@@ -53,7 +53,7 @@ dt_die() {
 # identity may come from an includeIf work profile, and the network
 # calls need credential helpers.
 gitr() {
-  command git --no-pager \
+  env git --no-pager \
     -c log.showSignature=false \
     -c color.ui=false -c color.diff=false -c color.status=false \
     -c core.quotePath=false \
