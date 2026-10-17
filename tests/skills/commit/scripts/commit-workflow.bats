@@ -313,3 +313,20 @@ stamp_file() { printf '%s/agent-skills/commit.stamp' "$(git rev-parse --absolute
   [[ "$output" == *"Operator note is not a file: missing.txt"* ]]
   [ ! -e "$(stamp_file)" ]
 }
+
+@test "commit review reads trusted policy and stamps its digest" {
+  initial_commit
+  mkdir -p .agents
+  printf 'Allow network values.\n' >.agents/review-instructions.md
+  git add -- .agents/review-instructions.md
+  git commit --quiet -m 'test: trusted policy'
+  git update-ref refs/remotes/origin/main HEAD
+  git symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/main
+  stage tracked.txt "$(printf '%s.%s.%s.%s' 100 64 0 1)"
+  export DEVTOOLS_REVIEW_CMD='cat >prompt; echo "VERDICT: PASS"'
+  run bash "$SCRIPTS/review.sh"
+  [ "$status" -eq 0 ]
+  hash=$(shasum -a 256 .agents/review-instructions.md | cut -d' ' -f1)
+  grep -q "^policy_hash $hash$" "$(stamp_file)"
+  grep -q 'Allow network values.' prompt
+}

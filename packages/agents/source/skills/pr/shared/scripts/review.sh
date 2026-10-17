@@ -102,6 +102,8 @@ still_as_gathered() {
     { [ "$note_digest" = none ] || [ "$(dt_digest "$inputs/operator-note.txt")" = "$note_digest" ]; }
 }
 
+dt_review_policy "$inputs" "$head" "$head"
+
 criteria=$DT_LIB_DIR/../../review-pr-description/SKILL.md
 status=0
 dt_review pr "$draft" "$snapshot" "$criteria" "$root" "$inputs" still_as_gathered \

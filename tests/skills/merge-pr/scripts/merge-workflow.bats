@@ -576,3 +576,12 @@ capture_diff() {
   git diff --no-ext-diff --no-textconv --no-color --binary --full-index "$BASE_OID...$HEAD_OID" -- >"$GH_FIXTURES/expected.diff"
   cmp "$GH_FIXTURES/expected.diff" "$GH_FIXTURES/reviewed.diff"
 }
+
+@test "merge review reports absent policy and retains credentials floor" {
+  export DEVTOOLS_REVIEW_CMD='cat >prompt; echo "VERDICT: PASS"'
+  run bash "$SCRIPTS/review.sh" 7
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"sha256: none; status: absent"* ]]
+  grep -q '^policy_hash none$' .git/agent-skills/squash.stamp
+  grep -q '## Credentials floor (non-overridable)' prompt
+}

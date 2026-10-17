@@ -420,3 +420,12 @@ publish_with_milestone() {
   [[ "$output" == *"gh identity: create-pr.sh publishes only while gh is signed in as agent"* ]]
   [[ "$output" == *"reviewer: review_cmd:"* ]]
 }
+
+@test "PR review reports absent policy and retains credentials floor" {
+  export DEVTOOLS_REVIEW_CMD='cat >prompt; echo "VERDICT: PASS"'
+  run bash "$SCRIPTS/review.sh"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"sha256: none; status: absent"* ]]
+  grep -q '^policy_hash none$' .git/agent-skills/pr.stamp
+  grep -q '## Credentials floor (non-overridable)' prompt
+}
