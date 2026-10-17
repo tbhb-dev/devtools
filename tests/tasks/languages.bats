@@ -68,7 +68,8 @@ GO
 	run mise run test-go -- -run '^$'
 	[ "$status" -eq 0 ]
 	[[ "$output" == *'no tests to run'* ]]
-	sed -i 's/value + value/value/' double.go
+	sed 's/value + value/value/' double.go > changed
+	mv changed double.go
 	run mise run devtools:test-go
 	[ "$status" -ne 0 ]
 	[[ "$output" == *'wrong result'* ]]
@@ -88,7 +89,8 @@ GO
 }
 
 @test "Python coverage expands consumer source roots rather than publisher paths" {
-	sed -i 's|go.toml|python.toml|' mise.toml
+	sed 's|go.toml|python.toml|' mise.toml > changed
+	mv changed mise.toml
 	mkdir -p bin lib/one lib/two
 	cat >bin/uv <<'SH'
 #!/usr/bin/env bash

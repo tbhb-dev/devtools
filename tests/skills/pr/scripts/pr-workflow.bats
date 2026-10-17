@@ -174,7 +174,8 @@ stale_local_main() {
 }
 
 @test "the validator reads base: ~ as an empty base, the way the publisher does (#143)" {
-  sed -i 's/^base: main$/base: ~/' PR_AGENTDESC.md
+  sed 's/^base: main$/base: ~/' PR_AGENTDESC.md > changed
+  mv changed PR_AGENTDESC.md
 
   run bash "$SCRIPTS/validate-description.sh"
 

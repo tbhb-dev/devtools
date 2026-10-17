@@ -172,7 +172,14 @@ commit_at() {
 
 @test "fails when a local APM lock version drifts from its manifest" {
   commit_at 1.2.3
-  sed -i '0,/version: 1.2.3/s//version: 1.2.2/' apm.lock.yaml
+  awk '
+    !changed && /version: 1[.]2[.]3/ {
+      sub(/version: 1[.]2[.]3/, "version: 1.2.2")
+      changed = 1
+    }
+    { print }
+  ' apm.lock.yaml > changed
+  mv changed apm.lock.yaml
 
   run "$SCRIPT"
   [ "$status" -eq 1 ]
@@ -183,7 +190,8 @@ commit_at() {
 
 @test "fails when a local APM lock entry is missing" {
   commit_at 1.2.3
-  sed -i '/local_path: .\/packages\/agents\/common/d' apm.lock.yaml
+  sed '/local_path: .\/packages\/agents\/common/d' apm.lock.yaml > changed
+  mv changed apm.lock.yaml
 
   run "$SCRIPT"
   [ "$status" -eq 1 ]
