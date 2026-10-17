@@ -1,9 +1,17 @@
 #!/usr/bin/env bats
 
+setup_file() {
+	local root
+	root=$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)
+	# Exercise this checkout without requiring a globally installed guard.
+	(cd "$root" && go build -o "$BATS_FILE_TMPDIR/bin/guard-markdown" ./cmd/guard-markdown)
+}
+
 setup() {
 	source "${BATS_TEST_DIRNAME}/../test_helper.bash"
 	isolate_git
 	ROOT=$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)
+	export PATH="$BATS_FILE_TMPDIR/bin:$PATH"
 	WORK="${BATS_TEST_TMPDIR}/consumer"
 	mkdir -p "$WORK/.devtools/tasks" "$WORK/.config/mise/conf.d"
 	cp "$ROOT/.config/mise/conf.d/10-devtools-tools.toml" "$WORK/.config/mise/conf.d/"
