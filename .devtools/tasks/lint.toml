@@ -127,7 +127,7 @@ files=()
 while IFS= read -r -d '' file; do
   files+=("$file")
 done < <(git ls-files -z --cached --others --exclude-standard -- "$pattern" "${excludes[@]}")
-if [[ -v files[0] ]]; then
+if [[ -n ${files[0]+set} ]]; then
   "${command[@]}" "$@" "${files[@]}"
 fi
 '''
