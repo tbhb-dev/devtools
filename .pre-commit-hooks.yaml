@@ -134,3 +134,12 @@
   stages: [pre-push]
   always_run: true
   pass_filenames: false
+
+- id: gomodscan
+  name: gomodscan
+  description: Scan dependency changes for supply-chain concerns.
+  entry: mise run devtools:gomodscan
+  language: system
+  stages: [pre-commit]
+  files: ^(go\.(mod|sum)|vendor/)
+  pass_filenames: false

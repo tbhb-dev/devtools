@@ -189,6 +189,24 @@ Copy the needed templates from [`.devtools/config`](.devtools/config) to the pro
 
 Use the [shared lint exclusions](docs/shared-lint-exclusions.md) when wiring shell and Markdown wrap gates. Default exclusions cover third-party and deployed agent trees. Declare generated paths with `DEVTOOLS_GENERATED_PATHS`. `devtools:lint-workflows` skips repositories without workflow files. `devtools:vendor-check` regenerates Go dependencies and catches tracked and untracked drift, including files hidden by personal ignore rules. It can change the worktree. Review its output.
 
+### Dependency scan gates
+
+Enable the published `gomodscan` hook in a Go consumer's `.pre-commit-config.yaml`. Add `id: gomodscan` to the existing devtools repository entry, keeping its full commit SHA and `# frozen: vX.Y.Z` release comment. `devtools:update-pins` already updates that pin. Install the pre-commit stage with `prek install`.
+
+The hook runs `mise run devtools:gomodscan` only for staged paths matching `^(go\.(mod|sum)|vendor/)` and passes no filenames. Keep `vendor/` out of any global hook exclusion so this gate checks vendored dependency changes. The consumer needs mise, the shared Go tasks, and the gomodscan tool dependency in `go.mod`. Findings block the commit. Execution failures, including unreachable scanner services in a sandbox, also block it and report that the scan couldn't run. Restore service access and retry before committing.
+
+Add both scans to the consumer's `check-all` task so a full local check includes dependency concerns and reachable vulnerabilities:
+
+```toml
+[tasks.check-all]
+run = [
+  "mise run lint",
+  "mise run test",
+  "mise run devtools:gomodscan",
+  "mise run devtools:vuln",
+]
+```
+
 ### Starter policy
 
 Copy the [starter vocabularies](.devtools/config/starter-vocabulary.md) and configure cspell and Vale to read the local copies. Extend them with project terms. The publisher's root dictionaries belong to devtools and aren't consumer defaults.

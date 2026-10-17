@@ -243,7 +243,16 @@ go tool govulncheck -format sarif ${DEVTOOLS_GO_PACKAGES:-./...} > "$usage_file"
 
 ["devtools:gomodscan"]
 description = "Scan each vendored module for supply-chain concerns in one pass"
-run = "go tool gomodscan"
+run = '''
+#!/usr/bin/env bash
+set -uo pipefail
+go tool gomodscan
+rc=$?
+if [ "$rc" -gt 1 ]; then
+  echo "gomodscan: scan could not run; check network access to the scanner services and retry." >&2
+fi
+exit "$rc"
+'''
 
 ["devtools:gomodscan-sarif"]
 description = "Emit the gomodscan findings as SARIF to <file> for the security.yml upload"
