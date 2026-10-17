@@ -5,6 +5,8 @@
 # line of a sorted word list.
 
 setup() {
+  source "${BATS_TEST_DIRNAME}/../../../test_helper.bash"
+  isolate_git
   ROOT="${BATS_TEST_DIRNAME}/../../../.."
   SCRIPTS="${ROOT}/packages/agents/claude/.apm/skills/resolve-rebase-conflicts/scripts"
   REPO="${BATS_TEST_TMPDIR}/repo"

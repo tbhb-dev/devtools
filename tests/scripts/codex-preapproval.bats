@@ -1,6 +1,8 @@
 #!/usr/bin/env bats
 
 setup() {
+  source "${BATS_TEST_DIRNAME}/../test_helper.bash"
+  isolate_git
   ROOT="${BATS_TEST_DIRNAME}/../.."
   REPO="${BATS_TEST_TMPDIR}/repo"
   git init --quiet --initial-branch=main "$REPO"

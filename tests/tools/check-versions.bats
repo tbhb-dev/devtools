@@ -11,6 +11,8 @@
 # moved out from under its hook.
 
 setup() {
+  source "${BATS_TEST_DIRNAME}/../test_helper.bash"
+  isolate_git
   SCRIPT="${BATS_TEST_DIRNAME}/../../tools/check-versions.sh"
   REPO="${BATS_TEST_TMPDIR}/repo"
 

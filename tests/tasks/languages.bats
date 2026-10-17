@@ -1,6 +1,8 @@
 #!/usr/bin/env bats
 
 setup() {
+  source "${BATS_TEST_DIRNAME}/../test_helper.bash"
+  isolate_git
 	ROOT=$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)
 	WORK="${BATS_TEST_TMPDIR}/consumer"
 	mkdir -p "$WORK/.devtools" "$WORK/.config/mise/conf.d"

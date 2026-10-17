@@ -1,6 +1,8 @@
 #!/usr/bin/env bats
 
 setup() {
+  source "${BATS_TEST_DIRNAME}/../test_helper.bash"
+  isolate_git
   local task="${BATS_TEST_DIRNAME}/../../.devtools/tasks/security.toml"
   SCRIPT="${BATS_TEST_TMPDIR}/gitleaks.sh"
   # Run the shipped task body, including its exit-status and commit guard.
