@@ -134,7 +134,6 @@ apm = "0.33.0"
 ast-grep = "0.45.3"
 jq = "1.8.2"
 shfmt = "3.14.1"
-uv = "0.12.23"
 
 # --- Setup ---
 
@@ -279,12 +278,7 @@ run = "mise run devtools:lint-go-arch"
 # opens the standalone scripts this gate covers.
 [tasks.lint-shell]
 description = "Lint every non-vendored *.sh git can see via shellcheck"
-run = '''
-#!/usr/bin/env bash
-set -eu
-files=$(git ls-files --cached --others --exclude-standard '*.sh' ':!:vendor/**' ':!:.claude/**')
-if [ -n "$files" ]; then shellcheck $files; fi
-'''
+run = "mise run devtools:lint-shell"
 
 # Aggregates the Go gates, the Python gates, prose (vale), spelling
 # (cspell), Markdown (rumdl), config / JS / TS (biome), YAML (ryl),
@@ -306,6 +300,7 @@ run = [
   "mise run devtools:lint-yaml",
   "mise run devtools:lint-toml",
   "mise run lint-shell",
+  "mise run devtools:lint-curl",
   "mise run lint-shell-fmt",
   "mise run devtools:lint-mise",
   "mise run lint-editorconfig",

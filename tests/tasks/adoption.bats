@@ -14,8 +14,6 @@ setup() {
   unset GIT_DIR GIT_COMMON_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY
   git init -q "$WORK"
   cat > "$WORK/mise.toml" <<'TOML'
-[tools]
-uv = "0.12.23"
 [task_config]
 includes = [".devtools/tasks/apm.toml"]
 [tasks.lint-draft]
@@ -107,8 +105,10 @@ dependencies:
 YAML
   cp "$REPO/packages/agents/claude/.apm/hooks/guard-markdown.json" package/.apm/hooks/current.json
   printf '{"hooks":{"Stop":[]},"permissions":{"allow":["Read"]}}\n' > .claude/settings.json
-  awk '{ print } /uv = / { print "apm = \"0.33.0\"" }' mise.toml > changed
-  mv changed mise.toml
+  cat >> mise.toml <<'TOML'
+[tools]
+apm = "0.33.0"
+TOML
   run mise run devtools:apm-sync
   echo "$output"
   [ "$status" -eq 0 ]

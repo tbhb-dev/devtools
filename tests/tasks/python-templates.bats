@@ -5,8 +5,8 @@ setup() {
   isolate_git
   ROOT=$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)
   WORK="${BATS_TEST_TMPDIR}/consumer"
-  mkdir -p "$WORK/.devtools/config"
-  cp -R "$ROOT/.devtools/config/python" "$WORK/.devtools/config/"
+  mkdir -p "$WORK/.devtools/config/python"
+  cp "$ROOT/.devtools/config/python/"*.template "$WORK/.devtools/config/python/"
   cd "$WORK" || return
 }
 

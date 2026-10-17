@@ -53,3 +53,19 @@ YAML
 		rm ".github/workflows/check.$extension"
 	done
 }
+
+@test "workflow shellcheck rejects masked command substitutions" {
+	mkdir -p .github/workflows
+	cat >.github/workflows/check.yml <<'YAML'
+name: Check
+on: push
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "$(false)"
+YAML
+	run mise run devtools:lint-workflows
+	[ "$status" -ne 0 ]
+	[[ "$output" == *SC2312* ]]
+}

@@ -103,7 +103,6 @@ check_gates() {
 
 setup_tree_gates() {
 	cp "$ROOT/.config/mise/conf.d/30-devtools-skill-contract.toml" "$WORK/.config/mise/conf.d/"
-	grep '^uv = ' "$ROOT/mise.toml" >>mise.toml
 	mkdir -p "$WORK/.vale/config/templates"
 	cp "$ROOT/.vale/config/templates/ai-tells-agent.tmpl" "$WORK/.vale/config/templates/"
 	cp "$ROOT/.devtools/tasks/go.toml" "$WORK/.devtools/tasks/"
@@ -182,4 +181,39 @@ check_tree_gates() {
 	bad_tree_sources src
 	git add -- src
 	check_tree_gates 1
+}
+
+@test "shared shell lint rejects masked returns and accepts checked substitutions" {
+	printf '#!/usr/bin/env bash\n[[ $(false) == expected ]]\n' >check.sh
+	run mise run devtools:lint-shell
+	[ "$status" -ne 0 ]
+	[[ "$output" == *SC2312* ]]
+	printf '#!/usr/bin/env bash\nvalue=$(false) || exit\n[[ $value == expected ]]\n' >check.sh
+	run mise run devtools:lint-shell
+	[ "$status" -eq 0 ]
+	# SC2155 must remain enabled alongside the optional rule.
+	printf '#!/usr/bin/env bash\ncheck() { local value=$(false); echo "$value"; }; check\n' >check.sh
+	run mise run devtools:lint-shell
+	[ "$status" -ne 0 ]
+	[[ "$output" == *SC2155* ]]
+}
+
+@test "curl task ships its checker and uses shared source exclusions" {
+	mkdir -p .devtools/scripts src vendor generated
+	cp "$ROOT/.devtools/scripts/check_curl_fail.py" .devtools/scripts/
+	export DEVTOOLS_DIR="$WORK/.devtools"
+	run mise run devtools:lint-curl
+	[ "$status" -eq 0 ]
+	printf '#!/bin/bash\ncurl url | cat\n' >'src/check curl.sh'
+	cp 'src/check curl.sh' vendor/check.sh
+	cp 'src/check curl.sh' generated/check.sh
+	export DEVTOOLS_GENERATED_PATHS=generated
+	run mise run devtools:lint-curl
+	[ "$status" -ne 0 ]
+	[[ "$output" == *'src/check curl.sh:2: curl without a fail option'* ]]
+	[[ "$output" != *'vendor/check.sh:2:'* ]]
+	[[ "$output" != *'generated/check.sh:2:'* ]]
+	printf '#!/bin/bash\ncurl --fail url | cat\n' >'src/check curl.sh'
+	run mise run devtools:lint-curl
+	[ "$status" -eq 0 ]
 }

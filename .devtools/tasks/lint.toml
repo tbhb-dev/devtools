@@ -82,7 +82,7 @@ run = """
 #!/usr/bin/env bash
 for workflow in .github/workflows/*.yml .github/workflows/*.yaml; do
   if [[ -f "$workflow" ]]; then
-    exec actionlint
+    SHELLCHECK_OPTS="${SHELLCHECK_OPTS:-} -o check-extra-masked-returns" exec actionlint
   fi
 done
 echo "No workflow files found; skipping actionlint."
@@ -119,7 +119,8 @@ while IFS= read -r path; do
   fi
 done <<< "${DEVTOOLS_GENERATED_PATHS:-}"
 case "$mode" in
-  shell) pattern='*.sh'; command=(shellcheck) ;;
+  shell) pattern='*.sh'; command=(shellcheck -o check-extra-masked-returns) ;;
+  curl) pattern='*.sh'; command=(uv run --script "$DEVTOOLS_DIR/scripts/check_curl_fail.py") ;;
   shell-fmt) pattern='*.sh'; command=(shfmt -d) ;;
   prose) pattern='*'; command=(vale --output=ai-tells-agent.tmpl --glob="${DEVTOOLS_PROSE_GLOB:-*}") ;;
   markdown-wrap) pattern='*.md'; command=(guard-markdown) ;;
@@ -152,3 +153,7 @@ run = "mise run devtools:lint-source-files -- shell-fmt"
 ["devtools:lint-markdown-wrap"]
 description = "Check owned Markdown paragraphs via guard-markdown"
 run = "mise run devtools:lint-source-files -- markdown-wrap"
+
+["devtools:lint-curl"]
+description = "Require curl to fail on HTTP errors in owned shell scripts"
+run = "mise run devtools:lint-source-files -- curl"
