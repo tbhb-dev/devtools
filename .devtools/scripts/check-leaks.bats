@@ -334,7 +334,7 @@ run_check() {
 	git commit -q -m "chore: empty file"
 	run_check --range "$base..HEAD"
 	[ "$status" -eq 1 ]
-	[[ $output =~ path#[0-9a-f]{8}:path:\ private\ literal\ O11Y_PRIVATE_STRINGS\ entry\ 1 ]]
+	[[ $output =~ path#[0-9a-f]{8}:path:\ private\ literal\ O11Y_PRIVATE_STRINGS\ entry\ 6 ]]
 	no_value "kestrel99"
 }
 
