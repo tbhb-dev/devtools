@@ -142,8 +142,6 @@ The Claude manifests for `write-pr-description` and `write-prose-fix` declare sc
 
 The Skill Scanner policy at `.github/skill-scanner-policy.yaml` inherits balanced defaults and suppresses only `ALLOWED_TOOLS_BASH_VIOLATION` for `SKILL.md` in those two writer skills. Scanner 2.3.0 fails to recognize their scoped Bash permissions. The high severity gate still covers other rules, skills, and files, and SARIF keeps suppressed findings with their reasons. Changing that exception requires review.
 
-Todo (SC2312 part 2): document failure propagation and deliberate exceptions in the shared skill scripts after the remaining sweep merges.
-
 ## Pre-approving the confirmations
 
 `commit`, `pr`, and `merge-pr` resolve confirmation before the step that writes something. Every gate and every independent review has already run by then, so across a series of commits that prompt is the only thing left costing a turn. Answering it once in advance is what these tasks are for:
@@ -234,8 +232,6 @@ Tasks that operate on one source language carry a `-go` or `-py` suffix, and the
 `fix-pr` maps check names by matching text within them, in order, rather than by workflow job ID. `lint` routes to `mise run lint`. All those `test` names, including `test-bats`, route to `mise run test`. For a Bats failure, the focused CI reproducers are `mise run test-hooks` and `mise run test-leaks`. A name containing `race` routes to `test-go-race`, `cover` to `cover-go-check`, `vendor` to `vendor-check`, `vuln` to `vuln`, and `gitleaks` or `secret` to `devtools:gitleaks`. `validate` routes to `apm install --frozen && apm audit --ci`. An unknown name, including `scan-skills` and `gomodscan`, requires reading the log because the diagnosis script doesn't invent a reproducer. The Actions run and log reads still use REST.
 
 Repository tooling now preserves command failures when output feeds another command or condition. Deliberate SC2312 exceptions cover diagnostic formatting that can't change an existing verdict. This first sweep didn't enable the optional rule or change skill sources.
-
-Todo (gate-enabling part 3): document the final `lint-curl` task and task wiring after the gate change merges. Document the enabled SC2312 scope then too, without claiming here that the tooling enables either gate.
 
 Python tooling covers `packages/`. It came from `proofhouse/proofhouse-python-tool`, dropping the checks that need an installable package. Because `pyproject.toml` declares a virtual project (`package = false`), `import-linter` contracts, a wheel build, and a generated build stamp have nothing to act on here. `lint-reuse` is absent for a different reason. REUSE compliance spans every file type in the tree. Adopting it needs a whole-tree sweep plus a `REUSE.toml` and `LICENSES/`, so that work belongs in its own change.
 

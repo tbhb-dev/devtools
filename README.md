@@ -84,10 +84,6 @@ Delegated writers have scoped tools for gathering context, editing, and validati
 
 PR, merge, and watch readers use GraphQL so REST core quota exhaustion doesn't produce a false identity mismatch. Quota failures stop with exit 76 and reset guidance. The scripts never retry writes automatically. See [API quota behavior](AGENTS.md#github-api-quota-in-pull-request-skills) for read costs and remaining REST use.
 
-Todo (SC2312 part 2): update the shared skill failure-handling guidance after the remaining sweep merges.
-
-Todo (gate-enabling part 3): add the final `lint-curl` invocation and SC2312 gate scope after those gates merge.
-
 ## Consumer adoption
 
 ### Bootstrap the runtime
