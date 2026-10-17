@@ -968,3 +968,7 @@ run = "bash tools/release-dispatch.sh"
 [tasks.verify-devtools-release]
 description = "Check that a release tag is annotated, signed, reachable, and matched by the version literals"
 run = "bash tools/release-verify.sh"
+
+[tasks."devtools:signing-agent-install"]
+description = "Install ssh-sign and inactive user service templates under ~/.local"
+run = "go run ./cmd/ssh-sign --install"

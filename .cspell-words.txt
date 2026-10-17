@@ -187,6 +187,7 @@ inlines
 intoto
 intrange
 iotamixing
+keygen
 keylength
 koalaman
 ldflags
@@ -255,6 +256,7 @@ pdir
 perfsprint
 pflag
 pgregory
+pgrep
 pipeable
 pipefail
 pipx

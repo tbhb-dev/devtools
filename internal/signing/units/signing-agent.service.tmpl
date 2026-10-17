@@ -1,0 +1,11 @@
+[Unit]
+Description=Devtools signing agent
+
+[Service]
+Type=simple
+UMask=0077
+ExecStart="{{.Agent}}" -D -a "{{.Socket}}"
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
