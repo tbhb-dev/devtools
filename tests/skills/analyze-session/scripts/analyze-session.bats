@@ -106,7 +106,7 @@ codex_fixture() {
   run "$CLAUDE_SCRIPTS/session.py" errors "$CLAUDE_T"
 
   [ "$status" -eq 0 ]
-  [[ "$output" == *"[nonzero]"* ]]
+  [[ "$output" == *"[lint]"* ]]
   [[ "$output" == *"[hook-block]"* ]]
   [[ "$output" == *"[permission]"* ]]
   [[ "$output" == *"3 failing result(s)"* ]]
