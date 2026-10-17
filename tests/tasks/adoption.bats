@@ -105,7 +105,8 @@ dependencies:
 YAML
   cp "$REPO/packages/agents/claude/.apm/hooks/guard-markdown.json" package/.apm/hooks/current.json
   printf '{"hooks":{"Stop":[]},"permissions":{"allow":["Read"]}}\n' > .claude/settings.json
-  sed -i '/uv = /a apm = "0.33.0"' mise.toml
+  awk '{ print } /uv = / { print "apm = \"0.33.0\"" }' mise.toml > changed
+  mv changed mise.toml
   run mise run devtools:apm-sync
   echo "$output"
   [ "$status" -eq 0 ]
