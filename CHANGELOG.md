@@ -5,6 +5,59 @@ All notable changes to this project will be documented in this file. See [conven
 - - -
 <!-- release -->
 
+## [v0.12.0](https://github.com/tbhb-dev/devtools/compare/d318a049d711d71d610276b1864fb039ce99923c..v0.12.0) - 2026-10-17
+
+### Features
+
+- (**ci**) publish consumer lint and security workflows (#192) - ([f9a46cd](https://github.com/tbhb-dev/devtools/commit/f9a46cd4ba3079c1d4171887cc110d561caa7d87)) - tbhb.dev Agent
+- (**leaks**) skip configured paths in working-tree scans (#222) - ([3bcdd80](https://github.com/tbhb-dev/devtools/commit/3bcdd80f85b2bd6d32d61db9b8ce06e69605fa5a)) - tbhb.dev Agent
+- (**signing**) provide an isolated SSH signing agent (#221) - ([bf8b432](https://github.com/tbhb-dev/devtools/commit/bf8b4321ea31bf40d0c9bfca7f10510a904631d2)) - tbhb.dev Agent
+- (**skills**) support trusted repository review policy (#201) - ([a04a6b1](https://github.com/tbhb-dev/devtools/commit/a04a6b1df6a776678a5f31a6deca70856f135352)) - tbhb.dev Agent
+- (**skills**) unite the pr family under shared sources (#183) - ([d318a04](https://github.com/tbhb-dev/devtools/commit/d318a049d711d71d610276b1864fb039ce99923c)) - tbhb.dev Agent
+- (**tasks**) allow declared consumer grant scopes (#191) - ([494b2ce](https://github.com/tbhb-dev/devtools/commit/494b2ceda418bcc1d0ac129b13b315d41684cb1a)) - tbhb.dev Agent
+- gate dependency commits with gomodscan (#220) - ([93cf18c](https://github.com/tbhb-dev/devtools/commit/93cf18c450e83cfdcf075d3cb78afd3f32ab9d46)) - tbhb.dev Agent
+
+### Bug Fixes
+
+- (**adoption**) provide the consumer runtime payload (#195) - ([67f6107](https://github.com/tbhb-dev/devtools/commit/67f61074b83552155aeb8825e939caf1530fa350)) - tbhb.dev Agent
+- (**agents**) order workflow gates and share clean-tree passes (#223) - ([b006694](https://github.com/tbhb-dev/devtools/commit/b00669404cca40d4fff943097b3c5d3657d660ff)) - tbhb.dev Agent
+- (**commit**) preview the sign-off added by git commit -s (#196) - ([d563e8d](https://github.com/tbhb-dev/devtools/commit/d563e8d27831ea70bb9d25d54e12fc73aeaade75)) - tbhb.dev Agent
+- (**leaks**) keep consumer leak setup opt-in (#215) - ([ed64093](https://github.com/tbhb-dev/devtools/commit/ed64093f227bd5c82012e349f5d2f1b03de82db1)) - tbhb.dev Agent
+- (**lint**) skip workflow lint when no workflows exist (#185) - ([e1c52e3](https://github.com/tbhb-dev/devtools/commit/e1c52e3a001e04376ebd94b40e650f225e4f8f3b)) - tbhb.dev Agent
+- (**merge-pr**) wait for approvals and review complete pinned diffs (#194) - ([9d9737b](https://github.com/tbhb-dev/devtools/commit/9d9737ba05b178f0baacc0d1f81b8a7262941633)) - tbhb.dev Agent
+- (**python**) keep vendored config templates undiscovered (#216) - ([80a19e7](https://github.com/tbhb-dev/devtools/commit/80a19e70425b56494f4b31a9c0b12b360e308678)) - tbhb.dev Agent
+- (**shell**) gate masked command failures and unsafe curl output (#209) - ([8498edd](https://github.com/tbhb-dev/devtools/commit/8498edd3be236e69d398f06bfba57705d1e644f5)) - tbhb.dev Agent
+- (**shell**) preserve failures in repository tooling (#205) - ([f79d2c0](https://github.com/tbhb-dev/devtools/commit/f79d2c0548d3fdf33e2f40d163c95e8bf15e318f)) - tbhb.dev Agent
+- (**skills**) name shared tasks in failure diagnosis (#219) - ([9fba789](https://github.com/tbhb-dev/devtools/commit/9fba7892460f6b9f42742662d73d7f53952aabe8)) - tbhb.dev Agent
+- (**skills**) preserve failures in shell status checks (#208) - ([8d972ce](https://github.com/tbhb-dev/devtools/commit/8d972cef163dc509a348e378ab3f4e5f9791b4d7)) - tbhb.dev Agent
+- (**skills**) allow delegated writers to run without prompts (#204) - ([65eb052](https://github.com/tbhb-dev/devtools/commit/65eb052ea86c12c52dd1e85cbbd52107f68e77dc)) - tbhb.dev Agent
+- (**skills**) distinguish API quota exhaustion from identity failures (#200) - ([a3692e9](https://github.com/tbhb-dev/devtools/commit/a3692e9061cbbd2908461537f30e0671ccad5bd4)) - tbhb.dev Agent
+- (**tasks**) handle empty pre-approval scopes on bash 3.2 (#197) - ([c4cd0ba](https://github.com/tbhb-dev/devtools/commit/c4cd0bacf4e899a1f11bef6f155d879d36d42eb2)) - tbhb.dev Agent
+- (**tasks**) share exclusions for shell and Markdown gates (#193) - ([494c426](https://github.com/tbhb-dev/devtools/commit/494c4265b5fcb8c97fa79dd4862532e60472154c)) - tbhb.dev Agent
+- (**tests**) remove scheduling races from macOS fixtures (#226) - ([9bc950c](https://github.com/tbhb-dev/devtools/commit/9bc950c576494e0fb10a9102c668c999950d4741)) - tbhb.dev Agent
+- (**tests**) isolate scratch repositories from inherited Git settings (#184) - ([c325117](https://github.com/tbhb-dev/devtools/commit/c3251172e4bc64ecd7017e9cadfaff5774be5f4e)) - tbhb.dev Agent
+- (**vendor**) detect drift hidden by personal ignores (#188) - ([10ba48c](https://github.com/tbhb-dev/devtools/commit/10ba48c9f0bb5dfc17bb0a90fe228483c6cd1bb8)) - tbhb.dev Agent
+- preserve lint exclusions and Bash 3.2 status handling (#217) - ([e49a286](https://github.com/tbhb-dev/devtools/commit/e49a286aba5970f4286eb9e84bf9e5fcdcea8869)) - tbhb.dev Agent
+
+### Documentation
+
+- update v0.12 review and workflow guidance (#207) - ([5ca072e](https://github.com/tbhb-dev/devtools/commit/5ca072ec278bb6e56c86f765ac552493e7076a85)) - tbhb.dev Agent
+- integrate consumer adoption and agent guidance (#199) - ([5b5cb02](https://github.com/tbhb-dev/devtools/commit/5b5cb028f50017ce33264993f3a54621bc04bd16)) - tbhb.dev Agent
+
+### Build system
+
+- (**config**) provide neutral starter vocabularies (#187) - ([356930f](https://github.com/tbhb-dev/devtools/commit/356930fe19b24882102e89416db39902da843389)) - tbhb.dev Agent
+- (**go**) move the toolchain pin to 1.27.2 (#186) - ([7b223a9](https://github.com/tbhb-dev/devtools/commit/7b223a9f285f7d8663e930bdc7ae158b700708bd)) - tbhb.dev Agent
+- (**security**) provide a default gitleaks fixture policy (#189) - ([0c88f8c](https://github.com/tbhb-dev/devtools/commit/0c88f8ca1c9f1bf0a82f3586f0b79b2c91cad681)) - tbhb.dev Agent
+
+### Continuous Integration
+
+- run bats regression suites on Linux and macOS (#190) - ([c83f778](https://github.com/tbhb-dev/devtools/commit/c83f778eee2380e226b368729782fd03c328bbd7)) - tbhb.dev Agent
+
+- - -
+
+<!-- release -->
+
 ## [v0.11.0](https://github.com/tbhb-dev/devtools/compare/7f66d9a5a04b507f00b9fda7566e6ed472bd7c60..v0.11.0) - 2026-10-16
 
 ### Features
