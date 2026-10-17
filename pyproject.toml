@@ -438,6 +438,8 @@ max-complexity = 15
 # pinned toolchain puts them on PATH, and hardcoding an absolute path would
 # defeat that.
 "tools/*.py" = ["T201", "S603", "S607"]
+# The same command-line helpers are shipped in the consumer payload.
+".devtools/scripts/*.py" = ["T201", "S603", "S607"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"

@@ -1,0 +1,11 @@
+# Select this file alongside pins.toml so updates reconcile APM hooks.
+["devtools:apm-sync"]
+description = "Reconcile APM hooks, reinstall primitives and audit the deployment"
+run = [
+  'bash "$DEVTOOLS_DIR/scripts/apm-sync.sh"',
+  'uv run --script "$DEVTOOLS_DIR/scripts/apm_audit.py"',
+]
+
+["devtools:lint-apm"]
+description = "Audit deployed APM primitives against the lockfile"
+run = 'uv run --script "$DEVTOOLS_DIR/scripts/apm_audit.py"'
