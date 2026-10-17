@@ -71,11 +71,6 @@ fi
 
 dir="$(git rev-parse --absolute-git-dir)/preapprovals"
 file="$dir/$session"
-mkdir -p "$dir"
-
-# A grant no session will ever read again is litter in the git
-# directory. Records outliving a week go, on the way past.
-find "$dir" -maxdepth 1 -type f -mtime +7 -delete 2>/dev/null || true
 
 # --no-biometrics covers the machines that have no Touch ID to offer: a
 # Linux consumer, a Mac with no sensor, a session over ssh. It has to be
@@ -93,19 +88,8 @@ if [ "$#" -eq 0 ]; then
   set -- commit pr
 fi
 
-requested=""
-for scope in "$@"; do
-  case $scope in
-  all) requested="$requested commit pr merge" ;;
-  commit | pr | merge) requested="$requested $scope" ;;
-  *)
-    echo "unknown scope '$scope'" >&2
-    echo "         known scopes: commit, pr, merge, all" >&2
-    echo "         flags: --no-biometrics" >&2
-    exit 1
-    ;;
-  esac
-done
+source "$DEVTOOLS_DIR/scripts/preapproval.sh"
+requested=$(preapproval_scopes "$@")
 
 method=unconfirmed
 if [ "$biometrics" = "1" ]; then
@@ -167,7 +151,7 @@ SWIFT
   # The reason string is what the system dialog shows above the prompt,
   # so it names the scopes and the session rather than the task.
   status=0
-  scopes=$(printf '%s' "${requested# }" | sed 's/ /, /g')
+  scopes=$(printf '%s' "$requested" | tr '\n' ' ' | sed 's/ /, /g')
   "$cache/touchid-confirm" \
     "pre-approve $scopes for $session_label ${session%%-*}" || status=$?
   case $status in
@@ -184,6 +168,9 @@ SWIFT
   esac
 fi
 
+# Remove records older than a week after confirmation.
+mkdir -p "$dir"
+find "$dir" -maxdepth 1 -type f -mtime +7 -delete 2>/dev/null || true
 stamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 if [ ! -f "$file" ]; then
   {
@@ -220,6 +207,8 @@ if [ -z "$session" ]; then
   exit 1
 fi
 
+source "$DEVTOOLS_DIR/scripts/preapproval.sh"
+requested=$(preapproval_scopes "$@")
 file="$(git rev-parse --absolute-git-dir)/preapprovals/$session"
 if [ ! -f "$file" ]; then
   echo "no pre-approval held for session $session"
@@ -235,25 +224,10 @@ if [ "$#" -eq 0 ]; then
   exit 0
 fi
 
-for scope in "$@"; do
-  case $scope in
-  commit | pr | merge)
-    # grep exits 1 on an empty selection, which set -e would take for a
-    # failure, so the status is discarded and the move is unconditional.
-    grep -v "^$scope " "$file" >"$file.tmp" || true
-    mv "$file.tmp" "$file"
-    ;;
-  all)
-    rm -f "$file"
-    echo "pre-approval withdrawn for session $session"
-    exit 0
-    ;;
-  *)
-    echo "unknown scope '$scope'" >&2
-    echo "         known scopes: commit, pr, merge, all" >&2
-    exit 1
-    ;;
-  esac
+for scope in $requested; do
+  # grep exits 1 when no lines remain.
+  grep -v "^$scope " "$file" >"$file.tmp" || true
+  mv "$file.tmp" "$file"
 done
 
 if grep -qv '^#' "$file"; then
@@ -263,4 +237,13 @@ else
   rm -f "$file"
   echo "pre-approval withdrawn for session $session"
 fi
+'''
+
+["devtools:check-preapproval"]
+description = "Check whether this session holds a declared action grant"
+alias = "check-preapproval"
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+bash "$DEVTOOLS_DIR/scripts/preapproval.sh" "$@"
 '''
