@@ -77,3 +77,6 @@ rumdl = "v0.2.78"
 shellcheck = "0.11.0"
 tombi = "1.8.1"
 vale = "3.24.0"
+
+# The shared curl lint gate runs its Python checker through uv.
+uv = "0.12.23"

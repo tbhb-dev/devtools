@@ -47,6 +47,7 @@ buildvcs
 buildx
 callgraph
 canonicalheader
+capsys
 cgo
 charset
 cisa

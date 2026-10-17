@@ -198,3 +198,23 @@ check_tree_gates() {
 	[ "$status" -ne 0 ]
 	[[ "$output" == *SC2155* ]]
 }
+
+@test "curl task ships its checker and uses shared source exclusions" {
+	mkdir -p .devtools/scripts src vendor generated
+	cp "$ROOT/.devtools/scripts/check_curl_fail.py" .devtools/scripts/
+	export DEVTOOLS_DIR="$WORK/.devtools"
+	run mise run devtools:lint-curl
+	[ "$status" -eq 0 ]
+	printf '#!/bin/bash\ncurl url | cat\n' >'src/check curl.sh'
+	cp 'src/check curl.sh' vendor/check.sh
+	cp 'src/check curl.sh' generated/check.sh
+	export DEVTOOLS_GENERATED_PATHS=generated
+	run mise run devtools:lint-curl
+	[ "$status" -ne 0 ]
+	[[ "$output" == *'src/check curl.sh:2: curl without a fail option'* ]]
+	[[ "$output" != *'vendor/check.sh:2:'* ]]
+	[[ "$output" != *'generated/check.sh:2:'* ]]
+	printf '#!/bin/bash\ncurl --fail url | cat\n' >'src/check curl.sh'
+	run mise run devtools:lint-curl
+	[ "$status" -eq 0 ]
+}
