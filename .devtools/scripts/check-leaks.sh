@@ -135,7 +135,6 @@ if ((loaded == 0)); then
   msg="no private values loaded (*_PRIVATE_STRINGS unset); only the publishable patterns are checked, so a host name, login or path outside those shapes passes"
   # On a machine that has the settings file, the values just didn't reach
   # this process. Say so, because that is a local setup mistake, not CI.
-  top=$(git rev-parse --show-toplevel || true)
   if [[ -n $top && -f $top/mise.local.toml ]]; then
     msg="$msg. mise.local.toml exists here but its values are not in the environment; run the check through mise (mise run devtools:lint-leaks) so it can read them"
   fi
@@ -306,16 +305,12 @@ emit_file() {
   emit_body "$2"
 }
 
-# emit_blob LABEL OBJECT: a blob as a file.
-emit_blob() {
-  git cat-file blob "$2" >"$tmp/blob"
-  emit_file "$1" "$tmp/blob"
-}
-
 emit_tree() {
-  local f
+  local f tree_skip
+  load_leak_skip
   git ls-files -z --cached --others --exclude-standard >"$tmp/list"
   while IFS= read -r -d '' f; do
+    [[ $f =~ $tree_skip ]] && continue
     if [[ -f $f && ! -L $f ]]; then
       emit_file "$f" "$f"
     elif [[ -L $f ]]; then
@@ -348,7 +343,8 @@ emit_raw() {
       continue
     fi
     if [[ $2 == content ]]; then
-      emit_blob "$p" "${m[3]}"
+      git cat-file blob "${m[3]}" >"$tmp/blob"
+      emit_file "$p" "$tmp/blob"
     else
       emit_path "$p"
     fi
@@ -546,6 +542,8 @@ while (($#)); do
   shift
 done
 
+# shellcheck source=.devtools/scripts/leak-skip.sh
+if [[ $mode == tree ]]; then source "${BASH_SOURCE[0]%/*}/leak-skip.sh"; fi
 if [[ $mode != files ]]; then
   top=$(git rev-parse --show-toplevel)
   cd "$top"
