@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 
 @test "the secret scan runs with full history and no persisted credentials" {
-  run uv run python - "${BATS_TEST_DIRNAME}/../../.github/workflows/security.yml" <<'PY'
+	run uv run python - "${BATS_TEST_DIRNAME}/../../.github/workflows/scan-gitleaks.yml" <<'PY'
 import re
 import sys
 
@@ -21,5 +21,44 @@ for step in steps:
     if "uses" in step:
         assert re.search(r"@[0-9a-f]{40}$", step["uses"])
 PY
-  [ "$status" -eq 0 ]
+	[ "$status" -eq 0 ]
+}
+
+@test "reusable jobs retain scanner failures, SARIF policy and caller contracts" {
+	run uv run python - "$BATS_TEST_DIRNAME/../.." <<'PY'
+from pathlib import Path
+import re
+import sys
+
+import yaml
+
+root = Path(sys.argv[1])
+workflows = root / ".github/workflows"
+for name in ("govulncheck", "gomodscan", "gitleaks"):
+    workflow = yaml.safe_load((workflows / f"scan-{name}.yml").read_text())
+    assert "workflow_call" in workflow[True]
+    job = workflow["jobs"][name]
+    for step in job["steps"]:
+        assert not step.get("continue-on-error", False)
+        if "uses" in step:
+            assert re.search(r"@[0-9a-f]{40}$", step["uses"])
+    caller = yaml.safe_load((workflows / "security.yml").read_text())
+    assert caller["jobs"][name]["uses"] == f"./.github/workflows/scan-{name}.yml"
+steps = yaml.safe_load((workflows / "scan-govulncheck.yml").read_text())["jobs"]["govulncheck"]["steps"]
+artifact = next(s for s in steps if s.get("uses", "").startswith("actions/upload-artifact@"))
+assert artifact["with"]["path"] == "govulncheck.sarif"
+assert "!cancelled()" in artifact["if"]
+upload = steps[-1]
+assert upload["with"]["sarif_file"] == "govulncheck-reachable.sarif"
+assert upload["with"]["category"] == "govulncheck"
+assert steps[-2]["run"] == "bash .devtools/scripts/filter-govulncheck-sarif.sh govulncheck.sarif govulncheck-reachable.sarif"
+lint = yaml.safe_load((workflows / "consumer-lint.yml").read_text())["jobs"]["lint"]
+assert lint["name"] == "lint"
+commands = [step["run"] for step in lint["steps"] if "run" in step]
+assert commands == ["mise run devtools:check-vendored", "mise run install-tools", "mise run install-guard-markdown", 'echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"', "mise run lint"]
+ci = yaml.safe_load((workflows / "ci.yml").read_text())
+assert ci["jobs"]["lint"]["name"] == "lint"
+assert ci["jobs"]["test"]["name"].startswith("test (")
+PY
+	[ "$status" -eq 0 ]
 }
