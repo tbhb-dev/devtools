@@ -127,7 +127,9 @@ documented() {
     return 0
     ;;
   esac
-  [ "$(git check-attr conflict-markers -- "$1" 2>/dev/null | sed 's/.*: //')" = documented ]
+  local attribute
+  attribute=$(git check-attr conflict-markers -- "$1" 2>/dev/null) || return 1
+  [ "${attribute##*: }" = documented ]
 }
 
 offenders=""

@@ -119,6 +119,7 @@ fi
 section "diff"
 if [ "$landing" != "0" ]; then
   patch=$(gitr diff --no-ext-diff "$base_ref...HEAD")
+  # shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
   if [ "$(printf '%s\n' "$patch" | wc -l)" -le "$DIFF_LINE_CAP" ]; then
     printf '%s\n' "$patch"
   else

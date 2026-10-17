@@ -111,3 +111,21 @@ resolve_conflict() {
 
   [[ "$output" == *"throwaway wip commit"* ]]
 }
+
+@test "continue refuses staged paths printed before git fails" {
+  run bash "$SCRIPTS/start-rebase.sh" main
+  [ "$status" -eq 1 ]
+  resolve_conflict
+  export REAL_GIT
+  REAL_GIT=$(command -v git)
+  mkdir -p "$BATS_TEST_TMPDIR/bin"
+  cat >"$BATS_TEST_TMPDIR/bin/git" <<'STUB'
+#!/usr/bin/env bash
+"$REAL_GIT" "$@" || exit $?
+case " $* " in *' diff --no-ext-diff --cached --name-only '*) exit 9 ;; esac
+STUB
+  chmod +x "$BATS_TEST_TMPDIR/bin/git"
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH" run bash "$SCRIPTS/continue-rebase.sh"
+  [ "$status" -eq 9 ]
+  [ -d .git/rebase-merge ]
+}

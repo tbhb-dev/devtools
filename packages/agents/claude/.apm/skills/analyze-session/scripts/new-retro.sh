@@ -78,6 +78,7 @@ session_id=""
 session_date=""
 records=""
 size_mb=""
+metadata=$("$here/session.py" meta --format "$fmt" "$transcript") || exit $?
 while IFS='=' read -r key value; do
   case $key in
   SESSION_ID) session_id=$value ;;
@@ -87,7 +88,7 @@ while IFS='=' read -r key value; do
   *) ;;
   esac
 done <<EOF
-$("$here/session.py" meta --format "$fmt" "$transcript")
+$metadata
 EOF
 
 if [ -z "$session_id" ] || [ -z "$session_date" ]; then

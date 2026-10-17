@@ -102,11 +102,12 @@ then run this again."
   # marker-scan.sh owns what counts as a marker and which files are
   # allowed to contain one, so this refusal and the report in
   # rebase-status.sh always agree about a given path.
+  staged_names=$(gitr diff --no-ext-diff --cached --name-only) || exit $?
   staged_paths=()
   while IFS= read -r path; do
     [ -n "$path" ] && staged_paths+=("$path")
   done <<EOF
-$(gitr diff --no-ext-diff --cached --name-only)
+$staged_names
 EOF
 
   offenders=""

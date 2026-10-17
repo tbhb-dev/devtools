@@ -110,6 +110,7 @@ case $root in
 */.codex/worktrees/*) printf 'layout:   agent worktree under .codex/worktrees\n' ;;
 *) printf 'layout:   primary checkout\n' ;;
 esac
+# shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
 printf 'head:     %s\n' "$(git rev-parse --short HEAD)"
 upstream=$(git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null || echo none)
 printf 'upstream: %s\n' "$upstream"
@@ -174,10 +175,13 @@ if [ "$DO_FETCH" = "1" ]; then
 fi
 printf 'fetch:  %s\n' "$fetch_state"
 printf 'default branch: %s\n' "$default_branch"
+# shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
 printf '%s vs origin/%s:  %s\n' "$default_branch" "$default_branch" \
   "$(ahead_behind "refs/heads/$default_branch" "refs/remotes/origin/$default_branch")"
+# shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
 printf '%s vs %s:  %s\n' "$branch" "$default_branch" \
   "$(ahead_behind HEAD "refs/heads/$default_branch")"
+# shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
 printf '%s vs origin/%s:  %s\n' "$branch" "$default_branch" \
   "$(ahead_behind HEAD "refs/remotes/origin/$default_branch")"
 
@@ -282,16 +286,20 @@ if [ "$rerere" = "true" ]; then
 else
   printf '\n'
 fi
+# shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
 printf 'rebase.updateRefs: %s  (start-rebase.sh pins this to false)\n' \
   "$(git config --get rebase.updateRefs || echo unset)"
+# shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
 printf 'rebase.autoSquash: %s  (start-rebase.sh pins this to false)\n' \
   "$(git config --get rebase.autoSquash || echo unset)"
+# shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
 printf 'rebase.autostash:  %s  (start-rebase.sh passes --autostash regardless)\n' \
   "$(git config --get rebase.autostash || echo unset)"
 # Left to the operator rather than pinned. Dropping a commit is a
 # content decision, and this workflow has no business making it
 # silently. Unset means drop, which is git's own default and the reason
 # verify-rebase.sh compares the branch against its pre-rebase self.
+# shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
 printf 'rebase.empty:      %s  (unset means git drops a commit the replay emptied,\n' \
   "$(git config --get rebase.empty || echo unset)"
 printf '                          without stopping; the range-diff at the end is what shows it)\n'

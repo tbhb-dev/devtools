@@ -121,11 +121,14 @@ require_reviewed() {
   [ -f "$state/pr.stamp" ] || die "no independent review has cleared this draft. Run it:
 
   bash $here/review.sh"
-  local now_ref now_oid
-  now_ref=$(pr_base_ref "$(pr_field "$draft" base)")
+  local now_ref now_oid now_base now_head now_mergebase
+  now_base=$(pr_field "$draft" base) || return $?
+  now_ref=$(pr_base_ref "$now_base") || return $?
+  now_head=$(dt_head) || return $?
   now_oid=$(gitr rev-parse --verify --quiet "${now_ref:-none}^{commit}" || printf 'none\n')
-  (dt_require_stamp pr "$draft" head "$(dt_head)" base "$now_ref" base_oid "$now_oid" \
-    mergebase "$(gitr merge-base "$now_oid" HEAD 2>/dev/null || printf 'none\n')") ||
+  now_mergebase=$(gitr merge-base "$now_oid" HEAD 2>/dev/null || printf 'none\n') || return $?
+  (dt_require_stamp pr "$draft" head "$now_head" base "$now_ref" base_oid "$now_oid" \
+    mergebase "$now_mergebase") ||
     die "the reviewed description and branch are no longer what would publish.
 Review it again against the current draft, branch, and base:
 
@@ -137,16 +140,21 @@ require_reviewed
 head=$(dt_head)
 copy=$state/pr.draft
 cp "$draft" "$copy"
-[ "$(dt_digest "$copy")" = "$(dt_stamp_value pr draft)" ] ||
+copy_digest=$(dt_digest "$copy") || exit $?
+reviewed_digest=$(dt_stamp_value pr draft) || exit $?
+[ "$copy_digest" = "$reviewed_digest" ] ||
   die "PR_AGENTDESC.md changed while it was being copied. Review it again."
 printf 'stamped for %s on %s\n' "$head" "$base_ref"
 
 # --- parse the reviewed copy -----------------------------------------
 
 is_draft=$(pr_field "$copy" draft)
-labels=$(pr_sequence "$(pr_field "$copy" labels)")
-reviewers=$(pr_sequence "$(pr_field "$copy" reviewers)")
-assignees=$(pr_sequence "$(pr_field "$copy" assignees)")
+labels_field=$(pr_field "$copy" labels) || exit $?
+labels=$(pr_sequence "$labels_field") || exit $?
+reviewers_field=$(pr_field "$copy" reviewers) || exit $?
+reviewers=$(pr_sequence "$reviewers_field") || exit $?
+assignees_field=$(pr_field "$copy" assignees) || exit $?
+assignees=$(pr_sequence "$assignees_field") || exit $?
 milestone=$(pr_field "$copy" milestone)
 title=$(pr_title "$copy")
 [ -n "$title" ] || die "the draft carries no level 1 heading to use as the title"
@@ -281,7 +289,9 @@ esac
 # The confirmation may have run another program. Check the stamp again,
 # then the copy against it, and only then write anything.
 require_reviewed
-[ "$(dt_digest "$copy")" = "$(dt_stamp_value pr draft)" ] ||
+copy_digest=$(dt_digest "$copy") || exit $?
+reviewed_digest=$(dt_stamp_value pr draft) || exit $?
+[ "$copy_digest" = "$reviewed_digest" ] ||
   die "the copy of PR_AGENTDESC.md no longer matches the review stamp. Review it again."
 check_identity
 
@@ -304,7 +314,8 @@ esac
 
 # A pre-push hook, or a server that rewrites a ref, could leave something
 # other than the reviewed commit on the branch.
-[ "$(dt_head)" = "$head" ] ||
+current_head=$(dt_head) || exit $?
+[ "$current_head" = "$head" ] ||
   die "HEAD moved during the push. No pull request was touched; review again."
 remote=$(git ls-remote origin "refs/heads/$branch" | cut -f1)
 [ "$remote" = "$head" ] ||
@@ -340,16 +351,17 @@ $3
 EOF
   }
 
-  reconcile --add-label --remove-label "$labels" \
-    "$(printf '%s' "$current" | jq -r '.labels[].name')"
-  reconcile --add-reviewer --remove-reviewer "$reviewers" \
-    "$(printf '%s' "$current" | jq -r '.reviewRequests[].login // empty')"
-  reconcile --add-assignee --remove-assignee "$assignees" \
-    "$(printf '%s' "$current" | jq -r '.assignees[].login')"
+  current_labels=$(printf '%s' "$current" | jq -r '.labels[].name') || exit $?
+  reconcile --add-label --remove-label "$labels" "$current_labels"
+  current_reviewers=$(printf '%s' "$current" | jq -r '.reviewRequests[].login // empty') || exit $?
+  reconcile --add-reviewer --remove-reviewer "$reviewers" "$current_reviewers"
+  current_assignees=$(printf '%s' "$current" | jq -r '.assignees[].login') || exit $?
+  reconcile --add-assignee --remove-assignee "$assignees" "$current_assignees"
 
+  current_milestone=$(printf '%s' "$current" | jq -r '.milestone.title // empty') || exit $?
   if [ -n "$milestone" ]; then
     dt_gh pr edit "$open_number" --milestone "$milestone" >/dev/null
-  elif [ -n "$(printf '%s' "$current" | jq -r '.milestone.title // empty')" ]; then
+  elif [ -n "$current_milestone" ]; then
     dt_gh pr edit "$open_number" --remove-milestone >/dev/null
   fi
   current_draft=$(printf '%s' "$current" | jq -r '.isDraft')

@@ -48,7 +48,10 @@ while [ $# -gt 0 ]; do
   --note)
     [ $# -ge 2 ] || dt_die "$usage"
     [ -f "$2" ] || dt_die "Operator note is not a file: $2"
-    note=$(cd "$(dirname "$2")" && pwd)/$(basename "$2")
+    note_dir=$(dirname "$2") || exit $?
+    note_name=$(basename "$2") || exit $?
+    note_dir=$(cd "$note_dir" && pwd) || exit $?
+    note=$note_dir/$note_name
     shift 2
     ;;
   -*) dt_die "$usage" ;;
@@ -78,7 +81,8 @@ esac
 inputs=$(dt_new_inputs squash)
 view=$inputs/pull-request.json
 mp_view "$number" "$view" number,title,body,state,baseRefName,headRefName,headRefOid,commits,reviewDecision || exit $?
-[ "$(mp_field "$view" state)" = OPEN ] || dt_die "#$number is $(mp_field "$view" state), not OPEN."
+pr_state=$(mp_field "$view" state) || exit $?
+[ "$pr_state" = OPEN ] || dt_die "#$number is $pr_state, not OPEN."
 mp_require_reviews "$view" "$number"
 head=$(mp_field "$view" headRefOid)
 base=$(mp_field "$view" baseRefName)
@@ -116,11 +120,17 @@ still_as_gathered() {
   live=$(dt_state_dir)/squash.live.json
   mp_view "$number" "$live" headRefOid,baseRefName,reviewDecision || exit $?
   mp_require_reviews "$live" "$number"
-  [ "$(mp_field "$live" headRefOid)" = "$head" ] &&
-    [ "$(mp_field "$live" baseRefName)" = "$base" ] || return 1
+  local live_head live_name
+  live_head=$(mp_field "$live" headRefOid) || return $?
+  live_name=$(mp_field "$live" baseRefName) || return $?
+  [ "$live_head" = "$head" ] && [ "$live_name" = "$base" ] || return 1
   live_base=$(mp_base_oid "$base") || exit $?
   [ "$live_base" = "$base_oid" ] &&
-    { [ "$note_digest" = none ] || [ "$(dt_digest "$inputs/operator-note.txt")" = "$note_digest" ]; }
+    { [ "$note_digest" = none ] || {
+      local live_note_digest
+      live_note_digest=$(dt_digest "$inputs/operator-note.txt") || return $?
+      [ "$live_note_digest" = "$note_digest" ]
+    }; }
 }
 
 dt_review_policy "$inputs" "$head" "$head"
@@ -129,7 +139,8 @@ criteria=$DT_LIB_DIR/../../review-squash-message/SKILL.md
 status=0
 dt_review squash "$draft" "$snapshot" "$criteria" "$root" "$inputs" still_as_gathered \
   pr "$number" head "$head" base "$base" base_oid "$base_oid" note "$note_digest" || status=$?
-rm -f "$(dt_state_dir)/squash.live.json"
+state=$(dt_state_dir) || exit $?
+rm -f "$state/squash.live.json"
 case $status in
 0) ;;
 2) printf '\nFix every finding in SQUASH_AGENTMSG, then run review.sh again.\n' ;;

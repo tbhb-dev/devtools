@@ -46,7 +46,10 @@ while [ $# -gt 0 ]; do
   --note)
     [ $# -ge 2 ] || dt_die "$usage"
     [ -f "$2" ] || dt_die "Operator note is not a file: $2"
-    note=$(cd "$(dirname "$2")" && pwd)/$(basename "$2")
+    note_dir=$(dirname "$2") || exit $?
+    note_name=$(basename "$2") || exit $?
+    note_dir=$(cd "$note_dir" && pwd) || exit $?
+    note=$note_dir/$note_name
     shift 2
     ;;
   *) dt_die "$usage" ;;
@@ -58,7 +61,8 @@ cd "$root"
 draft=$root/PR_AGENTDESC.md
 [ -s "$draft" ] || dt_die "PR_AGENTDESC.md is missing or empty. Draft the description first."
 gitr symbolic-ref -q HEAD >/dev/null || dt_die "HEAD is detached. Check out the branch to review."
-[ "$(dt_head)" != unborn ] || dt_die "The branch has no commit yet."
+current_head=$(dt_head) || exit $?
+[ "$current_head" != unborn ] || dt_die "The branch has no commit yet."
 
 # The snapshot. Everything the reviewer reads derives from the copy of
 # the draft and the commits recorded here.
@@ -96,10 +100,16 @@ fi
 
 # shellcheck disable=SC2329 # dt_review calls it by name
 still_as_gathered() {
-  [ "$(dt_head)" = "$head" ] &&
-    [ "$(pr_base_ref "$base")" = "$base_ref" ] &&
-    [ "$(gitr rev-parse --verify --quiet "$base_ref^{commit}")" = "$base_oid" ] &&
-    { [ "$note_digest" = none ] || [ "$(dt_digest "$inputs/operator-note.txt")" = "$note_digest" ]; }
+  local live_head live_ref live_oid
+  live_head=$(dt_head) || return $?
+  live_ref=$(pr_base_ref "$base") || return $?
+  live_oid=$(gitr rev-parse --verify --quiet "$base_ref^{commit}") || return $?
+  [ "$live_head" = "$head" ] && [ "$live_ref" = "$base_ref" ] && [ "$live_oid" = "$base_oid" ] &&
+    { [ "$note_digest" = none ] || {
+      local live_note_digest
+      live_note_digest=$(dt_digest "$inputs/operator-note.txt") || return $?
+      [ "$live_note_digest" = "$note_digest" ]
+    }; }
 }
 
 dt_review_policy "$inputs" "$head" "$head"

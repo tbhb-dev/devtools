@@ -701,3 +701,20 @@ CHECKER
   [ "$(cat "$CHECK_ARGS")" = $'check repo merge\ncheck repo merge' ]
   grep -q -- "--match-head-commit $HEAD_OID" "$GH_FIXTURES/merged"
 }
+
+@test "mergeability and draft checks reject fields printed before jq fails" {
+  bash "$SCRIPTS/review.sh" 7
+  export REAL_JQ FAIL_FIELD
+  REAL_JQ=$(command -v jq)
+  cat >"${BATS_TEST_TMPDIR}/bin/jq" <<'STUB'
+#!/usr/bin/env bash
+"$REAL_JQ" "$@" || exit $?
+case " $* " in *" --arg f $FAIL_FIELD "*) exit 9 ;; esac
+STUB
+  chmod +x "${BATS_TEST_TMPDIR}/bin/jq"
+  for FAIL_FIELD in mergeable mergeStateStatus isDraft; do
+    run bash "$SCRIPTS/squash-merge.sh" --confirmed 7
+    [ "$status" -eq 9 ]
+    [ ! -f "$GH_FIXTURES/merged" ]
+  done
+}

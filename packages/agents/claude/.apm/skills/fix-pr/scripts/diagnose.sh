@@ -125,6 +125,7 @@ while IFS="$(printf '\t')" read -r name link; do
   [ -n "$name" ] || continue
   printf '\n--------------------------------------------------------------\n'
   printf 'job:        %s\n' "$name"
+  # shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
   printf 'reproduce:  %s\n' "$(reproducer "$name")"
   printf 'run:        %s\n' "$link"
 

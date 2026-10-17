@@ -122,6 +122,7 @@ for dir in "$root/.fix-prose/run.$key" "$git_dir/fix-prose/run.$key"; do
   fi
 done
 if [ -n "$git_dir" ] && [ -s "$git_dir/fix-prose.lock" ]; then
+  # shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
   printf 'guard:    a previous run left a lock on %s\n' "$(head -1 "$git_dir/fix-prose.lock")"
 fi
 

@@ -244,3 +244,19 @@ codex_fixture() {
   [[ "$output" == *"~/.claude/projects"* ]]
   [[ "$output" == *"~/.codex/sessions"* ]]
 }
+
+@test "preflight rejects a basename printed before its command fails" {
+  export REAL_BASENAME
+  REAL_BASENAME=$(command -v basename)
+  mkdir -p "$BATS_TEST_TMPDIR/bin"
+  cat >"$BATS_TEST_TMPDIR/bin/basename" <<'STUB'
+#!/usr/bin/env bash
+"$REAL_BASENAME" "$@" || exit $?
+exit 9
+STUB
+  chmod +x "$BATS_TEST_TMPDIR/bin/basename"
+  cd "$REPO"
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH" run bash "$CLAUDE_SCRIPTS/preflight.sh" "$CLAUDE_T"
+  [ "$status" -eq 9 ]
+  [ ! -d .claude/retros ]
+}

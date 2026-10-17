@@ -94,6 +94,7 @@ fi
 printf 'branch=%s\nbase=%s\nbase_sha=%s\nbefore=%s\n' \
   "$branch" "$base" "$base_sha" "$before" >"$state_file"
 
+# shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
 printf 'Rebasing %s (%s) onto %s (%s).\n\n' \
   "$branch" "$(git rev-parse --short "$before")" "$base" "$(git rev-parse --short "$base_sha")"
 
@@ -144,7 +145,9 @@ fi
 after=$(git rev-parse HEAD)
 : >"$completed_file"
 printf '\n== finished ==\n'
+# shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
 printf 'before: %s\n' "$(git rev-parse --short "$before")"
+# shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
 printf 'after:  %s\n' "$(git rev-parse --short "$after")"
 printf '\ncommits now on %s above %s:\n' "$branch" "$base"
 gitr log --oneline --no-decorate "$base_sha..HEAD" || true

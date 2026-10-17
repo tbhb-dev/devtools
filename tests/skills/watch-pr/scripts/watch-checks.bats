@@ -122,3 +122,19 @@ calls() { cat "$CHECKS/count"; }
   [[ "$output" != *"quota exhausted"* ]]
   [ "$(calls)" -eq 1 ]
 }
+
+@test "a check count printed before jq fails cannot report green" {
+  printf '[%s]\n' "$(check build pass 5 ci)" >"$CHECKS/1"
+  export REAL_JQ
+  REAL_JQ=$(command -v jq)
+  cat >"${BATS_TEST_TMPDIR}/bin/jq" <<'STUB'
+#!/usr/bin/env bash
+"$REAL_JQ" "$@" || exit $?
+[ "$*" != length ] || exit 9
+STUB
+  chmod +x "${BATS_TEST_TMPDIR}/bin/jq"
+  run bash "$SCRIPT" 7
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"could not count checks"* ]]
+  [[ "$output" != *"ALL GREEN"* ]]
+}

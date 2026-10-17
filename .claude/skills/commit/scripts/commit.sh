@@ -97,18 +97,22 @@ fi
 
 # The stamp has to match everything the review read.
 require_reviewed() {
+  local now_tree now_head review_suffix=""
+  [ "$mode" != amend ] || review_suffix=" --amend"
+  now_tree=$(gitr write-tree) || return $?
+  now_head=$(dt_head) || return $?
   [ -f "$state/commit.stamp" ] || fail "No independent review has cleared this draft.
 
 That review is the only gate on the things linting cannot see: claims the
 diff does not support, restating the diff instead of explaining it, and
 whether the staged change is really one logical change. Run it:
 
-  bash $here/review.sh$([ "$mode" = amend ] && printf ' --amend')"
-  (dt_require_stamp commit "$draft" tree "$(gitr write-tree)" head "$(dt_head)" mode "$mode") ||
+  bash $here/review.sh$review_suffix"
+  (dt_require_stamp commit "$draft" tree "$now_tree" head "$now_head" mode "$mode") ||
     fail "The reviewed change and the change about to be committed are no longer
 the same. Run the review again against the current draft and index:
 
-  bash $here/review.sh$([ "$mode" = amend ] && printf ' --amend')"
+  bash $here/review.sh$review_suffix"
 }
 require_reviewed
 tree=$(gitr write-tree)
@@ -127,7 +131,9 @@ esac
 require_reviewed
 message=$state/commit.message
 cp "$draft" "$message"
-[ "$(dt_digest "$message")" = "$(dt_stamp_value commit draft)" ] ||
+message_digest=$(dt_digest "$message") || exit $?
+reviewed_digest=$(dt_stamp_value commit draft) || exit $?
+[ "$message_digest" = "$reviewed_digest" ] ||
   fail "COMMIT_AGENTMSG changed while it was being copied. Run the review again."
 
 # The commit runs under the operator's own git configuration apart from
@@ -156,7 +162,10 @@ command git "$@" || status=$?
 
 if [ "$status" != 0 ]; then
   dropped=""
-  [ -z "$manifest" ] || dropped=$(comm -23 <(printf '%s\n' "$manifest") <(staged))
+  if [ -n "$manifest" ]; then
+    remaining=$(staged) || exit $?
+    dropped=$(comm -23 <(printf '%s\n' "$manifest") <(printf '%s\n' "$remaining")) || exit $?
+  fi
   if [ -n "$dropped" ]; then
     printf '\nThe commit failed and the index came back short. These paths were\n' >&2
     printf 'staged before the attempt and are not staged now:\n\n' >&2
@@ -164,7 +173,8 @@ if [ "$status" != 0 ]; then
     printf '\nStage them again before retrying, or the retry commits a subset of\n' >&2
     printf 'the group without saying so.\n' >&2
   fi
-  if [ "$(snapshot)" = "$before" ]; then
+  after_attempt=$(snapshot) || exit $?
+  if [ "$after_attempt" = "$before" ]; then
     printf '\nA hook failed, and nothing in the index or the worktree changed. Its\n' >&2
     printf 'output is above. Fix what it reported; the staged change and the stamp\n' >&2
     printf 'are untouched, so a fix to a staged file means staging it and running\n' >&2
@@ -197,7 +207,8 @@ landed_paths() {
 }
 missing=""
 if [ -n "$manifest" ]; then
-  missing=$(comm -23 <(printf '%s\n' "$manifest") <(landed_paths | sort))
+  landed=$(landed_paths | sort) || exit $?
+  missing=$(comm -23 <(printf '%s\n' "$manifest") <(printf '%s\n' "$landed")) || exit $?
 fi
 
 gitr show --no-ext-diff --stat --format='%h %s' HEAD
