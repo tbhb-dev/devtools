@@ -6,7 +6,8 @@
 # A consumer pins devtools across these files, in three
 # syntaxes:
 #
-#   apm.yml                          tbhb-dev/devtools#vX.Y.Z
+#   apm.yml                          root or packages/agents/<harness>#vX.Y.Z
+#   mise.toml                        go: guard-markdown tool, vX.Y.Z
 #   vendir.yml                       two `ref: vX.Y.Z` under the git url
 #   .pre-commit-config.yaml          rev: <sha>  # frozen: vX.Y.Z
 #   .github/workflows/*.y*ml         four `uses: ...@<sha> # vX.Y.Z`
@@ -45,8 +46,7 @@
 # `apm install` is deliberately not called directly. It merges hook
 # declarations into .claude/settings.json additively and never
 # reconciles, so a bare install leaves drift no later command clears.
-# apm-sync is the consumer-side task that clears the hook state first;
-# both repos define it, and a consumer without one has to.
+# devtools:apm-sync in apm.toml clears the hook state before reinstalling.
 #
 # The vendir sync runs under a scrubbed git environment for the reason
 # vendir.toml sets out at length: an inherited GIT_DIR redirects vendir's
@@ -63,6 +63,20 @@ set -euo pipefail
 
 version=$usage_version
 case "$version" in v*) ;; *) version="v$version" ;; esac
+
+# Validate APM forms before changing any file.
+if [ -f apm.yml ]; then
+  awk '
+    /^[[:space:]]*-[[:space:]]*["\047]?tbhb-dev\/devtools/ && !/tbhb-dev\/devtools(\/packages\/agents\/(common|claude|codex|agy))?#v[0-9]+\.[0-9]+\.[0-9]+/ {
+      print "unsupported devtools APM pin: " $0 > "/dev/stderr"; bad = 1
+    }
+    END { exit bad }
+  ' apm.yml
+fi
+if ! grep -Eq '^"go:github.com/tbhb-dev/devtools/cmd/guard-markdown"[[:space:]]*=' mise.toml; then
+  echo 'declare "go:github.com/tbhb-dev/devtools/cmd/guard-markdown" in mise.toml [tools]' >&2
+  exit 1
+fi
 
 remote=https://github.com/tbhb-dev/devtools
 
@@ -94,8 +108,10 @@ edit() {
 # The two tag-string sites and the preset extends are self-contained
 # lines, so each is one substitution.
 if [ -f apm.yml ]; then
-  edit apm.yml sed -E "s|(tbhb-dev/devtools#)v[^[:space:]]+|\\1$version|"
+  edit apm.yml sed -E "s@(tbhb-dev/devtools(/packages/agents/(common|claude|codex|agy))?#)v[^[:space:]\"']+@\\1$version@"
 fi
+
+edit mise.toml sed -E "s|^(\"go:github.com/tbhb-dev/devtools/cmd/guard-markdown\"[[:space:]]*=[[:space:]]*)\"[^\"]*\"|\\1\"$version\"|"
 
 for wf in .github/workflows/*.yml .github/workflows/*.yaml; do
   [ -f "$wf" ] || continue
@@ -148,7 +164,7 @@ else
 fi
 
 mise install
-mise run apm-sync
+mise run devtools:apm-sync
 
 # The verification runs against the payload the sync just delivered, so
 # it is the post-update task rather than this one. A release that
@@ -191,17 +207,23 @@ set -euo pipefail
 # marks a site whose pin was found but whose version could not be read,
 # which is a disagreement in its own right.
 read_sites() {
-  for f in apm.yml vendir.yml .pre-commit-config.yaml \
+  for f in mise.toml apm.yml vendir.yml .pre-commit-config.yaml \
     .github/renovate.json5 .github/workflows/*.yml .github/workflows/*.yaml; do
     [ -f "$f" ] || continue
     awk -v file="$f" '
       function emit(ver, sha) { printf "%s\t%s\t%s:%d\n", ver, sha, file, FNR }
 
-      # apm.yml: a bare tag on the dependency line.
-      /tbhb-dev\/devtools#v/ {
-        v = $0
-        sub(/.*tbhb-dev\/devtools#/, "", v)
-        sub(/[[:space:]].*$/, "", v)
+      # APM supports the root package and the published sub-packages.
+      /^[[:space:]]*-[[:space:]]*["\047]?tbhb-dev\/devtools/ && file == "apm.yml" {
+        v = "?"
+        if ($0 ~ /tbhb-dev\/devtools(\/packages\/agents\/(common|claude|codex|agy))?#v/) {
+          v = $0; sub(/.*tbhb-dev\/devtools(\/packages\/agents\/(common|claude|codex|agy))?#/, "", v); sub(/[[:space:]"\047].*$/, "", v)
+        }
+        emit(v, "-")
+      }
+
+      /^"go:github.com\/tbhb-dev\/devtools\/cmd\/guard-markdown"[[:space:]]*=/ {
+        v = $0; sub(/^[^=]*=[[:space:]]*"/, "", v); sub(/".*$/, "", v)
         emit(v, "-")
       }
 
@@ -261,6 +283,11 @@ read_sites() {
 
 sites=$(read_sites)
 
+if ! printf '%s\n' "$sites" | grep -q 'mise.toml:'; then
+  echo 'missing guard-markdown tool pin in mise.toml [tools]' >&2
+  exit 1
+fi
+
 if [ -z "$sites" ]; then
   echo "no tbhb-dev/devtools pins found -- check-pins verified nothing" >&2
   echo "         run it from a repository that vendors devtools" >&2
@@ -286,7 +313,7 @@ report() {
 }
 
 rc=0
-if [ "$(printf '%s\n' "$versions" | wc -l)" -ne 1 ]; then
+if [ "$(printf '%s\n' "$versions" | wc -l)" -ne 1 ] || [ "$versions" = "?" ]; then
   report 1 version "$versions"
   rc=1
 fi
