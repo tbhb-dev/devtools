@@ -171,3 +171,15 @@ check_tree_gates() {
 	unset DEVTOOLS_GENERATED_PATHS
 	check_tree_gates 1
 }
+
+@test "architecture exclusions survive a symlinked working directory" {
+	setup_tree_gates
+	printf 'installed/\n' >.gitignore
+	bad_tree_sources installed
+	ln -s "$BATS_TEST_TMPDIR" "$BATS_TEST_TMPDIR/linked-parent"
+	cd "$BATS_TEST_TMPDIR/linked-parent/consumer"
+	check_tree_gates 0
+	bad_tree_sources src
+	git add -- src
+	check_tree_gates 1
+}

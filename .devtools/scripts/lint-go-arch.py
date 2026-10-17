@@ -43,7 +43,17 @@ def main() -> int:
     with tempfile.TemporaryDirectory(prefix="devtools-arch-") as directory:
         arch_file = Path(directory) / "arch.yml"
         arch_file.write_text(yaml.safe_dump(config, sort_keys=False))
-        return subprocess.call(["go-arch-lint", "check", "--arch-file", str(arch_file)])
+        # Go may preserve a symlinked PWD; use the same root as the exclusions.
+        return subprocess.call(
+            [
+                "go-arch-lint",
+                "check",
+                "--project-path",
+                str(Path.cwd()),
+                "--arch-file",
+                str(arch_file),
+            ],
+        )
 
 
 if __name__ == "__main__":
