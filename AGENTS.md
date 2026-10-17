@@ -72,6 +72,60 @@ Each of these skills declares guard hooks in its frontmatter scoped to the workf
 
 A skill's hooks remain active after the turn that invoked it ends, so more than one of these guards is often live at once. The `pr` and `merge-pr` guards share one allowlist so they agree wherever both run. `watch-pr` and `fix-pr` claim only the narrower forms their own scripts wrap, because a broader claim there would refuse a sibling's legitimate calls.
 
+## Repository review policy
+
+Commit, pull request description, and squash message reviews accept optional free-form criteria in `.agents/review-instructions.md`. This path lives outside the deployed skill directories. Repositories without this file keep the built-in review rules. Mechanical leak scans remain separate and keep their existing rules.
+
+### Policy authority
+
+The shared reader in `packages/agents/source/lib/lib.sh` reads the file from the local `origin/<default>` remote tracking ref, never from the working tree, index, or branch under review. Refresh origin before reviewing to get current policy. Default selection comes from `refs/remotes/origin/HEAD`. Without that symbolic ref, the reader uses main, or master when only that local default exists. Applying policy requires a trusted remote tracking commit. Only a regular, non-executable Git blob qualifies as the file.
+
+### Review precedence
+
+The policy overrides conflicting built-in review criteria. A credentials floor follows it in the prompt and always applies: reviewers must still check keys, tokens, `OAuth` client secrets, private keys, and passwords and report exposed credentials. Neither policy text nor an operator note can waive that floor.
+
+Policy supplies review text only. It can't select a reviewer, executable, command, tool, or authority. Reviewer configuration stays on the machine.
+
+A repository managing network policy could adopt this text:
+
+```markdown
+Tailnet and RFC 1918 addresses, subnet routes, tags, and member logins in `policy.json` are expected configuration. Allow these network values. Continue to report credentials and secrets.
+```
+
+### Policy changes under review
+
+When the reviewed tree changes the policy path relative to the branch's merge base with the trusted default, the entire review uses built-in rules alone. This includes adding or deleting the file and policy changes committed earlier on the branch. An unstaged edit can't supply instructions. Reviews also use built-in rules alone when Git can't establish a common ancestor. Adopt policy changes through ordinary review and the repository's human approval process before using them on later branches. Repository owners may add a CODEOWNERS rule for this path.
+
+### Audit records
+
+Every scripted review reports the policy path, SHA-256 digest of the applied bytes, status, and trusted ref and commit, while the review stamp records the digest, status, ref, and commit. An absent or suppressed policy reports a digest of `none`. Moving the trusted ref during review prevents stamping. Moving it after review requires a new review before committing or publishing.
+
+The same reader and prompt precedence serve commit, PR, and merge reviews on both harnesses.
+
+## GitHub API quota in pull request skills
+
+PR publication, merge, and watch scripts read the active account through GraphQL `viewer.login`. An exhausted REST core quota doesn't prevent that check. Before a push, publication, or merge, the configured account must still match. A failed request prints GitHub's error. Account mismatches report the actual and configured logins.
+
+For a rate-limit error, the shared reader returns status 76 and prints the affected quota and its reset time. It stops without retrying the request. A reset header supplies Unix seconds. Otherwise one REST `GET /rate_limit` reads the relevant resource's reset in Unix seconds without consuming core quota. If that lookup also fails, the message says the reset is unavailable and keeps the original error. Authentication and permission failures keep the original command status rather than becoming an identity mismatch. For ordinary check-read errors, the watcher retains status 2.
+
+### Calls per invocation
+
+These counts describe the explicit readers in the published scripts. GitHub CLI may make extra repository discovery requests or paginate a connection. No reader caches identity across invocations.
+
+| Operation | REST core reads | GraphQL reads |
+| --- | --- | --- |
+| PR preflight | 0 | Viewer, PR lists, repository, labels, milestones, issues, and published body when comparing a draft |
+| PR publication | 0 | Viewer, labels, optional milestones, each distinct referenced issue, final identity check when configured, PR lookup, and current properties for updates |
+| Merge preflight | 0 | Viewer reused for the identity report, PR snapshot. PR lookup when the caller supplies no number |
+| Squash briefing | 0 | Viewer, one PR snapshot including commits and files, each Related reference. PR lookup when the caller supplies no number |
+| Merge review | 0 | Viewer, PR snapshots, base refs, repository URL for fetching pinned objects |
+| Merge execution | 0 | Viewer, identity when configured, PR snapshots and base refs for the live gates, final PR URL |
+| Watch | 0 | Viewer, optional PR lookup, one checks request per snapshot |
+
+PR writes still use `gh pr create`, `gh pr edit`, and `gh pr ready`. Merge uses `gh pr merge`. GitHub CLI can spend REST quota while resolving reviewers, assignees, labels, and milestones or applying those properties. The scripts don't retry these writes automatically. Git push and fetch use Git transport, outside API quotas. Merge diff review uses pinned local Git objects rather than a REST diff download. The separate fix-pr workflow's Actions run and log readers still use REST through `gh run`. They're outside these read counts.
+
+The rate-limit classifier recognizes GitHub's rate-limit message, including a secondary rate limit. A secondary limit need not end at the primary quota reset: follow any retry guidance in the original error. A bare HTTP 403 without a rate-limit message remains a permission failure.
+
 ## Skill sources
 
 APM deploys a package verbatim and has no per-target variant, so the Claude and Codex packages each hold a full copy of every skill. Maintained by hand, those copies drifted in both directions.
@@ -82,7 +136,11 @@ Sources are siblings of the packages rather than part of one. Without an `apm.ym
 
 Each source directory has a `SKILL.claude.md` and a `SKILL.codex.md`, one manifest per harness. A line reading exactly `@include parts/<file>` pulls in a shared fragment from `parts/`, a directory that stays out of the output. Everything under `shared/` goes into both outputs. Anything under `claude/` or `codex/` goes into that harness's output alone, which is where Claude's guard-hook scripts belong. Without a template for a harness, the generator writes nothing for it. `tokens.json` belongs to `skill-tokens`, so generation leaves it in place and the check ignores it. A package skill with no source directory is hand-maintained and skipped, which lets the remaining skills migrate one family at a time.
 
-`packages/agents/source/lib/lib.sh` is the shared shell library. The generator copies it to `scripts/lib.sh` in every output whose scripts mention it, and a deployed skill then doesn't depend on anything outside its own directory. It contains the harness detection, the machine-level configuration lookup, the script-owned review and its stamp, and the confirmation chain. Its bats suite and the commit skill's run in `mise run test` against the generated output, with stubs replacing the reviewer CLI and the delegation check.
+`packages/agents/source/lib/lib.sh` is the shared shell library. The generator copies it to `scripts/lib.sh` in every output whose scripts mention it, and a deployed skill then doesn't depend on anything outside its own directory. It contains the harness detection, the machine-level configuration lookup, the script-owned review and its stamp, and the confirmation chain. Its Bats suite and the commit skill’s run in `mise run test-hooks` against the generated output, with stubs replacing the reviewer CLI and the delegation check.
+
+The Claude manifests for `write-pr-description` and `write-prose-fix` declare scoped tools for context gathering, edits, and draft validation, so delegated writers can finish without permission prompts. Reviews still run through the script-owned headless reviewer, and confirmation still belongs to the write script’s confirmation chain. Optional live probes use `RUN_HEADLESS_WRITERS=1` or `RUN_HEADLESS_REVIEWS=1`, while ordinary regression runs don't need model access.
+
+The Skill Scanner policy at `.github/skill-scanner-policy.yaml` inherits balanced defaults and suppresses only `ALLOWED_TOOLS_BASH_VIOLATION` for `SKILL.md` in those two writer skills. Scanner 2.3.0 fails to recognize their scoped Bash permissions. The high severity gate still covers other rules, skills, and files, and SARIF keeps suppressed findings with their reasons. Changing that exception requires review.
 
 ## Pre-approving the confirmations
 
@@ -108,7 +166,7 @@ In the commit skill, `commit.sh` resolves the confirmation itself rather than le
 2. this session's pre-approval record, keyed on `CLAUDE_CODE_SESSION_ID` and then `CODEX_THREAD_ID`
 3. a delegation check configured on the machine as `DEVTOOLS_DELEGATION_CHECK` or `delegation_check` in `~/.config/devtools/<repository>.conf`, called as `<checker> check <repository> commit`, where exit 0 grants and 1 refuses while any other status leaves the commit waiting
 
-Without any of them the script exits 75 and commits nothing, and the agent asks. An unattended run, such as a subagent, lacks both a session ID and a fingerprint, and the delegation check is how it gets an answer at all. Like the reviewer, the checker comes from machine configuration only, because a commit must not be able to widen its own authority. The PR and merge scripts use the same confirmation order for their own actions.
+Without any of them the script exits 75 and commits nothing, and the agent asks. An unattended subagent may lack a session grant and can't answer an interactive confirmation. The machine’s `delegation_check` supplies that answer. A parent’s instruction alone doesn't configure it. The checker receives `check <repository> <action>`, with `commit`, `pr`, or `merge` as the action. Exit 0 grants, exit 1 refuses, and any other exit leaves the action waiting. A refusal stops the write, and the agent must not grant itself pre-approval or invent an operator confirmation. Like the reviewer, the checker comes from machine configuration only, because a commit must not be able to widen its own authority. The PR and merge scripts use the same confirmation order for their own actions.
 
 ## Moving a branch onto its base
 
@@ -167,7 +225,13 @@ The baseline drop-in pins Go 1.27.2. Scratch Git repositories in the shell suite
 
 The repository dropped its Justfile. The last recipes to leave were the Go test and coverage family, held back because the CI matrix runs them on Windows and nobody had checked mise there. A probe on windows-2025 found it running a bash-shebang body under Git Bash and resolving its own go pin, which retired both the recipes and the `actions/setup-go` step feeding them. The delegation recipes went with them once the published skills learned to spell their gates `mise run <task>`. The committed `tools/mise-bootstrap` shim still runs in place of mise wherever PATH has none, and the prek hooks run through it.
 
-Tasks that operate on one source language carry a `-go` or `-py` suffix, and the bare name aggregates both: `mise run test` runs `test-go` and `test-py`, and so do `cover`, `mutate`, and `fuzz`. Use the suffixed form while iterating on one language, and the bare form before pushing. Lint gates follow the same pattern through `lint-go-all` and `lint-py-all`, which `mise run lint` composes. A bare-name task lists its members in an ordered `run` array rather than in `depends`, because `depends` runs in parallel and interleaves the linters' findings, which defeats the one-line-per-finding output template.
+Tasks that operate on one source language carry a `-go` or `-py` suffix, and the bare name aggregates both: `mise run test` runs `test-go`, `test-py`, `test-hooks`, and `test-leaks` in order. The `cover`, `mutate`, and `fuzz` aggregates each run their Go and Python members. Use the suffixed form while iterating on one language, and the bare form before pushing. Lint gates follow the same pattern through `lint-go-all` and `lint-py-all`, which `mise run lint` composes. A bare-name task lists its members in an ordered `run` array rather than in `depends`, because `depends` runs in parallel and interleaves the linters' findings, which defeats the one-line-per-finding output template.
+
+`mise run test-hooks` runs Bats recursively under `tests/`. Pass a path, such as `mise run test-hooks tests/skills`, to narrow it. `mise run test-leaks` runs `.devtools/scripts/check-leaks.bats`. CI runs both in `test-bats (ubuntu-24.04)` and `test-bats (macos-15)`. The Go jobs are `test (ubuntu-24.04)`, `test (ubuntu-24.04-arm)`, `test (macos-15)`, and `test (windows-2025)`. Python is `test (python)`.
+
+`fix-pr` maps check names by matching text within them, in order, rather than by workflow job ID. `lint` routes to `mise run lint`. All those `test` names, including `test-bats`, route to `mise run test`. For a Bats failure, the focused CI reproducers are `mise run test-hooks` and `mise run test-leaks`. A name containing `race` routes to `test-go-race`, `cover` to `cover-go-check`, `vendor` to `vendor-check`, `vuln` to `vuln`, and `gitleaks` or `secret` to `devtools:gitleaks`. `validate` routes to `apm install --frozen && apm audit --ci`. An unknown name, including `scan-skills` and `gomodscan`, requires reading the log because the diagnosis script doesn't invent a reproducer. The Actions run and log reads still use REST.
+
+Repository tooling now preserves command failures when output feeds another command or condition. Deliberate SC2312 exceptions cover diagnostic formatting that can't change an existing verdict. This first sweep didn't enable the optional rule or change skill sources.
 
 Python tooling covers `packages/`. It came from `proofhouse/proofhouse-python-tool`, dropping the checks that need an installable package. Because `pyproject.toml` declares a virtual project (`package = false`), `import-linter` contracts, a wheel build, and a generated build stamp have nothing to act on here. `lint-reuse` is absent for a different reason. REUSE compliance spans every file type in the tree. Adopting it needs a whole-tree sweep plus a `REUSE.toml` and `LICENSES/`, so that work belongs in its own change.
 
