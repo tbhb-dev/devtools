@@ -7,6 +7,8 @@ setup() {
   mkdir -p "$WORK/.config/mise/conf.d" "$WORK/.devtools"
   cp -R "$REPO/.devtools/." "$WORK/.devtools/"
   cp "$REPO/.config/mise/conf.d/"{10-devtools-tools,20-devtools-env,30-devtools-skill-contract}.toml "$WORK/.config/mise/conf.d/"
+  cp "$REPO/.config/mise/mise.lock" "$WORK/.config/mise/"
+  cp "$REPO/mise.lock" "$WORK/"
   export MISE_TRUSTED_CONFIG_PATHS="$WORK"
   export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
   unset GIT_DIR GIT_COMMON_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY

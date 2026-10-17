@@ -8,6 +8,8 @@ setup() {
 	mkdir -p "$WORK/.devtools/tasks" "$WORK/.config/mise/conf.d"
 	cp "$ROOT/.config/mise/conf.d/10-devtools-tools.toml" "$WORK/.config/mise/conf.d/"
 	cp "$ROOT/.devtools/tasks/lint.toml" "$WORK/.devtools/tasks/"
+	cp "$ROOT/.config/mise/mise.lock" "$WORK/.config/mise/"
+	cp "$ROOT/mise.lock" "$WORK/"
 	cd "$WORK"
 	git init -q
 	cat >mise.toml <<'TOML'
@@ -15,7 +17,7 @@ setup() {
 includes = [".devtools/tasks/lint.toml"]
 TOML
 	printf '\n[tools]\n' >>mise.toml
-	rg '^shfmt = ' "$ROOT/mise.toml" >>mise.toml
+	grep '^shfmt = ' "$ROOT/mise.toml" >>mise.toml
 	export MISE_TRUSTED_CONFIG_PATHS="$WORK"
 	unset DEVTOOLS_GENERATED_PATHS
 }
@@ -77,7 +79,7 @@ check_gates() {
 
 @test "architecture template excludes deployed and third-party directories" {
 	for directory in vendor apm_modules .claude .agents .codex; do
-		run rg --fixed-strings -- "  - $directory" "$ROOT/.devtools/config/go/.go-arch-lint.yml"
+		run grep -F -- "  - $directory" "$ROOT/.devtools/config/go/.go-arch-lint.yml"
 		[ "$status" -eq 0 ]
 	done
 }
