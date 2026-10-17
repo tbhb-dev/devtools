@@ -103,7 +103,6 @@ check_gates() {
 
 setup_tree_gates() {
 	cp "$ROOT/.config/mise/conf.d/30-devtools-skill-contract.toml" "$WORK/.config/mise/conf.d/"
-	grep '^uv = ' "$ROOT/.config/mise/conf.d/10-devtools-tools.toml" >>mise.toml
 	mkdir -p "$WORK/.vale/config/templates"
 	cp "$ROOT/.vale/config/templates/ai-tells-agent.tmpl" "$WORK/.vale/config/templates/"
 	cp "$ROOT/.devtools/tasks/go.toml" "$WORK/.devtools/tasks/"
