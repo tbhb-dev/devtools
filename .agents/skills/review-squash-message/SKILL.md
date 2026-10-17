@@ -24,9 +24,9 @@ When merge-pr's review script runs you, it takes one snapshot of the pull reques
 - `pull-request.txt`, with the number, the title, the branches, and the head and base commits the snapshot read
 - `commits.txt`, every commit message the squash collapses, bodies in full
 - `description.md`, the description as published
-- `files.txt` lists the changed files. `change.diff` shows the whole diff
+- `files.txt` lists the changed files. `change.diff` contains the complete local diff from the pinned base and head, including binary patches
 
-Read every one of them before judging anything, and read those files rather than the live pull request, which may have moved. Run any other way, gather the same material with `gh pr view <number> --json title,body,headRefOid,commits,files` and `gh pr diff <number>`, taking the number from the draft's subject.
+Read every one of them before judging anything, and read those files rather than the live pull request, which may have moved. Run any other way, use `merge-pr/scripts/review.sh <number>` to gather the pinned inputs and start this review, taking the number from the draft's subject. Keep vendored and deployed content in the complete diff.
 
 Read the commit bodies rather than skimming the subjects. A subject states what a commit did. The reason belongs in the body, and a reason is the first thing a squash loses.
 

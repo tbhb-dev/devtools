@@ -92,6 +92,8 @@ jq -r '
   "url: \(.url)"
 ' "$view"
 
+mp_require_reviews "$view" "$number"
+
 section "checks"
 status=0
 judged=$(mp_judge_checks "$view") || status=$?

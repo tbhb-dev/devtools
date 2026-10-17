@@ -5,6 +5,7 @@ This step is mandatory, and the merge script enforces it.
 | Exit | Meaning |
 | --- | --- |
 | 0 | Passed and stamped |
+| 75 | Waiting for an approving review GitHub requires |
 | 2 | Changes required: the output lists the findings |
 | 4 | The reviewer failed or replied without a readable verdict |
 | 5 | The draft or the pull request moved while the review ran |
