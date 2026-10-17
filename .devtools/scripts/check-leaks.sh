@@ -542,8 +542,9 @@ while (($#)); do
   shift
 done
 
+script_dir=$(dirname "${BASH_SOURCE[0]}")
 # shellcheck source=.devtools/scripts/leak-skip.sh
-if [[ $mode == tree ]]; then source "${BASH_SOURCE[0]%/*}/leak-skip.sh"; fi
+if [[ $mode == tree ]]; then source "$script_dir/leak-skip.sh"; fi
 if [[ $mode != files ]]; then
   top=$(git rev-parse --show-toplevel)
   cd "$top"

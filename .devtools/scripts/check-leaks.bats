@@ -1355,3 +1355,13 @@ fake() {
 		[[ $output != *"$expression"* ]]
 	done
 }
+
+@test "working-tree scan finds its helper when invoked by basename" {
+	mkdir -p scripts
+	cp "$checker" "$BATS_TEST_DIRNAME/leak-skip.sh" scripts/
+	printf 'scripts/\n' >>.gitignore
+	cd scripts
+	run bash check-leaks.sh
+	[ "$status" -eq 0 ]
+	[ -z "$output" ]
+}
