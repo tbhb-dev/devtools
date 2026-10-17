@@ -175,7 +175,7 @@ Run `mise run devtools:lint-go` or `mise run devtools:test-go`. Omit either lang
 
 Set overrides in `[env]`: `DEVTOOLS_GO_PACKAGES` defaults to `./...`, `DEVTOOLS_GO_BIN_PACKAGES` to `./cmd/...`, and `DEVTOOLS_GO_MODULES_MODE` to `readonly` (use `vendor` for a vendored module). Build metadata derives `DEVTOOLS_GO_MODULE` from `go list -m`. `DEVTOOLS_GO_BUILDMETA` defaults to that module's `internal/buildmeta` package, with string variables `Version`, `Commit`, and `Date`. Go ignores those linker assignments when the package is absent. Python source roots default to `src`: set `DEVTOOLS_PYTHON_DIRS` for `pylint`, complexipy, and vulture, `DEVTOOLS_PYTHON_SOURCE_DIRS` for bandit and coverage, and `DEVTOOLS_PYTHON_PROPERTY_DIRS` for fuzzing (default `tests/property`). Directory lists use shell word splitting and glob expansion, so paths must contain no whitespace. Ruff, pyrefly, `pytest`, and cosmic-ray read the consumer's own config for their scope and policy. Both complexipy and vulture also read local policy.
 
-Copy the needed templates from [`.devtools/config`](.devtools/config) to the project root, then adapt these fields. These are starting points. Syncing updates the templates without overwriting local policy.
+Copy the needed templates from [`.devtools/config`](.devtools/config) to the project root, then adapt these fields. The Python templates use `.template` suffixes so tools don't discover them inside the vendored payload. Remove that suffix when copying them to the root. These are starting points. Syncing updates the templates without overwriting local policy.
 
 | File | Consumer adaptations |
 | --- | --- |
@@ -183,8 +183,8 @@ Copy the needed templates from [`.devtools/config`](.devtools/config) to the pro
 | `go/.go-arch-lint.yml` → `.go-arch-lint.yml` | Replace components' `in` paths and `deps` edges with your layers. Adjust `exclude` for your tooling and fixtures. |
 | `go/.testcoverage.yml` → `.testcoverage.yml` | Replace `local-prefix` with your module path. Choose thresholds and excluded entry points. Keep `profile: coverage.out` for these tasks. |
 | `go/.gremlins.yaml` → `.gremlins.yaml` | Adjust `unleash.exclude-files` for generated or third-party code. The default excludes vendor. |
-| `python/ruff.toml` → `ruff.toml` | Adjust `exclude` and the test/script patterns under `lint.per-file-ignores`. Choose your rules and documentation string convention. Existing `[tool.ruff]` settings in `pyproject.toml` can stay there instead. |
-| `python/pyrefly.toml` → `pyrefly.toml` | Set `project-includes` and `project-excludes`. Keep the diagnostic catalog aligned with your pinned pyrefly version. Existing `[tool.pyrefly]` settings can stay in `pyproject.toml`. |
+| `python/ruff.toml.template` → `ruff.toml` | Adjust `exclude` and the test/script patterns under `lint.per-file-ignores`. Choose your rules and documentation string convention. Existing `[tool.ruff]` settings in `pyproject.toml` can stay there instead. |
+| `python/pyrefly.toml.template` → `pyrefly.toml` | Set `project-includes` and `project-excludes`. Keep the diagnostic catalog aligned with your pinned pyrefly version. Existing `[tool.pyrefly]` settings can stay in `pyproject.toml`. |
 | `.devtools/scripts/go-ldflags.sh` | No edits: set the module or metadata package through env if the defaults differ from your layout. `tools/go-ldflags.sh` in this repo forwards to it. |
 
 Use the [shared lint exclusions](docs/shared-lint-exclusions.md) when wiring shell and Markdown wrap gates. Default exclusions cover third-party and deployed agent trees. Declare generated paths with `DEVTOOLS_GENERATED_PATHS`. `devtools:lint-workflows` skips repositories without workflow files. `devtools:vendor-check` regenerates Go dependencies and catches tracked and untracked drift, including files hidden by personal ignore rules. It can change the worktree. Review its output.
