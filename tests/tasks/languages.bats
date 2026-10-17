@@ -97,6 +97,11 @@ GO
 printf '%s\n' "$@"
 SH
 	chmod +x bin/uv
+	# Put the recorder ahead of mise's pinned uv when the task resolves PATH.
+	cat >>mise.toml <<'TOML'
+[env]
+_.path = ["bin"]
+TOML
 	run env PATH="$WORK/bin:$PATH" DEVTOOLS_PYTHON_SOURCE_DIRS='lib/*' mise run devtools:cover-py
 	[ "$status" -eq 0 ]
 	[[ "$output" == *'--cov=lib/one'* ]]
