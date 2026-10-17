@@ -666,3 +666,38 @@ capture_diff() {
   [[ "$output" == *"reset time: 1792195200"* ]]
   [ ! -e "$(stamp_file)" ]
 }
+
+@test "delegated merge checks its script-owned stamp and checker refusal then grant (#137)" {
+  mkdir -p .claude/skills
+  cp -R "$ROOT/packages/agents/claude/.apm/skills/merge-pr" \
+    "$ROOT/packages/agents/claude/.apm/skills/review-squash-message" .claude/skills/
+  SCRIPTS="$PWD/.claude/skills/merge-pr/scripts"
+  # Opt-in CLI smoke test; ordinary runs keep the deterministic reviewer.
+  if [ "${RUN_HEADLESS_REVIEWS:-0}" = 1 ]; then
+    unset DEVTOOLS_REVIEW_CMD
+    export DEVTOOLS_HARNESS=claude
+  fi
+  # No skill hooks, operator flag, or session pre-approval participates.
+  [ -z "${CLAUDE_CODE_SESSION_ID:-}${CODEX_THREAD_ID:-}" ]
+  export DEVTOOLS_DELEGATION_CHECK="${BATS_TEST_TMPDIR}/checker"
+  export CHECK_ARGS="${BATS_TEST_TMPDIR}/checker.args"
+  cat >"$DEVTOOLS_DELEGATION_CHECK" <<'CHECKER'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >>"$CHECK_ARGS"
+exit "${CHECK_STATUS:-1}"
+CHECKER
+  chmod +x "$DEVTOOLS_DELEGATION_CHECK"
+  bash "$SCRIPTS/review.sh" 7
+  [ -s "$(stamp_file)" ]
+
+  CHECK_STATUS=1 run bash "$SCRIPTS/squash-merge.sh" 7
+  [ "$status" -eq 1 ]
+  [[ "$output" == *REFUSED* ]]
+  [ -s "$(stamp_file)" ]
+
+  CHECK_STATUS=0 run bash "$SCRIPTS/squash-merge.sh" 7
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"confirmation: delegation_check granted merge in repo"* ]]
+  [ "$(cat "$CHECK_ARGS")" = $'check repo merge\ncheck repo merge' ]
+  grep -q -- "--match-head-commit $HEAD_OID" "$GH_FIXTURES/merged"
+}

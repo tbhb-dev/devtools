@@ -6,6 +6,13 @@ description: >-
 context: fork
 agent: general-purpose
 background: false
+allowed-tools:
+  - Read
+  - Edit
+  - Write
+  - Bash(bash ${CLAUDE_SKILL_DIR}/scripts/context.sh*)
+  - Bash(bash */pr/scripts/validate-description.sh*)
+  - Bash(echo *)
 ---
 
 # Write a pull request description

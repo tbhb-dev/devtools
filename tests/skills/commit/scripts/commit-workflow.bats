@@ -330,3 +330,40 @@ stamp_file() { printf '%s/agent-skills/commit.stamp' "$(git rev-parse --absolute
   grep -q "^policy_hash $hash$" "$(stamp_file)"
   grep -q 'Allow network values.' prompt
 }
+
+@test "delegated commit checks its script-owned stamp and checker refusal then grant (#137)" {
+  initial_commit
+  stage tracked.txt reviewed
+  mkdir -p .claude/skills
+  cp -R "$ROOT/packages/agents/claude/.apm/skills/commit" \
+    "$ROOT/packages/agents/claude/.apm/skills/review-commit-message" .claude/skills/
+  SCRIPTS="$PWD/.claude/skills/commit/scripts"
+  # Opt-in CLI smoke test; ordinary runs keep the deterministic reviewer.
+  if [ "${RUN_HEADLESS_REVIEWS:-0}" = 1 ]; then
+    unset DEVTOOLS_REVIEW_CMD
+    export DEVTOOLS_HARNESS=claude
+  fi
+  # No skill hooks, operator flag, or session pre-approval participates.
+  [ -z "${CLAUDE_CODE_SESSION_ID:-}${CODEX_THREAD_ID:-}" ]
+  export DEVTOOLS_DELEGATION_CHECK="${BATS_TEST_TMPDIR}/checker"
+  export CHECK_ARGS="${BATS_TEST_TMPDIR}/checker.args"
+  cat >"$DEVTOOLS_DELEGATION_CHECK" <<'CHECKER'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >>"$CHECK_ARGS"
+exit "${CHECK_STATUS:-1}"
+CHECKER
+  chmod +x "$DEVTOOLS_DELEGATION_CHECK"
+  bash "$SCRIPTS/review.sh"
+  [ -s "$(stamp_file)" ]
+
+  CHECK_STATUS=1 run bash "$SCRIPTS/commit.sh"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *REFUSED* ]]
+  [ -s "$(stamp_file)" ]
+
+  CHECK_STATUS=0 run bash "$SCRIPTS/commit.sh"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"confirmation: delegation_check granted commit in repo"* ]]
+  [ "$(cat "$CHECK_ARGS")" = $'check repo commit\ncheck repo commit' ]
+  [ "$(git show HEAD:tracked.txt)" = reviewed ]
+}
