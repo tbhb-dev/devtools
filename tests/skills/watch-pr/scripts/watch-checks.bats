@@ -16,6 +16,8 @@ setup() {
 #!/usr/bin/env bash
 case "$1 $2" in
 "auth status") exit 0 ;;
+"api graphql") echo agent ;;
+"api rate_limit") echo 1792195200 ;;
 "pr checks")
   n=$(($(cat "$CHECKS/count" 2>/dev/null || echo 0) + 1))
   printf '%s\n' "$n" >"$CHECKS/count"
@@ -100,4 +102,23 @@ calls() { cat "$CHECKS/count"; }
   [[ "$output" == *"PASS  build"* ]]
   [[ "$output" == *"FAIL  build  https://github.com/o/r/actions/runs/1/job/6"* ]]
   [[ "$output" == *"FAILED #7 with 1 failing check(s)"* ]]
+}
+
+@test "quota exhaustion stops the watcher with reset and distinct status" {
+  : >"$CHECKS/1"
+  printf 'HTTP 403: API rate limit exceeded\n' >"$CHECKS/1.err"
+  run bash "$SCRIPT" 7
+  [ "$status" -eq 76 ]
+  [[ "$output" == *"reset time: 1792195200"* ]]
+  [ "$(calls)" -eq 1 ]
+}
+
+@test "authentication errors stop the watcher without quota advice" {
+  : >"$CHECKS/1"
+  printf 'HTTP 401: Bad credentials\n' >"$CHECKS/1.err"
+  run bash "$SCRIPT" 7
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"Bad credentials"* ]]
+  [[ "$output" != *"quota exhausted"* ]]
+  [ "$(calls)" -eq 1 ]
 }

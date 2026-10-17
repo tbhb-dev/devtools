@@ -91,3 +91,7 @@ bash .agents/skills/merge-pr/scripts/squash-merge.sh [--confirmed] <number>
 Pass `--confirmed` only when the operator answered `Merge it` in step 6. Merge only through this script.
 
 @include parts/merge.md
+
+## API quota
+
+Identity and explicit readers use GraphQL, which doesn't spend REST core quota. Each checks snapshot uses one GraphQL call. Quota failures return 76 and print the resource's reset time. Other API failures keep GitHub's error. The watcher returns 2 for ordinary check-read failures. A missing reset header needs one REST `/rate_limit` lookup, which doesn't consume core quota. GitHub CLI writes can still spend REST quota resolving or applying labels, milestones, reviewers, and assignees. Scripts never retry writes automatically.

@@ -163,10 +163,9 @@ pr_body "$copy" >"$body_file"
 
 step "resolving pull request properties"
 command -v gh >/dev/null 2>&1 || die "gh is not installed"
-gh auth status >/dev/null 2>&1 || die "gh is not authenticated. Run gh auth login."
+dt_gh_login >/dev/null || exit $?
 
-known_labels=$(gh label list --limit 200 --json name --jq '.[].name') ||
-  die "gh could not list the repository's labels"
+known_labels=$(dt_gh label list --limit 200 --json name --jq '.[].name') || exit $?
 while IFS= read -r want; do
   [ -n "$want" ] || continue
   printf '%s\n' "$known_labels" | grep -qxF -- "$want" ||
@@ -176,8 +175,7 @@ $labels
 EOF
 
 if [ -n "$milestone" ]; then
-  known_milestones=$(gh api 'repos/{owner}/{repo}/milestones' --jq '.[].title') ||
-    die "gh could not list the repository's milestones"
+  known_milestones=$(dt_gh_repo "query(\$owner:String!,\$name:String!){repository(owner:\$owner,name:\$name){milestones(first:100,states:OPEN){nodes{title} pageInfo{hasNextPage}}}}" --jq '.data.repository.milestones | if .pageInfo.hasNextPage then error("more than 100 open milestones") else .nodes[].title end') || exit $?
   printf '%s\n' "$known_milestones" | grep -qxF -- "$milestone" ||
     die "no milestone named \"${milestone}\" in this repository."
 fi
@@ -188,8 +186,11 @@ fi
 refs=$(grep -o '#[0-9][0-9]*' "$body_file" | sort -u | head -20 || true)
 for ref in $refs; do
   number=${ref#\#}
-  gh api "repos/{owner}/{repo}/issues/${number}" --jq '.number' >/dev/null 2>&1 ||
-    die "the description references ${ref}, which is not an issue or pull request here."
+  dt_gh_repo "query(\$owner:String!,\$name:String!,\$number:Int!){repository(owner:\$owner,name:\$name){issueOrPullRequest(number:\$number){__typename}}}" -F "number=$number" --jq '.data.repository.issueOrPullRequest | if . == null then error("reference does not exist") else .__typename end' >/dev/null || {
+    status=$?
+    printf 'could not validate reference #%s\n' "$number" >&2
+    exit "$status"
+  }
 done
 printf 'labels, milestone, and references all resolve\n'
 
@@ -252,7 +253,7 @@ check_identity() {
     printf 'gh identity: gh_login is not configured, so the account check is skipped\n'
     return 0
   fi
-  login=$(gh api user --jq .login 2>/dev/null) || die "gh could not say which account it is signed in as"
+  login=$(dt_gh_login) || exit $?
   [ "$login" = "$want" ] ||
     die "gh is signed in as ${login:-nobody}, not ${want}. Nothing was pushed or published."
   printf 'gh identity: %s\n' "$login"
@@ -311,14 +312,13 @@ remote=$(git ls-remote origin "refs/heads/$branch" | cut -f1)
 
 # --- publish ---------------------------------------------------------
 
-open_number=$(gh pr list --head "$branch" --state open --json number --jq '.[0].number // empty') ||
-  die "gh could not list pull requests for ${branch}; the branch is pushed, so run this again"
+open_number=$(dt_gh pr list --head "$branch" --state open --json number --jq '.[0].number // empty') || exit $?
 
 if [ -n "$open_number" ]; then
   step "updating pull request #${open_number}"
-  current=$(gh pr view "$open_number" \
+  current=$(dt_gh pr view "$open_number" \
     --json baseRefName,isDraft,labels,reviewRequests,assignees,milestone)
-  gh pr edit "$open_number" --base "$base" --title "$title" --body-file "$body_file" >/dev/null
+  dt_gh pr edit "$open_number" --base "$base" --title "$title" --body-file "$body_file" >/dev/null
 
   # reconcile <add-flag> <remove-flag> <desired> <current>: bring one
   # property set to what the draft says, removals included.
@@ -327,14 +327,14 @@ if [ -n "$open_number" ]; then
     while IFS= read -r item; do
       [ -n "$item" ] || continue
       printf '%s\n' "$3" | grep -qxF -- "$item" ||
-        gh pr edit "$open_number" "$2" "$item" >/dev/null
+        dt_gh pr edit "$open_number" "$2" "$item" >/dev/null
     done <<EOF
 $4
 EOF
     while IFS= read -r item; do
       [ -n "$item" ] || continue
       printf '%s\n' "$4" | grep -qxF -- "$item" ||
-        gh pr edit "$open_number" "$1" "$item" >/dev/null
+        dt_gh pr edit "$open_number" "$1" "$item" >/dev/null
     done <<EOF
 $3
 EOF
@@ -348,17 +348,17 @@ EOF
     "$(printf '%s' "$current" | jq -r '.assignees[].login')"
 
   if [ -n "$milestone" ]; then
-    gh pr edit "$open_number" --milestone "$milestone" >/dev/null
+    dt_gh pr edit "$open_number" --milestone "$milestone" >/dev/null
   elif [ -n "$(printf '%s' "$current" | jq -r '.milestone.title // empty')" ]; then
-    gh pr edit "$open_number" --remove-milestone >/dev/null
+    dt_gh pr edit "$open_number" --remove-milestone >/dev/null
   fi
   current_draft=$(printf '%s' "$current" | jq -r '.isDraft')
   if [ "$is_draft" = true ] && [ "$current_draft" = false ]; then
-    gh pr ready "$open_number" --undo >/dev/null
+    dt_gh pr ready "$open_number" --undo >/dev/null
   elif [ "$is_draft" = false ] && [ "$current_draft" = true ]; then
-    gh pr ready "$open_number" >/dev/null
+    dt_gh pr ready "$open_number" >/dev/null
   fi
-  gh pr view "$open_number" --json url --jq '.url'
+  dt_gh pr view "$open_number" --json url --jq '.url'
   rm -f "$copy" "$body_file"
   step "done"
   printf 'description updated at %s. PR_AGENTDESC.md stays for the next edit.\n' "$head"
@@ -392,7 +392,7 @@ if [ -n "$milestone" ]; then
   set -- "$@" --milestone "$milestone"
 fi
 
-gh pr create "$@" || die "gh pr create failed; the branch is pushed, so run this again"
+dt_gh pr create "$@" || exit $?
 rm -f "$copy" "$body_file"
 
 step "done"

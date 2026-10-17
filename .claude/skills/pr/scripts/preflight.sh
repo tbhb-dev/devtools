@@ -204,20 +204,20 @@ section "existing pull request"
 gh_state=ok
 if ! command -v gh >/dev/null 2>&1; then
   gh_state="gh is not installed"
-elif ! gh auth status >/dev/null 2>&1; then
-  gh_state="gh is not authenticated — run gh auth login"
+else
+  dt_gh_login >/dev/null || exit $?
 fi
 open_number=""
 if [ "$gh_state" != ok ]; then
   printf '%s\n' "$gh_state"
 else
-  existing=$(gh pr list --head "$branch" --state all \
+  existing=$(dt_gh pr list --head "$branch" --state all \
     --json number,state,isDraft,url,title \
     --template '{{range .}}#{{.number}} {{.state}}{{if .isDraft}} (draft){{end}} {{.title}}
 {{.url}}
-{{end}}' 2>/dev/null || true)
-  open_number=$(gh pr list --head "$branch" --state open --json number \
-    --jq '.[0].number' 2>/dev/null || true)
+{{end}}') || exit $?
+  open_number=$(dt_gh pr list --head "$branch" --state open --json number \
+    --jq '.[0].number') || exit $?
   if [ -n "$existing" ]; then
     printf '%s\n' "$existing"
     if [ -n "$open_number" ]; then
@@ -231,19 +231,19 @@ fi
 
 section "repository"
 if [ "$gh_state" = ok ]; then
-  gh repo view --json nameWithOwner,defaultBranchRef \
+  dt_gh repo view --json nameWithOwner,defaultBranchRef \
     --template 'repo: {{.nameWithOwner}}
 default branch: {{.defaultBranchRef.name}}
-' 2>/dev/null || printf '(gh repo view failed)\n'
+' || exit $?
   printf '\nlabels:\n'
-  gh label list --limit 100 2>/dev/null || printf '(none)\n'
+  dt_gh label list --limit 100 || exit $?
   printf '\nopen milestones:\n'
-  milestones=$(gh api 'repos/{owner}/{repo}/milestones' --jq '.[].title' 2>/dev/null || true)
+  milestones=$(dt_gh_repo "query(\$owner:String!,\$name:String!){repository(owner:\$owner,name:\$name){milestones(first:100,states:OPEN){nodes{title} pageInfo{hasNextPage}}}}" --jq '.data.repository.milestones | if .pageInfo.hasNextPage then error("more than 100 open milestones") else .nodes[].title end') || exit $?
   if [ -n "$milestones" ]; then printf '%s\n' "$milestones"; else none; fi
   printf '\nopen issues (newest first, for the Related section):\n'
-  issues=$(gh issue list --state open --limit "$ISSUE_CAP" \
+  issues=$(dt_gh issue list --state open --limit "$ISSUE_CAP" \
     --json number,title --template '{{range .}}#{{.number}} {{.title}}
-{{end}}' 2>/dev/null || true)
+{{end}}') || exit $?
   if [ -n "$issues" ]; then printf '%s\n' "$issues"; else none; fi
 else
   printf '%s\n' "$gh_state"
@@ -346,7 +346,7 @@ else
   title_line=$(awk -v last="${fm_end:-0}" 'NR > last && /^# / { print NR; exit }' "$DRAFT" || true)
   if [ -n "$title_line" ]; then
     drafted=$(awk -v start="$title_line" 'NR > start' "$DRAFT" | awk 'NF { seen = 1 } seen')
-    published=$(gh pr view "$open_number" --json body --jq '.body' 2>/dev/null || true)
+    published=$(dt_gh pr view "$open_number" --json body --jq '.body') || exit $?
     if [ "$(printf '%s' "$drafted")" = "$(printf '%s' "$published")" ]; then
       printf 'It matches the published description, so nothing needs republishing.\n'
     else

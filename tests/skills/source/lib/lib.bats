@@ -383,3 +383,76 @@ policy_review() {
   [[ "$output" == *"must be a regular non-executable file"* ]]
   [ ! -e reviewer-started ]
 }
+
+stub_github() {
+  mkdir -p "$BATS_TEST_TMPDIR/bin"
+  export GH_CALLS="$BATS_TEST_TMPDIR/gh.calls"
+  cat >"$BATS_TEST_TMPDIR/bin/gh" <<'STUB'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >>"$GH_CALLS"
+if [ "$2" = rate_limit ]; then
+  printf '1792195200\n'
+  exit 0
+fi
+if [ "${GH_SUCCESS:-0}" = 1 ]; then printf '%s\n' "${GH_RESULT:-}"; exit 0; fi
+printf '%s\n' "${GH_ERROR:-HTTP 401: Bad credentials}" >&2
+exit "${GH_STATUS:-4}"
+STUB
+  chmod +x "$BATS_TEST_TMPDIR/bin/gh"
+  export PATH="$BATS_TEST_TMPDIR/bin:$PATH"
+}
+
+@test "REST quota has its own status and reads the REST reset without retrying" {
+  stub_github
+  export GH_ERROR='HTTP 403: API rate limit exceeded' GH_STATUS=1
+  lib 'dt_gh api user --jq .login'
+  [ "$status" -eq 76 ]
+  [[ "$output" == *"GitHub core quota exhausted; reset time: 1792195200"* ]]
+  [ "$(wc -l <"$GH_CALLS")" -eq 2 ]
+  grep -q '^api rate_limit --jq .resources.core.reset$' "$GH_CALLS"
+}
+
+@test "quota response headers avoid the reset lookup" {
+  stub_github
+  export GH_ERROR=$'HTTP 403: API rate limit exceeded\nX-RateLimit-Reset: 1792195200'
+  lib 'dt_gh api user'
+  [ "$status" -eq 76 ]
+  [[ "$output" == *"reset time: 1792195200"* ]]
+  [ "$(wc -l <"$GH_CALLS")" -eq 1 ]
+}
+
+@test "authentication and permission failures preserve status and error" {
+  stub_github
+  lib dt_gh_login
+  [ "$status" -eq 4 ]
+  [[ "$output" == *"HTTP 401: Bad credentials"* ]]
+  [[ "$output" != *"rate limit:"* ]]
+  [ "$(wc -l <"$GH_CALLS")" -eq 1 ]
+  export GH_ERROR='HTTP 403: Resource not accessible' GH_STATUS=1
+  lib dt_gh_login
+  [ "$status" -eq 1 ]
+  [[ "$output" != *"quota exhausted"* ]]
+}
+
+
+@test "viewer identity refuses empty and null successful responses" {
+  stub_github
+  export GH_SUCCESS=1 GH_RESULT=''
+  lib dt_gh_login
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"no viewer login"* ]]
+  export GH_RESULT=null
+  lib dt_gh_login
+  [ "$status" -eq 1 ]
+}
+
+
+@test "CLI mutation GraphQL throttling reports the GraphQL reset without retry" {
+  stub_github
+  export GH_ERROR='GraphQL: API rate limit exceeded' GH_STATUS=1
+  lib 'dt_gh pr edit 7 --title changed'
+  [ "$status" -eq 76 ]
+  [[ "$output" == *"GitHub graphql quota exhausted"* ]]
+  grep -q '^api rate_limit --jq .resources.graphql.reset$' "$GH_CALLS"
+  [ "$(wc -l <"$GH_CALLS")" -eq 2 ]
+}

@@ -610,3 +610,52 @@ dt_confirm() {
   printf 'HELD: nobody has confirmed this %s. No operator flag, no pre-approval for this\nsession, and no delegation that grants it. Ask the operator, then run this again\nwith --confirmed.\n' "$action" >&2
   return "$DT_HELD"
 }
+
+# dt_gh preserves gh's failure status; quota exhaustion has status 76.
+# Only quota failures need the extra rate_limit reset lookup. Never retry a
+# mutation: its outcome may already have taken effect on GitHub.
+dt_gh() {
+  local err status reset resource
+  err=$(mktemp) || return 1
+  if gh "$@" 2>"$err"; then
+    cat "$err" >&2
+    rm -f "$err"
+    return 0
+  else
+    status=$?
+  fi
+  if grep -qiE 'rate.?limit|API rate limit exceeded' "$err"; then
+    resource=core
+    case "$*" in
+    *graphql* | 'pr view '* | 'pr list '* | 'pr checks '* | 'repo view '* | 'label list '* | 'issue list '*) resource=graphql ;;
+    esac
+    if grep -qi 'GraphQL' "$err"; then resource=graphql; fi
+    reset=$(awk 'tolower($1) == tolower("X-RateLimit-Reset:") { print $2; exit }' "$err")
+    if [ -z "$reset" ]; then
+      reset=$(gh api rate_limit --jq ".resources.${resource}.reset" 2>/dev/null) || reset=""
+    fi
+    printf 'rate limit: GitHub %s quota exhausted; reset time: %s. Rerun after the reset; no automatic retry was made.\n' "$resource" "${reset:-unavailable (see GitHub error below)}" >&2
+    status=76
+  fi
+  cat "$err" >&2
+  rm -f "$err"
+  return "$status"
+}
+
+# GraphQL has its own quota and does not spend REST core quota.
+dt_gh_login() {
+  local login
+  login=$(dt_gh api graphql -f 'query={viewer{login}}' --jq '.data.viewer.login // empty') || return $?
+  [ -n "$login" ] && [ "$login" != null ] || {
+    printf 'GitHub returned no viewer login\n' >&2
+    return 1
+  }
+  printf '%s\n' "$login"
+}
+
+# gh expands owner/repo placeholders from the current repository.
+dt_gh_repo() {
+  local query=$1
+  shift
+  dt_gh api graphql -F owner='{owner}' -F name='{repo}' -f "query=$query" "$@"
+}
