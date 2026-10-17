@@ -148,6 +148,25 @@ run_check() {
 	[[ $output == *"leak.md:1: pattern: tailnet host name"* ]]
 }
 
+@test "the vendored leak suite is exempt from patterns without an allow list" {
+	rm .leak-allow
+	mkdir -p .devtools/scripts
+	cp "$BATS_TEST_FILENAME" .devtools/scripts/check-leaks.bats
+	O11Y_PRIVATE_STRINGS='' run_check .devtools/scripts/check-leaks.bats
+	[ "$status" -eq 0 ]
+	[[ $output != *"pattern:"* ]]
+	literal="vendored-""private-value"
+	echo "$literal" >>.devtools/scripts/check-leaks.bats
+	O11Y_PRIVATE_STRINGS=$literal run_check .devtools/scripts/check-leaks.bats
+	[ "$status" -eq 1 ]
+	[[ $output == *"private literal O11Y_PRIVATE_STRINGS entry 1"* ]]
+	no_value "$literal"
+	echo '10.1.2.3' >.devtools/scripts/other.bats
+	run_check .devtools/scripts/other.bats
+	[ "$status" -eq 1 ]
+	[[ $output == *"pattern: private IPv4 address"* ]]
+}
+
 @test "vendored trees are exempt from patterns but not from literals" {
 	mkdir -p .devtools .claude/skills .vale .config/mise/conf.d tools
 	local dir

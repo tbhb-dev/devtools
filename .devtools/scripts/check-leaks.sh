@@ -183,7 +183,7 @@ scan() {
       }
       if (r < 0) unreadable = 1
       close(pf)
-      exempt = ENVIRON["PATTERN_EXEMPT"]
+      exempt = "^\\.devtools/scripts/check-leaks\\.bats$|" ENVIRON["PATTERN_EXEMPT"]
       for (i = 1; i < 256; i++) ord[sprintf("%c", i)] = i
       # Split so a search for the literal finds only real uses of it.
       op_ref = "op:" "//"
@@ -411,7 +411,7 @@ emit_objects() {
       close(file)
     }
     BEGIN {
-      exempt = ENVIRON["PATTERN_EXEMPT"]
+      exempt = "^\\.devtools/scripts/check-leaks\\.bats$|" ENVIRON["PATTERN_EXEMPT"]
       load(ENVIRON["TYPES"], "types")
       load(ENVIRON["PAIRS"], "paths")
       load(ENVIRON["NAMES"], "paths")
