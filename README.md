@@ -7,9 +7,10 @@ Shared agent tooling for tbhb repositories. The repo provides Go command-line to
 Repositories across tbhb install the shared primitives with the [APM CLI](https://microsoft.github.io/apm/quickstart/):
 
 ```bash
-apm install tbhb-dev/devtools/packages/agents/claude#v0.11.0
-apm install tbhb-dev/devtools/packages/agents/common#v0.11.0
+apm install tbhb-dev/devtools#v0.11.0
 ```
+
+A consumer can also select a sub-package, such as `apm install tbhb-dev/devtools/packages/agents/claude#v0.11.0`. The pin tasks support both forms.
 
 The package deploys these primitives from sub-packages under [`packages/agents/`](packages/agents/): `claude` contains the skills below plus the `guard-markdown` hook declaration, and `common` contains the harness-neutral `worktree-wip` instructions.
 
@@ -20,7 +21,7 @@ The package deploys these primitives from sub-packages under [`packages/agents/`
 | `worktree-wip` | instructions | Stash and work-in-progress rules for repos that run more than one agent worktree session. |
 | `guard-markdown` | hook | `PreToolUse` gate on `Write` and `Edit` that refuses Markdown whose paragraphs span more than one line. |
 
-Pinning the bare repo (`apm install tbhb-dev/devtools#v0.11.0`) resolves the root workspace manifest, whose dependencies on the four sub-packages under `packages/agents/` are local paths that a remote consumer's `apm` resolves transitively, filtering each sub-package by its own targets. For a claude-only consumer, the bare pin gives exactly what the `claude` and `common` pins deliver. The codex and agy scaffolds skip on target intersection. This repo installs its own package the way a consumer does: `apm install` deploys the primitives into the local harness layout, and CI rejects drift between the `packages/agents/*/.apm/` sources and the deployed copies.
+Pinning the bare repo (`apm install tbhb-dev/devtools#v0.11.0`) resolves the root workspace manifest, whose dependencies on the four sub-packages under `packages/agents/` are local paths that a remote consumer's `apm` resolves transitively, filtering each sub-package by its own targets. For a claude-only consumer, the bare pin gives exactly what the `claude` and `common` pins deliver. APM filters the other packages by their declared targets. This repo installs its own package the way a consumer does: `apm install` deploys the primitives into the local harness layout, and CI rejects drift between the `packages/agents/*/.apm/` sources and the deployed copies.
 
 ## Checks
 
@@ -42,7 +43,9 @@ repos:
       - id: guard-markdown
 ```
 
-Note that the two legs install separately. prek builds its own copy from `language: golang`. The Claude hook instead resolves `guard-markdown` on PATH, which comes from `go install`. A consumer wanting both adds the hook and runs the install.
+Before running consumer pin checks, freeze the preceding hook tag to its full commit SHA and keep a `# frozen: vX.Y.Z` comment, as shown in the pin forms below.
+
+Note that the two legs install separately. prek builds its own copy from `language: golang`. The Claude hook instead resolves `guard-markdown` on PATH, which comes from the managed mise tool declaration in the adoption steps below. A consumer wanting both adds the prek hook and the mise tool.
 
 Pass `--fix` to collapse paragraphs someone already wrapped.
 
@@ -71,23 +74,94 @@ mise run build
 
 [mise](https://mise.jdx.dev) pins the toolchain and runs the workflow: `mise run bootstrap` sets up a fresh clone, `mise run lint` runs the full lint suite, `mise run test` runs the tests, and `mise run build` compiles the binaries into `bin/`. On a machine with no mise, the committed shim at `tools/mise-bootstrap` runs in place of `mise` and installs the pinned release on first use. The pins live in [mise.toml](mise.toml) and the drop-ins under `.config/mise/conf.d/`, locked by digest in the committed `mise.lock` files. See [AGENTS.md](AGENTS.md) for the agent-facing contributor guide.
 
-## Language tasks
+## Consumer adoption
 
-Copy [the vendir manifest](.devtools/vendir.yml) to `vendir.yml`, set both refs to a release containing these task sets, and run `vendir sync`. The manifest syncs the whole `.devtools` directory, including task files, scripts, and config templates. It defines that directory's contents. Keep local adaptations outside it. Existing consumers syncing only `.devtools/tasks` must expand their manifest to `.devtools/**` with `newRootPath: .devtools`. The shared `vendir.toml` drift gate checks that whole directory, and `pins.toml` updates both manifest refs without adding a pin for each task file.
+### Bootstrap the runtime
 
-Select the languages in the consumer's `mise.toml`:
+These instructions describe the current main branch for the next release. The v0.11.0 examples show pin syntax. That release lacks the new adoption tasks. Choose one released tag containing these changes for every devtools reference. Copy the [vendir manifest](.devtools/vendir.yml) into the consumer as `vendir.yml` and replace both refs with that tag. It delivers the whole `.devtools` tree and the mise drop-ins. Keep both paths in Git so updates can check their contents against the index. Existing consumers syncing only `.devtools/tasks` must expand the manifest to `.devtools/**` with `newRootPath: .devtools`.
+
+The consumer needs mise and vendir before its first sync. Declare vendir, uv and APM in its root mise tools, then run `vendir sync` and `mise install`. Add the guard tool in the root tools table, using the same tag as the manifest:
+
+```toml
+[tools]
+"go:github.com/tbhb-dev/devtools/cmd/guard-markdown" = "v0.11.0"
+```
+
+The baseline payload pins Go, which builds the guard. Keep this tool declaration in the root `mise.toml`: the pin tasks read and update that location. Replacing the old manual `go install` step puts the executable on the mise task PATH and makes its version part of the update contract. Run agent sessions under `mise exec --` so their hooks inherit that PATH too.
+
+### Configure draft tasks
+
+Select the runtime tasks in the consumer's root config:
 
 ```toml
 [task_config]
 includes = [
-  ".devtools/tasks/go.toml",
-  ".devtools/tasks/python.toml",
-  ".devtools/tasks/vendir.toml",
+  ".devtools/tasks/apm.toml",
   ".devtools/tasks/pins.toml",
+  ".devtools/tasks/toolchain.toml",
+  ".devtools/tasks/vendir.toml",
 ]
+
+[tasks.lint-draft]
+extends = "devtools:lint-draft"
+
+[tasks.fix-prose-replacements]
+extends = "devtools:fix-prose-replacements"
 ```
 
-Run `mise run devtools:lint-go` or `mise run devtools:test-go`. Omit either language file when unused. Local wrappers such as `test-go` can run `mise run devtools:test-go`. In devtools, these wrappers keep task names without a namespace. Add `devtools:check-vendored` and `devtools:check-pins` to the consumer's combined lint task. Pin vendir in the consumer before the first sync. The shared conf.d pins supply the Go executables. Install Python tools in the consumer's uv dependency groups and lockfile. Go tasks using `go tool` also need the corresponding tool dependencies in the consumer's `go.mod`.
+Keep any other task includes the project needs. Both prose tasks have default bodies in the skill-contract drop-in, so consumers can remove their copied helper bodies. The payload supplies `lint-draft.sh`, `fix_prose_replacements.py` and `apm_audit.py`. Consumers don't need their own copies.
+
+Each consumer defines its prose policy.
+
+Supply `.vale.ini`, `.cspell.jsonc` and the Markdown lint config. Scope Vale to the draft paths and run `vale sync` to install its styles and the published `ai-tells-agent.tmpl` template. Draft lint checks that rules cover the target path before running Vale, cspell, and rumdl. For corrections carrying `replace_with`, the replacement task checks the original span before applying them. It leaves other findings for an author. It needs uv and Python 3.14 or later. uv can provision the interpreter.
+
+### Deploy agent packages
+
+Declare agent dependencies in `apm.yml`. The pin tasks accept the bare `tbhb-dev/devtools#vX.Y.Z` reference and the published `packages/agents/common`, `packages/agents/claude`, `packages/agents/codex` and `packages/agents/agy` forms, including quoted YAML strings. An unrecognized package or a reference without a version fails the update before files change. All declared references and the guard tool must specify the same release.
+
+Run `mise run devtools:apm-sync` for the first deployment and after changing agent dependencies. It clears `.hooks` in Claude and Codex settings, `.apm` in the shared agent hook file and the generated hook manifests, then runs `apm install` and audits the result. Settings outside those keys remain unchanged. Those hook keys belong to APM. Keep custom hooks in package declarations so reconciliation can restore them. A failed install or audit fails the task.
+
+Set `DEVTOOLS_LOCK_PLATFORMS` in the root mise environment to the project's supported platform list. Run `mise lock --platform <list>` and commit both mise lockfiles along with the payload and APM deployment. Updates warn and leave lockfiles alone without that variable.
+
+### Pin forms
+
+Keep tag references and commit references aligned. The pin tasks read these forms:
+
+| Site | Form |
+| --- | --- |
+| `apm.yml` | `tbhb-dev/devtools#vX.Y.Z` or a supported agent sub-package with the same suffix |
+| Root `mise.toml` | Guard tool version `vX.Y.Z` in `[tools]` |
+| `vendir.yml` | Both devtools Git refs use `vX.Y.Z` |
+| `.pre-commit-config.yaml` | Full commit SHA with `# frozen: vX.Y.Z` |
+| `.github/workflows/*.yml` or `*.yaml` | devtools `uses` calls use a full commit SHA with `# vX.Y.Z` |
+| `.github/renovate.json5` | devtools preset ref uses `#vX.Y.Z`, or a commit SHA with a `// vX.Y.Z` comment |
+
+### Verify adoption
+
+To verify adoption, create a draft at a Vale-scoped path, run `mise run lint-draft <file>`, run `mise run fix-prose-replacements <file>` and review the edits. Then run the draft gate again. Check deployment with `mise run devtools:lint-apm`, pins with `mise run devtools:check-pins` and the installed tools with `mise run devtools:check-toolchain`. Stage the payload before running `mise run devtools:check-vendored`, which syncs again and compares against the index, including new files hidden by personal ignore rules.
+
+### Update to the next release
+
+For the next release, run `mise run devtools:update-pins <version>`.
+
+It resolves the tag and moves APM, guard, vendir, hook, workflow, and preset pins. It then syncs the payload and refreshes configured lock platforms. After installing the tools and reconciling APM, it checks the new pins. The consumer must select `apm.toml` alongside `pins.toml`. It no longer needs to supply an `apm-sync` task. Review and commit the resulting files. Unpinned Renovate presets remain unpinned and cause a disagreement with versioned sites.
+
+Wire `devtools:check-pins`, `devtools:check-vendored`, `devtools:check-toolchain` and `devtools:lint-apm` into the consumer's combined lint task. Keep local policy outside the vendored directories.
+
+## Language tasks
+
+Select other task files in the same `task_config.includes` array as the adoption tasks, omitting language files you don't use.
+
+| Task file under `.devtools/tasks/` | Consumer use |
+| --- | --- |
+| `go.toml` | Go lint, test, build, coverage, vulnerability, and vendor tasks |
+| `python.toml` | Python lint, test, coverage, mutation, and fuzz tasks |
+| `lint.toml` | Shared shell, Markdown, spelling, config, and workflow gates |
+| `security.toml` | Gitleaks scanning |
+| `leaks.toml` | Private identifier scans and prek installation |
+| `preapproval.toml` | Session grants, checks, and revocation. See [consumer scopes](docs/consumer-preapproval.md) |
+
+Run `mise run devtools:lint-go` or `mise run devtools:test-go`. Omit either language file when unused. Local wrappers such as `test-go` can run `mise run devtools:test-go`. In devtools, these wrappers keep task names without a namespace. The shared conf.d pins supply the Go executables. Install Python tools in the consumer's uv dependency groups and lockfile. Go tasks using `go tool` also need the corresponding tool dependencies in the consumer's `go.mod`.
 
 Set overrides in `[env]`: `DEVTOOLS_GO_PACKAGES` defaults to `./...`, `DEVTOOLS_GO_BIN_PACKAGES` to `./cmd/...`, and `DEVTOOLS_GO_MODULES_MODE` to `readonly` (use `vendor` for a vendored module). Build metadata derives `DEVTOOLS_GO_MODULE` from `go list -m`. `DEVTOOLS_GO_BUILDMETA` defaults to that module's `internal/buildmeta` package, with string variables `Version`, `Commit`, and `Date`. Go ignores those linker assignments when the package is absent. Python source roots default to `src`: set `DEVTOOLS_PYTHON_DIRS` for `pylint`, complexipy, and vulture, `DEVTOOLS_PYTHON_SOURCE_DIRS` for bandit and coverage, and `DEVTOOLS_PYTHON_PROPERTY_DIRS` for fuzzing (default `tests/property`). Directory lists use shell word splitting and glob expansion, so paths must contain no whitespace. Ruff, pyrefly, `pytest`, and cosmic-ray read the consumer's own config for their scope and policy. Both complexipy and vulture also read local policy.
 
@@ -102,6 +176,18 @@ Copy the needed templates from [`.devtools/config`](.devtools/config) to the pro
 | `python/ruff.toml` → `ruff.toml` | Adjust `exclude` and the test/script patterns under `lint.per-file-ignores`. Choose your rules and documentation string convention. Existing `[tool.ruff]` settings in `pyproject.toml` can stay there instead. |
 | `python/pyrefly.toml` → `pyrefly.toml` | Set `project-includes` and `project-excludes`. Keep the diagnostic catalog aligned with your pinned pyrefly version. Existing `[tool.pyrefly]` settings can stay in `pyproject.toml`. |
 | `.devtools/scripts/go-ldflags.sh` | No edits: set the module or metadata package through env if the defaults differ from your layout. `tools/go-ldflags.sh` in this repo forwards to it. |
+
+Use the [shared lint exclusions](docs/shared-lint-exclusions.md) when wiring shell and Markdown wrap gates. Default exclusions cover third-party and deployed agent trees. Declare generated paths with `DEVTOOLS_GENERATED_PATHS`. `devtools:lint-workflows` skips repositories without workflow files. `devtools:vendor-check` regenerates Go dependencies and catches tracked and untracked drift, including files hidden by personal ignore rules. It can change the worktree. Review its output.
+
+### Starter policy
+
+Copy the [starter vocabularies](.devtools/config/starter-vocabulary.md) and configure cspell and Vale to read the local copies. Extend them with project terms. The publisher's root dictionaries belong to devtools and aren't consumer defaults.
+
+Copy `.devtools/config/gitleaks.toml` to `.gitleaks.toml` and keep its built-in rules enabled. Follow the [fixture policy](docs/gitleaks.md) for narrowly justified exceptions. These exceptions are separate from the private identifier gate below.
+
+### Consumer workflows
+
+Use the [reusable workflow guide](docs/consumer-workflows.md) for caller jobs, permissions, required tasks, and scanner behavior. Pin workflow calls to a full release commit SHA with a `# vX.Y.Z` comment so the pin tasks can update them. Keep caller job IDs `lint` and `test` stable. The caller supplies test jobs and the reachable-vulnerability gate. Raw govulncheck findings remain available even when code scanning receives only reachable findings.
 
 ## Releases
 

@@ -44,4 +44,4 @@ Update the vendored `.devtools/scripts/filter-govulncheck-sarif.sh` with the wor
 
 Under its own category, the gomodscan report remains unfiltered.
 
-Run `mise run devtools:lint-workflows` and `mise exec -- bats tests/workflows/security.bats tests/workflows/sarif.bats` in devtools to verify the workflow contracts and SARIF fixtures. P15 can link this guide from the shared adoption documentation without changing the workflow interfaces.
+Run `mise run devtools:lint-workflows` and `mise exec -- bats tests/workflows/security.bats tests/workflows/sarif.bats` in devtools to verify the workflow contracts and SARIF fixtures.

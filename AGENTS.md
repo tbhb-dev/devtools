@@ -14,7 +14,9 @@ Draft every commit message in the repo-root file `COMMIT_AGENTMSG` before you co
 4. Run `mise run lint-commit-msg` and resolve whatever it reports.
 5. Confirm the message with the operator, then commit the validated draft through the skill's `commit.sh`.
 
-`mise run lint-commit-msg` mirrors the commit-msg hook:
+`mise run lint-commit-msg` previews the commit-msg hook against a temporary copy of the draft. When no sign-off exists it appends the identity from `git var GIT_COMMITTER_IDENT`, as `git commit -s` would. It preserves an existing sign-off and leaves the draft unchanged. The real hook still requires the trailer. See [the sign-off preview](docs/commit-signoff-preview.md) for identity and existing-trailer behavior. Agent drafts still include the complete trailers before review.
+
+The preview runs:
 
 - vale under the commit scope, which catches AI commit tells via `ai-tells-commits`
 - cspell with the commit dictionary
@@ -62,6 +64,8 @@ The rest of the lifecycle splits into three skills, each usable on its own:
 - `fix-pr` diagnoses a red pull request. One call reads the failing logs and names the local task reproducing each failure.
 - `merge-pr` squash merges under a message this toolchain writes. Its briefing script prints the published description, every commit the squash collapses, and the diffstat, then leaves a `SQUASH_AGENTMSG` skeleton whose body the agent writes. That message then passes `mise run lint-squash-msg` and a headless reviewer that `review.sh` starts with `review-squash-message` as its criteria. The stamp it writes binds the draft, the pull request's head, its base, and the commit that base points at. `squash-merge.sh` checks them all again and resolves the confirmation through the `merge` action. It then merges pinned to the reviewed head before it clears both drafts. It also works on a pull request nobody here authored, a dependency bump being the usual case.
 
+Required or changed reviews stop merge preflight with exit 75 and `WAITING_REVIEW`, before message review. The review script checks again before invoking its reviewer, and the merge script checks live state before merging the reviewed head. Merge review builds its complete diff locally from pinned base and head objects, including fork heads. GitHub's capped pull request diff isn't its source.
+
 Left alone, GitHub writes the squash message by concatenating every commit on the branch. That text has never passed a commit-msg hook, and nothing lints it afterwards, so `merge-pr` writes the message instead.
 
 Each of these skills declares guard hooks in its frontmatter scoped to the workflow and inert outside one. The `gh pr` guards work by allowlist: they permit reading through `list`, `view`, `diff`, `status`, and `checks`, and everything that changes a pull request goes through the wrapping script. Naming the read-only verbs rather than the mutating ones means a verb `gh` grows later arrives already covered. `watch-pr` and `fix-pr` refuse the narrower set of forms their own scripts wrap.
@@ -82,7 +86,7 @@ Each source directory has a `SKILL.claude.md` and a `SKILL.codex.md`, one manife
 
 ## Pre-approving the confirmations
 
-`commit`, `pr`, and `merge-pr` each stop at an `AskUserQuestion` before the step that writes something. Every gate and every independent review has already run by then, so across a series of commits that prompt is the only thing left costing a turn. Answering it once in advance is what these tasks are for:
+`commit`, `pr`, and `merge-pr` resolve confirmation before the step that writes something. Every gate and every independent review has already run by then, so across a series of commits that prompt is the only thing left costing a turn. Answering it once in advance is what these tasks are for:
 
 ```bash
 mise run preapprove              # commit and pr
@@ -90,7 +94,7 @@ mise run preapprove merge        # adds merge to whatever is already held
 mise run revoke-preapproval      # withdraws everything
 ```
 
-Grants are additive. The scopes are `commit`, `pr`, `merge`, and `all`. A bare grant doesn't cover merging, which is the one action here that no later step can undo. Each grant belongs to one Claude Code session, keyed on `CLAUDE_CODE_SESSION_ID` and recorded at `<git dir>/preapprovals/<session id>` beside the other session marks the skills write. A new session doesn't start with any grant.
+Grants are additive. A bare grant covers `commit` and `pr`. The `all` grant covers only `commit`, `pr`, and `merge`. Consumers can declare extra actions with `DEVTOOLS_PREAPPROVAL_SCOPES`. They can check one with `devtools:check-preapproval` and revoke one by name. [Consumer scopes](docs/consumer-preapproval.md) defines validation, exit status, and revocation. Each grant belongs to one session, keyed on `CLAUDE_CODE_SESSION_ID` and then `CODEX_THREAD_ID`. It lives at `<git dir>/preapprovals/<session id>`. A new session starts without a grant. Empty extra scopes work on Bash 3.2 as well as newer Bash.
 
 Granting takes a Touch ID prompt, and revoking takes nothing. An operator's shell and an agent's are the same shell here, reaching the same mise under the same environment, so a fingerprint is the one input left that an agent can't produce. `--no-biometrics` covers a machine with no sensor, and the record says which of the two happened, so a grant that skipped the sensor never passes for one that didn't. None of that amounts to a boundary: anything able to run a shell can write the record by hand, or edit the preflight that reads it. The prompt buys one thing. The sanctioned path needs a person, so an agent granting itself has to bypass that path in a transcript and a diff somebody can read.
 
@@ -104,7 +108,7 @@ In the commit skill, `commit.sh` resolves the confirmation itself rather than le
 2. this session's pre-approval record, keyed on `CLAUDE_CODE_SESSION_ID` and then `CODEX_THREAD_ID`
 3. a delegation check configured on the machine as `DEVTOOLS_DELEGATION_CHECK` or `delegation_check` in `~/.config/devtools/<repository>.conf`, called as `<checker> check <repository> commit`, where exit 0 grants and 1 refuses while any other status leaves the commit waiting
 
-Without any of them the script exits 75 and commits nothing, and the agent asks. An unattended run, such as a subagent, lacks both a session ID and a fingerprint, and the delegation check is how it gets an answer at all. Like the reviewer, the checker comes from machine configuration only, because a commit must not be able to widen its own authority. Until their own migration, the other skills still confirm through their prose.
+Without any of them the script exits 75 and commits nothing, and the agent asks. An unattended run, such as a subagent, lacks both a session ID and a fingerprint, and the delegation check is how it gets an answer at all. Like the reviewer, the checker comes from machine configuration only, because a commit must not be able to widen its own authority. The PR and merge scripts use the same confirmation order for their own actions.
 
 ## Moving a branch onto its base
 
@@ -153,7 +157,13 @@ APM can deploy a hook's executable. A package-root `hooks/` directory lands unde
 
 mise pins the toolchain and holds most task definitions. `mise.toml` has the repo-specific pins and tasks, and it selects the shared payload this repository both publishes and uses itself: the conf.d drop-ins plus the task files under `.devtools/tasks/`, which vendir syncs into every consumer at the same paths. The tree commits both lockfiles, and `devtools:check-toolchain` checks the installed set against them.
 
-That selection runs in both directions. This repository publishes `vendir.toml` and `pins.toml` without including either, because both act on the pins a consumer declares and the publisher has none: it doesn't declare a `vendir.yml` to sync or a `tbhb-dev/devtools` reference to move. `pins.toml` holds the pair a consumer uses to change releases. `devtools:update-pins <version>`, aliased `devtools:update`, rewrites all nine sites and then runs the sync, the lockfile refresh, the install, and the APM redeploy. `devtools:check-pins` reads the nine sites and fails when they disagree. A consumer lists the file in its own `[task_config] includes` and adds `check-pins` to its own `lint` task.
+That selection runs in both directions. This repository publishes `vendir.toml`, `pins.toml` and `apm.toml` for consumers. Its publisher task bodies remain here. The [consumer adoption steps](README.md#consumer-adoption) document the bootstrap sequence, supported pin forms, task includes, and update procedure. Don't copy the publisher's helper scripts or dictionaries into consumers. The payload supplies draft lint, prose replacements and APM audit helpers, while consumers define prose policy and combined task bodies.
+
+The consumer's `devtools:check-vendored` syncs the payload again and compares it against the index. The Go `devtools:vendor-check` regenerates dependencies and compares the worktree. Both detect untracked output without applying personal ignore files. Neither gate is read-only. Review and stage intentional output before retrying. Shared shell and Markdown exclusions and generated-path extensions live in the [lint guide](docs/shared-lint-exclusions.md). The publisher still runs its Markdown guard from source. Workflow lint skips an empty workflow directory.
+
+[Reusable consumer workflows](docs/consumer-workflows.md) require caller task contracts and stable `lint` and `test` job IDs. They don't replace publisher-specific CI. [Starter policy](README.md#starter-policy) links to consumer starter vocabularies and gitleaks policy. Copy and adapt them outside the vendored tree. Security exceptions require review.
+
+The baseline drop-in pins Go 1.27.2. Scratch Git repositories in the shell suites use `tests/test_helper.bash` to clear inherited Git configuration and identity variables and turn off global and system configuration. Keep new fixtures isolated the same way.
 
 The repository dropped its Justfile. The last recipes to leave were the Go test and coverage family, held back because the CI matrix runs them on Windows and nobody had checked mise there. A probe on windows-2025 found it running a bash-shebang body under Git Bash and resolving its own go pin, which retired both the recipes and the `actions/setup-go` step feeding them. The delegation recipes went with them once the published skills learned to spell their gates `mise run <task>`. The committed `tools/mise-bootstrap` shim still runs in place of mise wherever PATH has none, and the prek hooks run through it.
 

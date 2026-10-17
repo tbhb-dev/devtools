@@ -20,9 +20,3 @@ CHANGELOG.md
 Because generated paths have no universal names, the shared tasks exclude only the paths the consumer declares. Keep real source outside those entries so violations still fail the gates.
 
 The Go architecture starter at `.devtools/config/go/.go-arch-lint.yml` excludes the same third-party and deployed directories, along with its existing `testdata` and `tools` entries. Copy that starter into the consumer's configuration and add generated directories to its `exclude` list. The environment list affects the shared shell and Markdown tasks. Go-arch-lint reads its own configuration.
-
-## Integration handoff
-
-The release integration package owns root task wiring. Replace local shell and Markdown wrap recipes with calls to the shared tasks, preserving any repository-specific tool invocation the repository still needs. This repository currently runs guard-markdown from source, while the shared task uses the installed command. You don't need to change the README or agent instructions in this package.
-
-Run `mise exec -- bats tests/tasks/exclusions.bats` for consumer fixtures covering empty repositories, tracked and untracked violations, default exclusions, and generated directory and file extensions.
