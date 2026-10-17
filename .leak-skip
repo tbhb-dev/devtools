@@ -1,0 +1,3 @@
+# Vendored dependencies are checked at commit and push time.
+# Existing private values here go unreported by working-tree lint.
+^vendor/

@@ -1303,3 +1303,65 @@ fake() {
 	[ "$status" -eq 2 ]
 	[[ $output != *"sensitive-allow"* ]]
 }
+
+@test "working-tree skips vendor contents before any content read" {
+	mkdir vendor bin
+	local i
+	for i in {1..100}; do echo mango-secret >"vendor/$i"; done
+	printf '# vendor dependencies\n\n   \n^vendor/\n' >.leak-skip
+	git add -- vendor .leak-skip
+	# tr is the first content reader; record invocations without changing input.
+	local real_tr
+	real_tr=$(command -v tr)
+	printf '#!/usr/bin/env bash\necho read >>"$READ_LOG"\nexec "%s" "$@"\n' "$real_tr" >bin/tr
+	chmod +x bin/tr
+	export READ_LOG="$BATS_TEST_TMPDIR/reads"
+	export PATH="$work/bin:$PATH"
+	printf 'bin/\n' >>.gitignore
+	run_check
+	[ "$status" -eq 0 ]
+	# Only .gitignore, .leak-allow and .leak-skip are read (twice each).
+	[ "$(wc -l <"$READ_LOG")" -eq 6 ]
+	rm .leak-skip
+	run_check
+	[ "$status" -eq 1 ]
+}
+
+@test "skip configuration never exempts staged range push or explicit files" {
+	mkdir vendor
+	echo mango-secret >vendor/dependency
+	printf '^vendor/\n[\n' >.leak-skip
+	git add -- vendor .leak-skip
+	run_check --staged
+	[ "$status" -eq 1 ]
+	run_check vendor/dependency
+	[ "$status" -eq 1 ]
+	git commit -qm 'test: dependency'
+	run_check --range "$base..HEAD"
+	[ "$status" -eq 1 ]
+	local head
+	head=$(git rev-parse HEAD)
+	printf 'refs/heads/main %s refs/heads/main %s\n' "$head" "$base" >"$BATS_TEST_TMPDIR/push"
+	run_check --pre-push <"$BATS_TEST_TMPDIR/push"
+	[ "$status" -eq 1 ]
+}
+
+@test "invalid and unanchored skip expressions fail without repeating them" {
+	local expression
+	for expression in '^[' 'vendor/'; do
+		printf '%s\n' "$expression" >.leak-skip
+		run_check
+		[ "$status" -eq 2 ]
+		[[ $output != *"$expression"* ]]
+	done
+}
+
+@test "working-tree scan finds its helper when invoked by basename" {
+	mkdir -p scripts
+	cp "$checker" "$BATS_TEST_DIRNAME/leak-skip.sh" scripts/
+	printf 'scripts/\n' >>.gitignore
+	cd scripts
+	run bash check-leaks.sh
+	[ "$status" -eq 0 ]
+	[ -z "$output" ]
+}
