@@ -36,3 +36,7 @@ The exit code reports the outcome: `0` all passed, `1` something failed, `2` inc
 Say which checks failed and hand back. Give the pull request, the failing jobs, and the run links the script printed. Invoke `fix-pr` with the same number only when the caller asked for a fix.
 
 A timeout isn't a failure, and neither is a pull request with no checks. Say the checks were still running, or that none registered, give the bound, and let the caller decide whether to wait again. An empty check set never counts as green.
+
+## API quota
+
+Identity and explicit readers use GraphQL, which doesn't spend REST core quota. Each checks snapshot uses one GraphQL call. Quota failures return 76 and print the resource's reset time. Other API failures keep GitHub's error. The watcher returns 2 for ordinary check-read failures. A missing reset header needs one REST `/rate_limit` lookup, which doesn't consume core quota. GitHub CLI writes can still spend REST quota resolving or applying labels, milestones, reviewers, and assignees. Scripts never retry writes automatically.

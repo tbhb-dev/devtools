@@ -43,6 +43,9 @@ export PYTHONUTF8=1
 unset CDPATH GH_REPO GH_HOST GREP_OPTIONS
 IFS=$' \t\n'
 
+# shellcheck disable=SC1091 # generated beside this script
+. "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+
 readonly INTERVAL=${PR_CHECKS_INTERVAL:-30}
 readonly TIMEOUT=${PR_CHECKS_TIMEOUT:-1800}
 readonly APPEAR_TIMEOUT=${PR_CHECKS_APPEAR_TIMEOUT:-120}
@@ -57,12 +60,12 @@ fail() {
 
 command -v gh >/dev/null 2>&1 || fail "gh is not installed"
 command -v jq >/dev/null 2>&1 || fail "jq is not installed"
-gh auth status >/dev/null 2>&1 || fail "gh is not authenticated"
+dt_gh_login >/dev/null || exit $?
 
 number=${1:-}
 if [ -z "$number" ]; then
   branch=$(git rev-parse --abbrev-ref HEAD)
-  number=$(gh pr list --head "$branch" --state open --json number --jq '.[0].number' 2>/dev/null || true)
+  number=$(dt_gh pr list --head "$branch" --state open --json number --jq '.[0].number') || exit $?
   [ -n "$number" ] || fail "no open pull request for ${branch}"
 fi
 
@@ -77,7 +80,14 @@ printf 'WATCHING #%s\n' "$number"
 gh_err=$(mktemp)
 trap 'rm -f "$gh_err"' EXIT
 snapshot() {
-  if ! raw_checks=$(gh pr checks "$number" --json name,bucket,link,workflow 2>"$gh_err"); then
+  if raw_checks=$(dt_gh pr checks "$number" --json name,bucket,link,workflow 2>"$gh_err"); then
+    :
+  else
+    status=$?
+    if [ "$status" -eq 76 ]; then
+      cat "$gh_err" >&2
+      exit 76
+    fi
     grep -q 'no checks reported' "$gh_err" ||
       fail "could not read checks for #${number}: $(head -n 1 "$gh_err")"
     raw_checks='[]'

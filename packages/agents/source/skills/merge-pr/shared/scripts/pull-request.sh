@@ -19,14 +19,14 @@ unset CDPATH GH_REPO GH_HOST GREP_OPTIONS
 # mp_need_tools: gh, signed in, and jq, or stop.
 mp_need_tools() {
   command -v gh >/dev/null 2>&1 || dt_die "gh is not installed"
-  gh auth status >/dev/null 2>&1 || dt_die "gh is not authenticated; run gh auth login"
+  dt_gh_login >/dev/null || exit $?
   command -v jq >/dev/null 2>&1 || dt_die "jq is not installed"
 }
 
 # mp_view <number> <file> <field,...>: save one response naming every
 # field the caller reads.
 mp_view() {
-  gh pr view "$1" --json "$3" >"$2"
+  dt_gh pr view "$1" --json "$3" >"$2"
 }
 
 # mp_field <file> <field>: one top-level field of a saved response, a
@@ -38,7 +38,7 @@ mp_field() {
 # mp_base_oid <base-ref>: the commit the base branch points at on
 # GitHub, read through gh so it names the same repository gh merges in.
 mp_base_oid() {
-  gh api "repos/{owner}/{repo}/git/ref/heads/$1" --jq .object.sha
+  dt_gh_repo "query(\$owner:String!,\$name:String!,\$ref:String!){repository(owner:\$owner,name:\$name){ref(qualifiedName:\$ref){target{oid}}}}" -f "ref=refs/heads/$1" --jq '.data.repository.ref.target.oid // error("base ref not found")'
 }
 
 # mp_judge_checks <file>: judge the statusCheckRollup in a saved
@@ -126,7 +126,7 @@ mp_require_reviews() {
 # persisting credentials. Do not change branches, the index, or FETCH_HEAD.
 mp_local_diff() {
   local repository
-  repository=$(gh repo view --json url --jq .url) || dt_die "Could not locate the pull request repository."
+  repository=$(dt_gh repo view --json url --jq .url) || exit $?
   [ -n "$repository" ] || dt_die "Could not locate the pull request repository."
   if [ "$(gitr rev-parse --is-shallow-repository)" = true ]; then
     gitr -c credential.helper= -c 'credential.helper=!gh auth git-credential' fetch --no-tags --no-write-fetch-head --unshallow "$repository" "$1" "$2" ||

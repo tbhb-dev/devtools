@@ -67,6 +67,10 @@ out() { if [ -n "$filter" ]; then jq -r "$filter"; else cat; fi; }
 case "${args[0]} ${args[1]:-}" in
 "auth status") exit 0 ;;
 "pr view")
+  if [ -f "$F/live-error" ]; then
+    cat "$F/live-error" >&2
+    exit "$(cat "$F/live-status")"
+  fi
   # $F/unknown holds how many more reads report mergeability as still
   # being computed; "always" never stops.
   n=$(cat "$F/unknown" 2>/dev/null || echo 0)
@@ -81,7 +85,26 @@ case "${args[0]} ${args[1]:-}" in
 "pr diff") echo "HTTP 406: diff exceeds 20000 lines" >&2; exit 1 ;;
 "repo view") cat "$F/repository" ;;
 "pr merge") printf '%s\n' "${args[*]}" >"$F/merged" ;;
-"api user") out <"$F/user.json" ;;
+"api rate_limit") echo 1792195200 ;;
+"api user") echo 'HTTP 403: API rate limit exceeded' >&2; exit 1 ;;
+"api graphql")
+  if [ -n "${GH_GRAPHQL_ERROR:-}" ]; then
+    echo "$GH_GRAPHQL_ERROR" >&2
+    exit "${GH_GRAPHQL_STATUS:-1}"
+  fi
+  case "${args[*]}" in
+  *viewer*) jq '{data:{viewer:.}}' "$F/user.json" | out ;;
+  *qualifiedName*)
+    if [ -f "$F/base-error" ]; then cat "$F/base-error" >&2; exit 1; fi
+    jq '{data:{repository:{ref:{target:{oid:.object.sha}}}}}' "$F/api/repos_{owner}_{repo}_git_ref_heads_main.json" | out ;;
+  *issueOrPullRequest*)
+    n=$(printf '%s\n' "${args[*]}" | sed -nE 's/.*number=([0-9]+).*/\1/p')
+    file="$F/api/repos_{owner}_{repo}_issues_${n}.json"
+    if [ -f "$file" ]; then
+      jq '{data:{repository:{issueOrPullRequest: (if has("pull_request") then {__typename:"PullRequest"} else {__typename:"Issue",state:(.state|ascii_upcase)} end)}}}' "$file" | out
+    else echo '{"data":{"repository":{"issueOrPullRequest":null}}}' | out; fi ;;
+  esac ;;
+
 "api "*)
   file=$F/api/$(printf '%s' "${args[1]}" | tr '/' '_').json
   [ -f "$file" ] || { echo "HTTP 404: Not Found" >&2; exit 1; }
@@ -175,6 +198,7 @@ lone_cancel() {
   run bash "$SCRIPTS/squash-message.sh" 7
 
   [ "$status" -eq 0 ]
+  [ "$(grep -c '^pr view ' "$GH_FIXTURES/gh.log")" -eq 1 ]
   grep -qx 'Closes #10' SQUASH_AGENTMSG
   ! grep -q 'Closes #11' SQUASH_AGENTMSG
   ! grep -q 'Closes #12' SQUASH_AGENTMSG
@@ -584,4 +608,61 @@ capture_diff() {
   [[ "$output" == *"sha256: none; status: absent"* ]]
   grep -q '^policy_hash none$' .git/agent-skills/squash.stamp
   grep -q '## Credentials floor (non-overridable)' prompt
+}
+
+
+@test "merge preflight reports quota reset with a distinct status" {
+  export GH_GRAPHQL_ERROR='HTTP 403: API rate limit exceeded'
+  run bash "$SCRIPTS/preflight.sh" 7
+  [ "$status" -eq 76 ]
+  [[ "$output" == *"reset time: 1792195200"* ]]
+  [[ "$output" != *"NOT the configured"* ]]
+}
+
+@test "merge preflight preserves authentication failure status" {
+  export GH_GRAPHQL_ERROR='HTTP 401: Bad credentials' GH_GRAPHQL_STATUS=4
+  run bash "$SCRIPTS/preflight.sh" 7
+  [ "$status" -eq 4 ]
+  [[ "$output" == *"Bad credentials"* ]]
+  [[ "$output" != *"quota exhausted"* ]]
+}
+
+@test "merge readers use GraphQL rather than REST user and refs" {
+  draft
+  run bash "$SCRIPTS/preflight.sh" 7
+  [ "$status" -eq 0 ]
+  run bash "$SCRIPTS/review.sh" 7
+  [ "$status" -eq 0 ]
+  if grep -E '^api (user|repos/)' "$GH_FIXTURES/gh.log"; then return 1; fi
+  grep -q 'qualifiedName' "$GH_FIXTURES/gh.log"
+}
+
+
+@test "quota failure during final review validation keeps status 76 and no stamp" {
+  draft
+  export DEVTOOLS_REVIEW_CMD='cat >/dev/null; echo "HTTP 403: API rate limit exceeded" >"$GH_FIXTURES/live-error"; echo 1 >"$GH_FIXTURES/live-status"; echo "VERDICT: PASS"'
+  run bash "$SCRIPTS/review.sh" 7
+  [ "$status" -eq 76 ]
+  [[ "$output" == *"reset time: 1792195200"* ]]
+  [ ! -e "$(stamp_file)" ]
+}
+
+@test "auth failure during final review validation keeps its status and no stamp" {
+  draft
+  export DEVTOOLS_REVIEW_CMD='cat >/dev/null; echo "HTTP 401: Bad credentials" >"$GH_FIXTURES/live-error"; echo 4 >"$GH_FIXTURES/live-status"; echo "VERDICT: PASS"'
+  run bash "$SCRIPTS/review.sh" 7
+  [ "$status" -eq 4 ]
+  [[ "$output" == *"Bad credentials"* ]]
+  [[ "$output" != *"quota exhausted"* ]]
+  [ ! -e "$(stamp_file)" ]
+}
+
+
+@test "base ref quota failure during final review validation keeps status 76" {
+  draft
+  export DEVTOOLS_REVIEW_CMD='cat >/dev/null; echo "HTTP 403: API rate limit exceeded" >"$GH_FIXTURES/base-error"; echo "VERDICT: PASS"'
+  run bash "$SCRIPTS/review.sh" 7
+  [ "$status" -eq 76 ]
+  [[ "$output" == *"reset time: 1792195200"* ]]
+  [ ! -e "$(stamp_file)" ]
 }

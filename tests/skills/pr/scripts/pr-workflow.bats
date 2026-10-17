@@ -48,10 +48,31 @@ stub_gh() {
   cat >"${BATS_TEST_TMPDIR}/bin/gh" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >>"$GH_LOG"
+filter=''
+previous=''
+for arg in "$@"; do
+  if [ "$previous" = --jq ]; then filter=$arg; fi
+  previous=$arg
+done
+out() { jq -r "$filter" || return 1; }
 case "$1 $2" in
 "auth status") exit 0 ;;
 "label list") printf '%s\n' "$GH_LABELS" ;;
-"api user") printf '%s\n' "$GH_USER" ;;
+"api user") echo 'HTTP 403: API rate limit exceeded' >&2; exit 1 ;;
+"api graphql")
+  case "$*" in
+  *viewer*)
+    if [ -n "${GH_VIEWER_ERROR:-}" ]; then echo "$GH_VIEWER_ERROR" >&2; exit "${GH_ERROR_STATUS:-1}"; fi
+    jq -n --arg login "$GH_USER" '{data:{viewer:{login:$login}}}' | out ;;
+  *milestones*) printf '%s\n' "$GH_MILESTONES" | jq -Rn '{data:{repository:{milestones:{nodes:[inputs | {title:.}],pageInfo:{hasNextPage:false}}}}}' | out ;;
+  *issueOrPullRequest*)
+    n=$(printf '%s\n' "$*" | sed -nE 's/.*number=([0-9]+).*/\1/p')
+    case " $GH_ISSUES " in
+    *" $n "*) printf '{"data":{"repository":{"issueOrPullRequest":{"__typename":"Issue"}}}}\n' | out ;;
+    *) printf '{"data":{"repository":{"issueOrPullRequest":null}}}\n' | out ;;
+    esac ;;
+  esac ;;
+"api rate_limit") echo 1792195200 ;;
 "api repos/{owner}/{repo}/milestones") printf '%s\n' "$GH_MILESTONES" ;;
 "api repos/{owner}/{repo}/issues/"*)
   n=${2##*/}
@@ -399,7 +420,7 @@ publish_with_milestone() {
   run bash "$SCRIPTS/create-pr.sh" --confirmed
 
   [ "$status" -eq 1 ]
-  [[ "$output" == *"references #99"* ]]
+  [[ "$output" == *"reference #99"* ]]
   [ -z "$(remote_topic)" ]
 }
 
@@ -429,4 +450,46 @@ publish_with_milestone() {
   [[ "$output" == *"sha256: none; status: absent"* ]]
   grep -q '^policy_hash none$' .git/agent-skills/pr.stamp
   grep -q '## Credentials floor (non-overridable)' prompt
+}
+
+@test "identity succeeds without REST even when REST user is rate limited" {
+  export DEVTOOLS_GH_LOGIN=agent
+  bash "$SCRIPTS/review.sh"
+  run bash "$SCRIPTS/create-pr.sh" --confirmed --dry-run
+  [ "$status" -eq 0 ]
+  grep -q 'viewer{login}' "$GH_LOG"
+  refute_grep '^api user' "$GH_LOG"
+  refute_grep '^auth status' "$GH_LOG"
+}
+
+@test "publisher reports quota reset separately from identity failure" {
+  bash "$SCRIPTS/review.sh"
+  export GH_VIEWER_ERROR='HTTP 403: API rate limit exceeded' GH_ERROR_STATUS=1
+  run bash "$SCRIPTS/create-pr.sh" --confirmed
+  [ "$status" -eq 76 ]
+  [[ "$output" == *"rate limit: GitHub graphql quota exhausted; reset time: 1792195200"* ]]
+  [[ "$output" != *"signed in as"* ]]
+  [ -z "$(remote_topic)" ]
+}
+
+@test "publisher preserves authentication failures without claiming quota exhaustion" {
+  bash "$SCRIPTS/review.sh"
+  export GH_VIEWER_ERROR='HTTP 401: Bad credentials' GH_ERROR_STATUS=4
+  run bash "$SCRIPTS/create-pr.sh" --confirmed
+  [ "$status" -eq 4 ]
+  [[ "$output" == *"Bad credentials"* ]]
+  [[ "$output" != *"quota exhausted"* ]]
+  refute_grep '^api rate_limit' "$GH_LOG"
+  [ -z "$(remote_topic)" ]
+}
+
+
+@test "publisher resolves milestones and issue references without REST" {
+  write_draft v1 '' 'Closes #12.'
+  bash "$SCRIPTS/review.sh"
+  run bash "$SCRIPTS/create-pr.sh" --confirmed --dry-run
+  [ "$status" -eq 0 ]
+  grep -q 'milestones(first:100' "$GH_LOG"
+  grep -q 'issueOrPullRequest' "$GH_LOG"
+  refute_grep '^api repos/' "$GH_LOG"
 }

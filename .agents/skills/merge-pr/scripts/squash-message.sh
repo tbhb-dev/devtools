@@ -45,6 +45,9 @@ export PYTHONUTF8=1
 unset CDPATH GH_REPO GH_HOST GREP_OPTIONS
 IFS=$' \t\n'
 
+# shellcheck disable=SC1091 # generated beside this script
+. "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+
 readonly DRAFT=SQUASH_AGENTMSG
 
 root=$(git rev-parse --show-toplevel)
@@ -59,40 +62,34 @@ section() { printf '\n== %s ==\n' "$1"; }
 none() { printf '(none)\n'; }
 
 command -v gh >/dev/null 2>&1 || die "gh is not installed"
-gh auth status >/dev/null 2>&1 || die "gh is not authenticated"
+dt_gh_login >/dev/null || exit $?
 
 number=${1:-}
 if [ -z "$number" ]; then
   branch=$(git rev-parse --abbrev-ref HEAD)
-  number=$(gh pr list --head "$branch" --state open --json number --jq '.[0].number' 2>/dev/null || true)
+  number=$(dt_gh pr list --head "$branch" --state open --json number --jq '.[0].number') || exit $?
   [ -n "$number" ] || die "no open pull request for ${branch}. Pass a number explicitly."
 fi
 
-# One request for the scalars. Tab-separated because a title may carry
-# anything except a newline, and splitting on tabs alone keeps a title
-# with spaces in it whole.
-meta=$(gh pr view "$number" \
-  --json title,baseRefName,headRefName,changedFiles,additions,deletions \
-  --jq '[.title, .baseRefName, .headRefName, .changedFiles, .additions, .deletions] | @tsv') ||
-  die "could not read pull request #${number}"
+# Read the briefing from one response so its fields describe one snapshot.
+briefing=$(dt_gh pr view "$number" --json title,baseRefName,headRefName,changedFiles,additions,deletions,body,commits,files) || exit $?
+meta=$(printf '%s\n' "$briefing" | jq -r '[.title, .baseRefName, .headRefName, .changedFiles, .additions, .deletions] | @tsv')
 IFS=$(printf '\t') read -r title base head_ref changed added removed <<EOF
 $meta
 EOF
 [ -n "$title" ] || die "pull request #${number} has no title"
 
-body=$(gh pr view "$number" --json body --jq '.body' 2>/dev/null || true)
+body=$(printf '%s\n' "$briefing" | jq -r '.body')
 
 # Each record opens with a --- line, so the trailer pass below can tell
 # one commit's message from the next.
-commits=$(gh pr view "$number" --json commits \
-  --jq '.commits[] | "--- " + .oid[0:7] + "  " + (.authors[0].name // "unknown")
+commits=$(printf '%s\n' "$briefing" | jq -r '.commits[] | "--- " + .oid[0:7] + "  " + (.authors[0].name // "unknown")
         + "\n" + .messageHeadline
         + (if (.messageBody // "") == "" then "" else "\n\n" + .messageBody end)
-        + "\n"' 2>/dev/null || true)
+        + "\n"') || exit $?
 count=$(printf '%s\n' "$commits" | grep -c '^--- ' || true)
 
-files=$(gh pr view "$number" --json files \
-  --jq '.files[]? | [.additions, .deletions, .path] | @tsv' 2>/dev/null || true)
+files=$(printf '%s\n' "$briefing" | jq -r '.files[]? | [.additions, .deletions, .path] | @tsv') || exit $?
 
 # --- trailers --------------------------------------------------------
 #
@@ -173,8 +170,8 @@ related=$(section_of related |
 closes=""
 held=""
 for ref in $related; do
-  kind=$(gh api "repos/{owner}/{repo}/issues/${ref}" \
-    --jq 'if has("pull_request") then "pull request" else .state + " issue" end' 2>/dev/null || true)
+  kind=$(dt_gh_repo "query(\$owner:String!,\$name:String!,\$number:Int!){repository(owner:\$owner,name:\$name){issueOrPullRequest(number:\$number){__typename ... on Issue{state}}}}" -F "number=$ref" \
+    --jq '.data.repository.issueOrPullRequest | if .__typename == "PullRequest" then "pull request" elif .__typename == "Issue" then (.state | ascii_downcase) + " issue" else "" end') || exit $?
   case $kind in
   "open issue") closes="${closes}Closes #${ref}"$'\n' ;;
   "") held="${held}# Not closed: #${ref} could not be read from GitHub"$'\n' ;;
