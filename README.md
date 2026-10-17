@@ -12,7 +12,7 @@ apm install tbhb-dev/devtools#v0.11.0
 
 A consumer can also select a sub-package, such as `apm install tbhb-dev/devtools/packages/agents/claude#v0.11.0`. The pin tasks support both forms.
 
-The package deploys these primitives from sub-packages under [`packages/agents/`](packages/agents/): `claude` contains the skills below plus the `guard-markdown` hook declaration, and `common` contains the harness-neutral `worktree-wip` instructions.
+The package deploys these primitives from sub-packages under [`packages/agents/`](packages/agents/): `claude` contains the skills below plus the `guard-markdown` hook declaration, `codex` contains the Codex skill variants, and `common` contains the harness-neutral `worktree-wip` instructions.
 
 | Primitive | Type | Purpose |
 | --- | --- | --- |
@@ -73,6 +73,20 @@ mise run build
 ## Development
 
 [mise](https://mise.jdx.dev) pins the toolchain and runs the workflow: `mise run bootstrap` sets up a fresh clone, `mise run lint` runs the full lint suite, `mise run test` runs the tests, and `mise run build` compiles the binaries into `bin/`. On a machine with no mise, the committed shim at `tools/mise-bootstrap` runs in place of `mise` and installs the pinned release on first use. The pins live in [mise.toml](mise.toml) and the drop-ins under `.config/mise/conf.d/`, locked by digest in the committed `mise.lock` files. See [AGENTS.md](AGENTS.md) for the agent-facing contributor guide.
+
+The test task includes Go, Python, hook Bats, and leak Bats suites. Run `mise run test-hooks` or `mise run test-leaks` for the shell suites. CI runs them in `test-bats (ubuntu-24.04)` and `test-bats (macos-15)`. See the [task and CI routing guide](AGENTS.md#tasks) for the check names `fix-pr` recognizes.
+
+### Review and delegated runs
+
+Commit messages, PR descriptions, and squash messages pass script-owned independent reviews. Repositories can supply [review policy](AGENTS.md#repository-review-policy) in `.agents/review-instructions.md` on origin’s trusted default branch. Policy changes need ordinary review before later branches can use them, and policy can't waive credential checks or select a reviewer.
+
+Delegated writers have scoped tools for gathering context, editing, and validation. A delegated write gets confirmation through the machine’s `delegation_check` when no explicit confirmation or session grant applies. See [confirmation authority](AGENTS.md#pre-approving-the-confirmations) and [the writer scanner exception](AGENTS.md#skill-sources). The exception covers one scanner rule in the two writer manifests. Other scanning remains enabled.
+
+PR, merge, and watch readers use GraphQL so REST core quota exhaustion doesn't produce a false identity mismatch. Quota failures stop with exit 76 and reset guidance. The scripts never retry writes automatically. See [API quota behavior](AGENTS.md#github-api-quota-in-pull-request-skills) for read costs and remaining REST use.
+
+Todo (SC2312 part 2): update the shared skill failure-handling guidance after the remaining sweep merges.
+
+Todo (gate-enabling part 3): add the final `lint-curl` invocation and SC2312 gate scope after those gates merge.
 
 ## Consumer adoption
 
