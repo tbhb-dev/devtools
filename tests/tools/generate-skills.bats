@@ -114,3 +114,50 @@ setup() {
   [ "$status" -ne 0 ]
   [[ "$output" == *"scripts/run.sh exists in both shared/ and claude/"* ]]
 }
+
+@test "check rejects hash failures even when both listings print identical hashes" {
+  bash "$GEN"
+  mkdir -p bin
+  real_git=$(command -v git)
+  cat >bin/git <<EOF_STUB
+#!/usr/bin/env bash
+if [[ \$1 == hash-object ]]; then
+  echo deadbeef
+  exit 23
+fi
+exec "$real_git" "\$@"
+EOF_STUB
+  chmod +x bin/git
+  run env PATH="$PWD/bin:$PATH" bash "$GEN" --check
+  [ "$status" -eq 23 ]
+}
+
+@test "generation rejects failed source discovery instead of copying an incomplete tree" {
+  mkdir -p bin
+  real_find=$(command -v find)
+  cat >bin/find <<EOF_STUB
+#!/usr/bin/env bash
+if [[ \$1 == */shared ]]; then exit 23; fi
+exec "$real_find" "\$@"
+EOF_STUB
+  chmod +x bin/find
+  run env PATH="$PWD/bin:$PATH" bash "$GEN"
+  [ "$status" -eq 23 ]
+}
+
+@test "generation rejects a failed output parent lookup" {
+  mkdir -p bin
+  printf '#!/bin/sh\necho scripts\nexit 23\n' >bin/dirname
+  chmod +x bin/dirname
+  run env PATH="$PWD/bin:$PATH" bash "$GEN"
+  [ "$status" -eq 23 ]
+}
+
+@test "check rejects diff errors instead of reporting no drift" {
+  bash "$GEN"
+  mkdir -p bin
+  printf '#!/bin/sh\nexit 23\n' >bin/diff
+  chmod +x bin/diff
+  run env PATH="$PWD/bin:$PATH" bash "$GEN" --check
+  [ "$status" -eq 23 ]
+}

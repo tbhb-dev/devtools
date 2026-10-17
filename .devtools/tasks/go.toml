@@ -6,7 +6,8 @@ description = "Build every binary into the bin directory"
 run = '''
 #!/usr/bin/env bash
 set -eu
-CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags "$(bash "$DEVTOOLS_DIR/scripts/go-ldflags.sh")" -o bin/ ${DEVTOOLS_GO_BIN_PACKAGES:-./cmd/...} "$@"
+ldflags=$(bash "$DEVTOOLS_DIR/scripts/go-ldflags.sh")
+CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags "$ldflags" -o bin/ ${DEVTOOLS_GO_BIN_PACKAGES:-./cmd/...} "$@"
 '''
 
 ["devtools:install"]
@@ -14,7 +15,8 @@ description = "Install every binary to GOPATH/bin"
 run = '''
 #!/usr/bin/env bash
 set -eu
-CGO_ENABLED=0 go install -trimpath -buildvcs=false -ldflags "$(bash "$DEVTOOLS_DIR/scripts/go-ldflags.sh")" ${DEVTOOLS_GO_BIN_PACKAGES:-./cmd/...} "$@"
+ldflags=$(bash "$DEVTOOLS_DIR/scripts/go-ldflags.sh")
+CGO_ENABLED=0 go install -trimpath -buildvcs=false -ldflags "$ldflags" ${DEVTOOLS_GO_BIN_PACKAGES:-./cmd/...} "$@"
 '''
 
 ["devtools:format-go"]
@@ -212,7 +214,8 @@ run = '''
 set -euo pipefail
 rm -rf coverage.covdata.merged
 mkdir -p coverage.covdata.merged
-go tool covdata merge -i="$(ls -d "$usage_slotsdir"/*/ | paste -sd, -)" -o=coverage.covdata.merged
+inputs=$(ls -d "$usage_slotsdir"/*/ | paste -sd, -)
+go tool covdata merge -i="$inputs" -o=coverage.covdata.merged
 go tool covdata textfmt -i=coverage.covdata.merged -o=coverage.out
 go tool gocover-cobertura < coverage.out > coverage.xml
 '''

@@ -34,6 +34,7 @@ cat "$log"
 
 if ! grep -qE '[1-9][0-9]* commits scanned' "$log"; then
     echo "gitleaks walked 0 commits, so this scan proves nothing." >&2
+    # shellcheck disable=SC2312 # pwd only supplies context for an already failed scan
     echo "Check that the repository resolves from $(pwd)." >&2
     exit 1
 fi

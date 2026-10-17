@@ -62,6 +62,7 @@ dirty=$(command git status --porcelain)
 if [ -z "$dirty" ]; then
   ok "working tree clean"
 else
+  # shellcheck disable=SC2312 # tr only formats diagnostic text after the verdict is settled
   fail "working tree clean" "$(printf '%s' "$dirty" | tr '\n' ' ')"
 fi
 
@@ -99,6 +100,7 @@ fi
 if literals=$(bash tools/check-versions.sh 2>&1); then
   ok "version literals name the latest tag"
 else
+  # shellcheck disable=SC2312 # tr only formats diagnostic text after the verdict is settled
   fail "version literals name the latest tag" "$(printf '%s' "$literals" | tr '\n' ' ')"
 fi
 
@@ -132,6 +134,7 @@ else
   if [ -z "$bad" ]; then
     ok "checks green on HEAD"
   else
+    # shellcheck disable=SC2312 # tr only formats diagnostic text after the verdict is settled
     fail "checks green on HEAD" "$(printf '%s' "$bad" | tr '\n' '; ')"
   fi
 fi
@@ -168,6 +171,7 @@ fi
 if derived=$(cog bump --auto --dry-run 2>&1) && [ -n "$derived" ]; then
   printf 'INFO  cog bump --auto would derive %s\n' "$derived"
 else
+  # shellcheck disable=SC2312 # tr only formats diagnostic text after the verdict is settled
   printf 'INFO  cog bump --auto derived nothing: %s\n' "$(printf '%s' "$derived" | tr '\n' ' ')"
 fi
 

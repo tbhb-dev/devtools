@@ -86,6 +86,7 @@ probe_rc=$?
 probe=$(printf '%s\n' "$probe_out" | grep -c '^[0-9]' || true)
 
 if [ "$probe_rc" -gt 1 ]; then
+  # shellcheck disable=SC2312 # tr only flattens an already failed probe for diagnostics
   printf '%s:1 [error] vale-failed  vale exited %s instead of linting, so this run measured nothing: %s\n' \
     "$file" "$probe_rc" "$(printf '%s' "$probe_out" | tr '\n' ' ')"
   rc=1

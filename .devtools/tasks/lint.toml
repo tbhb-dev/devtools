@@ -123,10 +123,13 @@ case "$mode" in
   shell-fmt) pattern='*.sh'; command=(shfmt -d) ;;
   markdown-wrap) pattern='*.md'; command=(guard-markdown) ;;
 esac
+selected=$(mktemp)
+trap 'rm -f "$selected"' EXIT
+git ls-files -z --cached --others --exclude-standard -- "$pattern" "${excludes[@]}" >"$selected"
 files=()
 while IFS= read -r -d '' file; do
   files+=("$file")
-done < <(git ls-files -z --cached --others --exclude-standard -- "$pattern" "${excludes[@]}")
+done <"$selected"
 if [[ -n ${files[0]+set} ]]; then
   "${command[@]}" "$@" "${files[@]}"
 fi
