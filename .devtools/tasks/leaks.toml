@@ -9,3 +9,7 @@ run = "bash $DEVTOOLS_DIR/scripts/check-leaks.sh"
 description = "Check that the leak scan runs before prek at pre-push"
 quiet = true
 run = "bash $DEVTOOLS_DIR/scripts/install-pre-push.sh --check"
+
+["devtools:install-leak-hook"]
+description = "Install the leak scan before prek at pre-push"
+run = "bash $DEVTOOLS_DIR/scripts/install-pre-push.sh"
