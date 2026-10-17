@@ -1,8 +1,9 @@
 ---
 # Secret scanning and supply-chain security checks.
 # Two jobs run the project's dependency scanners with SARIF output and
-# upload each result under its own category: govulncheck over the call
-# graph, and gomodscan over the vendored module set (retraction,
+# upload reachable govulncheck findings and the complete gomodscan
+# results under separate categories. The raw govulncheck report stays
+# available as an artifact. gomodscan checks the module set (retraction,
 # deprecation, and OSV malicious-package checks).
 #
 # Triggers cover pull requests and pushes to `main` — the pushes seed
@@ -39,92 +40,16 @@ concurrency:
 
 jobs:
   govulncheck:
-    name: govulncheck
-    runs-on: ubuntu-24.04
+    uses: ./.github/workflows/scan-govulncheck.yml
     permissions:
       contents: read
       security-events: write
-    steps:
-      - name: Harden the runner
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
-        with:
-          egress-policy: audit
-
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Set up mise
-        uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
-        with:
-          # renovate: datasource=github-releases depName=jdx/mise
-          version: 2026.10.3
-          install_args: go
-
-      - name: Run govulncheck (SARIF)
-        run: mise run vuln-sarif govulncheck.sarif
-
-      - name: Upload govulncheck SARIF
-        uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4
-        with:
-          sarif_file: govulncheck.sarif
-          category: govulncheck
 
   gomodscan:
-    name: gomodscan
-    runs-on: ubuntu-24.04
+    uses: ./.github/workflows/scan-gomodscan.yml
     permissions:
       contents: read
       security-events: write
-    steps:
-      - name: Harden the runner
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
-        with:
-          egress-policy: audit
-
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Set up mise
-        uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
-        with:
-          # renovate: datasource=github-releases depName=jdx/mise
-          version: 2026.10.3
-          install_args: go
-
-      - name: Run gomodscan (SARIF)
-        run: mise run gomodscan-sarif gomodscan.sarif
-
-      - name: Upload gomodscan SARIF
-        uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4
-        with:
-          sarif_file: gomodscan.sarif
-          category: gomodscan
 
   gitleaks:
-    name: gitleaks
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Harden the runner
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
-        with:
-          egress-policy: audit
-
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: Set up mise
-        uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
-        with:
-          # renovate: datasource=github-releases depName=jdx/mise
-          version: 2026.10.3
-          install_args: gitleaks
-
-      - name: Run gitleaks
-        run: mise run devtools:gitleaks
+    uses: ./.github/workflows/scan-gitleaks.yml

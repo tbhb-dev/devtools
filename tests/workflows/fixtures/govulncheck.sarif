@@ -1,0 +1,16 @@
+{
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {"driver": {"name": "govulncheck"}},
+      "results": [
+        {"ruleId": "reachable", "codeFlows": [{"threadFlows": []}]},
+        {"ruleId": "unreachable"},
+        {"ruleId": "empty", "codeFlows": []},
+        {"ruleId": "null", "codeFlows": null}
+      ]
+    },
+    {"results": []},
+    {"tool": {"driver": {"name": "other"}}}
+  ]
+}

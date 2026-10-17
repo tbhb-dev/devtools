@@ -1,0 +1,47 @@
+# Consumer CI and security workflows
+
+Call the reusable workflows from jobs in your repository. Pin each external `uses` reference to the full devtools release commit SHA. The workflows run on `ubuntu-24.04`, check out the caller, turn off persisted checkout credentials, harden the runner and enforce `MISE_LOCKED=1`. They use the caller's committed mise configuration and lockfiles.
+
+| Workflow | Caller job ID | Required token permissions |
+| --- | --- | --- |
+| `consumer-lint.yml` | `lint` | `contents: read` |
+| `scan-gitleaks.yml` | `gitleaks` | `contents: read` |
+| `scan-govulncheck.yml` | `govulncheck` | `contents: read`, `security-events: write` |
+| `scan-gomodscan.yml` | `gomodscan` | `contents: read`, `security-events: write` |
+
+Replace `DEVTOOLS_RELEASE_COMMIT_SHA` below with the release's full commit SHA before running actionlint:
+
+```yaml
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    uses: tbhb-dev/devtools/.github/workflows/consumer-lint.yml@DEVTOOLS_RELEASE_COMMIT_SHA
+  gitleaks:
+    uses: tbhb-dev/devtools/.github/workflows/scan-gitleaks.yml@DEVTOOLS_RELEASE_COMMIT_SHA
+  govulncheck:
+    uses: tbhb-dev/devtools/.github/workflows/scan-govulncheck.yml@DEVTOOLS_RELEASE_COMMIT_SHA
+    permissions:
+      contents: read
+      security-events: write
+  gomodscan:
+    uses: tbhb-dev/devtools/.github/workflows/scan-gomodscan.yml@DEVTOOLS_RELEASE_COMMIT_SHA
+    permissions:
+      contents: read
+      security-events: write
+```
+
+Keep caller job IDs `lint` and `test` stable for the fix-pr routing contract. Keep repository-specific test jobs in the caller. Reusable jobs add a called-job component to GitHub's displayed check names. Check required-status rules when adopting them. devtools retains its own lint setup because its release and private-identifier gates differ from consumer setup, and calls the reusable security jobs locally.
+
+The lint workflow requires `devtools:check-vendored`, `install-tools`, `install-guard-markdown` and `lint`. It checks vendored payload first, installs project dependencies and the Markdown guard, then adds the Go binary directory to PATH before linting. Checkout includes full history.
+
+With full history checked, the gitleaks workflow invokes `devtools:gitleaks`. Scanner failures fail the job. Your root gitleaks configuration still applies. See [the fixture policy](gitleaks.md) for the default policy and narrow fixture exceptions.
+
+Go scans require the shared Go tasks and scanner tools declared in the caller's module. SARIF tasks report findings without converting them into scanner execution failures. Task errors still fail the job. Keep the separate reachable-vulnerability gate (`mise run devtools:vuln`) in CI when findings must fail checks. Run security workflows on pull requests, pushes to the default branch and a daily schedule to seed code scanning and detect new advisories.
+
+Update the vendored `.devtools/scripts/filter-govulncheck-sarif.sh` with the workflow release. Running the govulncheck workflow requires this helper and `jq`. The supported runner provides `jq`. Preserving SARIF metadata, the helper retains only results with nonempty `codeFlows` for code scanning, including an empty result list to clear previous alerts. The untouched raw report remains in the `govulncheck-raw-sarif` artifact for 14 days, including after a scanner failure if a report exists. Filtering, artifact, and upload failures fail the job.
+
+Under its own category, the gomodscan report remains unfiltered.
+
+Run `mise run devtools:lint-workflows` and `mise exec -- bats tests/workflows/security.bats tests/workflows/sarif.bats` in devtools to verify the workflow contracts and SARIF fixtures. P15 can link this guide from the shared adoption documentation without changing the workflow interfaces.

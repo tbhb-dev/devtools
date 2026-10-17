@@ -1,0 +1,58 @@
+---
+name: scan-govulncheck
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+  security-events: write
+
+env:
+  MISE_LOCKED: "1"
+
+jobs:
+  govulncheck:
+    name: govulncheck
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Harden the runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up mise
+        uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
+        with:
+          # renovate: datasource=github-releases depName=jdx/mise
+          version: 2026.10.3
+          install_args: go
+
+      - name: Run govulncheck (SARIF)
+        run: mise run devtools:vuln-sarif govulncheck.sarif
+
+      - name: Retain raw govulncheck SARIF
+        if: ${{ !cancelled() && hashFiles('govulncheck.sarif') != '' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: govulncheck-raw-sarif
+          path: govulncheck.sarif
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Keep reachable findings for code scanning
+        run: bash .devtools/scripts/filter-govulncheck-sarif.sh govulncheck.sarif govulncheck-reachable.sarif
+
+      - name: Upload govulncheck SARIF
+        uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4
+        with:
+          sarif_file: govulncheck-reachable.sarif
+          category: govulncheck
