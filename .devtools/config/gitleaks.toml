@@ -1,0 +1,9 @@
+# Copy to .gitleaks.toml at the repository root and review edits as security policy.
+[extend]
+useDefault = true
+
+# Optional fixture exception: uncomment only after adding this exact fixture.
+# This file contains a synthetic private key used to test private-key detection.
+# [[allowlists]]
+# description = "Synthetic private key for scanner regression tests"
+# paths = ['''^tests/fixtures/private-key\.pem$''']

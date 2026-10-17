@@ -40,3 +40,71 @@ setup() {
   [ "$status" -eq 1 ]
   [[ $output == *"gitleaks walked 0 commits"* ]]
 }
+
+install_fixture_policy() {
+  local config="${BATS_TEST_DIRNAME}/../../.devtools/config/gitleaks.toml"
+  # Activate the documented example exactly as a consumer would.
+  sed 's/^# \(\[\[allowlists\]\]\|description =\|paths =\)/\1/' "$config" > .gitleaks.toml
+  git init -q
+}
+
+commit_fixture_policy() {
+  git add -- .gitleaks.toml tests
+  git -c core.hooksPath=/dev/null -c commit.gpgSign=false \
+    -c user.name=Test -c user.email=test@example.com commit -qm fixture
+}
+
+@test "the shipped template keeps private-key detection enabled by default" {
+  cp "${BATS_TEST_DIRNAME}/../../.devtools/config/gitleaks.toml" .gitleaks.toml
+  git init -q
+  mkdir -p tests/fixtures
+  openssl genrsa 1024 \
+    > tests/fixtures/private-key.pem 2>/dev/null
+  commit_fixture_policy
+
+  run bash "$SCRIPT"
+
+  [ "$status" -eq 1 ]
+  [[ $output == *"private-key"* ]]
+  [[ $output == *"tests/fixtures/private-key.pem"* ]]
+}
+
+@test "the documented exact fixture exception permits a synthetic private key" {
+  install_fixture_policy
+  mkdir -p tests/fixtures
+  openssl genrsa 1024 \
+    > tests/fixtures/private-key.pem 2>/dev/null
+  commit_fixture_policy
+
+  run bash "$SCRIPT"
+
+  [ "$status" -eq 0 ]
+  [[ $output == *"no leaks found"* ]]
+}
+
+@test "fixture policy retains default rules outside the exact allowed path" {
+  install_fixture_policy
+  local path
+  for path in tests/fixtures/other.pem tests/fixtures/private-key/pem \
+    tests/fixtures/private-key.pem.bak nested/tests/fixtures/private-key.pem; do
+    mkdir -p "$(dirname "$path")"
+    printf 'token=ghp_%s\n' "$(openssl rand -hex 18)" > "$path"
+  done
+  mkdir -p tests
+  printf 'token=ghp_%s\n' "$(openssl rand -hex 18)" > tests/production.txt
+  commit_fixture_policy
+  # Include a path with a prefix to exercise the start anchor too.
+  git add -- nested
+  git -c core.hooksPath=/dev/null -c commit.gpgSign=false \
+    -c user.name=Test -c user.email=test@example.com commit -qm prefix
+
+  run bash "$SCRIPT"
+
+  [ "$status" -eq 1 ]
+  [[ $output == *"github-pat"* ]]
+  for path in tests/production.txt tests/fixtures/other.pem \
+    tests/fixtures/private-key/pem tests/fixtures/private-key.pem.bak \
+    nested/tests/fixtures/private-key.pem; do
+    [[ $output == *"$path"* ]]
+  done
+}
