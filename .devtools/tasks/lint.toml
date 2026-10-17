@@ -100,3 +100,46 @@ echo "No workflow files found; skipping actionlint."
 ["devtools:lint-mise"]
 description = "Format-check the mise config with mise's own formatter"
 run = "mise fmt --check"
+
+# Keep file selection in one task so shell and Markdown gates share defaults.
+# DEVTOOLS_GENERATED_PATHS adds newline-separated repository-relative path patterns.
+["devtools:lint-source-files"]
+hide = true
+description = "Select owned source files for shell and Markdown gates"
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+mode=$1
+shift
+excludes=(':(exclude)vendor/**' ':(exclude)apm_modules/**' ':(exclude).claude/**' ':(exclude).agents/**' ':(exclude).codex/**')
+while IFS= read -r path; do
+  if [[ -n "$path" ]]; then
+    path=${path%/}
+    excludes+=(":(exclude)$path" ":(exclude)$path/**")
+  fi
+done <<< "${DEVTOOLS_GENERATED_PATHS:-}"
+case "$mode" in
+  shell) pattern='*.sh'; command=(shellcheck) ;;
+  shell-fmt) pattern='*.sh'; command=(shfmt -d) ;;
+  markdown-wrap) pattern='*.md'; command=(guard-markdown) ;;
+esac
+files=()
+while IFS= read -r -d '' file; do
+  files+=("$file")
+done < <(git ls-files -z --cached --others --exclude-standard -- "$pattern" "${excludes[@]}")
+if [[ -v files[0] ]]; then
+  "${command[@]}" "$@" "${files[@]}"
+fi
+'''
+
+["devtools:lint-shell"]
+description = "Lint owned shell scripts via shellcheck"
+run = "mise run devtools:lint-source-files -- shell"
+
+["devtools:lint-shell-fmt"]
+description = "Check owned shell script formatting via shfmt"
+run = "mise run devtools:lint-source-files -- shell-fmt"
+
+["devtools:lint-markdown-wrap"]
+description = "Check owned Markdown paragraphs via guard-markdown"
+run = "mise run devtools:lint-source-files -- markdown-wrap"
