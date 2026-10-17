@@ -9,7 +9,7 @@
 
 [task_templates."devtools:lint-commit-msg"]
 description = "Pre-validate a drafted commit message against the commit-msg gates"
-run = "prek run --stage commit-msg --commit-msg-filename COMMIT_AGENTMSG"
+run = 'bash "$DEVTOOLS_DIR/scripts/lint-commit-msg.sh"'
 
 [task_templates."devtools:lint-squash-msg"]
 description = "Pre-validate a drafted squash commit message against the commit-msg gates"
