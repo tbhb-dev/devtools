@@ -119,3 +119,24 @@ mp_require_reviews() {
   *) dt_die "#$2 has an unknown review decision: $decision" ;;
   esac
 }
+
+# mp_local_diff <base-oid> <head-oid> <inputs-dir>: fetch the pinned
+# objects from the base repository, including fork PR heads exposed by
+# its pull refs. Use gh authentication for private repositories without
+# persisting credentials. Do not change branches, the index, or FETCH_HEAD.
+mp_local_diff() {
+  local repository
+  repository=$(gh repo view --json url --jq .url) || dt_die "Could not locate the pull request repository."
+  [ -n "$repository" ] || dt_die "Could not locate the pull request repository."
+  if [ "$(gitr rev-parse --is-shallow-repository)" = true ]; then
+    gitr -c credential.helper= -c 'credential.helper=!gh auth git-credential' fetch --no-tags --no-write-fetch-head --unshallow "$repository" "$1" "$2" ||
+      dt_die "Could not fetch the complete pinned base and head histories."
+  else
+    gitr -c credential.helper= -c 'credential.helper=!gh auth git-credential' fetch --no-tags --no-write-fetch-head "$repository" "$1" "$2" ||
+      dt_die "Could not fetch the pinned base and head."
+  fi
+  gitr diff --no-ext-diff --no-textconv --no-color --binary --full-index "$1...$2" -- >"$3/change.diff" ||
+    dt_die "Could not build the complete pinned diff."
+  gitr diff --no-ext-diff --no-textconv --no-color --name-status "$1...$2" -- >"$3/files.txt" ||
+    dt_die "Could not list the pinned diff files."
+}

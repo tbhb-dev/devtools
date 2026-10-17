@@ -7,8 +7,8 @@
 # through DEVTOOLS_REVIEW_CMD; the harness session variables are cleared
 # so the confirmation chain starts empty.
 
-readonly HEAD_OID=1111111111111111111111111111111111111111
-readonly BASE_OID=2222222222222222222222222222222222222222
+HEAD_OID=1111111111111111111111111111111111111111
+BASE_OID=2222222222222222222222222222222222222222
 
 setup() {
   source "${BATS_TEST_DIRNAME}/../../../test_helper.bash"
@@ -34,6 +34,16 @@ setup() {
   printf 'SQUASH_AGENTMSG\n' >.gitignore
   git add -- .gitignore
   git commit --quiet -m 'test: initial state'
+  BASE_OID=$(git rev-parse HEAD)
+  git checkout --quiet -b topic
+  printf 'a\n' >a.txt
+  git add -- a.txt
+  git commit --quiet -m 'feat: add the thing'
+  HEAD_OID=$(git rev-parse HEAD)
+  git clone --quiet --bare . "$GH_FIXTURES/upstream.git"
+  printf '%s\n' "$GH_FIXTURES/upstream.git" >"$GH_FIXTURES/repository"
+  pr ".headRefOid = \"$HEAD_OID\" | .commits[0].oid = \"$HEAD_OID\""
+  base_at "$BASE_OID"
   draft
 }
 
@@ -68,7 +78,8 @@ case "${args[0]} ${args[1]:-}" in
   fi
   ;;
 "pr list") echo '[]' | out ;;
-"pr diff") cat "$F/pr.diff" ;;
+"pr diff") echo "HTTP 406: diff exceeds 20000 lines" >&2; exit 1 ;;
+"repo view") cat "$F/repository" ;;
 "pr merge") printf '%s\n' "${args[*]}" >"$F/merged" ;;
 "api user") out <"$F/user.json" ;;
 "api "*)
@@ -469,4 +480,99 @@ STUB
   [ "$status" -eq 75 ]
   [[ "$output" == *"WAITING_REVIEW: #7"* ]]
   [ ! -e "$(stamp_file)" ]
+}
+
+# Capture exactly what reaches the independent reviewer, before it can
+# read a live branch or a working tree instead of the pinned snapshot.
+capture_diff() {
+  export DEVTOOLS_REVIEW_CMD='cat >/dev/null; cp "$DEVTOOLS_REVIEW_INPUTS/change.diff" "$GH_FIXTURES/reviewed.diff"; cp "$DEVTOOLS_REVIEW_INPUTS/files.txt" "$GH_FIXTURES/reviewed.files"; echo "VERDICT: PASS"'
+}
+
+@test "review receives a complete local diff above GitHub's line limit (#152)" {
+  git clone --quiet "$GH_FIXTURES/upstream.git" "$GH_FIXTURES/producer"
+  producer=$GH_FIXTURES/producer
+  git -C "$producer" config user.name Tester
+  git -C "$producer" config user.email tester@example.com
+  seq 1 21001 >"$producer/large.txt"
+  printf '\000\001\002' >"$producer/binary.dat"
+  git -C "$producer" add -- large.txt binary.dat
+  git -C "$producer" commit --quiet -m 'feat: large payload'
+  HEAD_OID=$(git -C "$producer" rev-parse HEAD)
+  git -C "$producer" push --quiet origin HEAD:refs/pull/7/head
+  pr ".headRefOid = \"$HEAD_OID\""
+  git -C "$producer" diff --no-ext-diff --no-textconv --no-color --binary --full-index "$BASE_OID...$HEAD_OID" -- >"$GH_FIXTURES/expected.diff"
+  # The pin is absent locally and the checked-out files are unrelated.
+  ! git cat-file -e "$HEAD_OID" 2>/dev/null
+  printf 'uncommitted\n' >a.txt
+  capture_diff
+
+  run bash "$SCRIPTS/review.sh" 7
+
+  [ "$status" -eq 0 ]
+  [ "$(wc -l <"$GH_FIXTURES/reviewed.diff")" -gt 20000 ]
+  cmp "$GH_FIXTURES/expected.diff" "$GH_FIXTURES/reviewed.diff"
+  grep -q 'GIT binary patch' "$GH_FIXTURES/reviewed.diff"
+  grep -q 'large.txt$' "$GH_FIXTURES/reviewed.files"
+  grep -q 'binary.dat$' "$GH_FIXTURES/reviewed.files"
+  ! grep -q '^pr diff' "$GH_FIXTURES/gh.log"
+  [ "$(cat a.txt)" = uncommitted ]
+}
+
+@test "review fetches fork heads from the base repository without origin (#152)" {
+  pr '.isCrossRepository = true | .headRefName = "fork-only"'
+  git --git-dir="$GH_FIXTURES/upstream.git" update-ref refs/pull/7/head "$HEAD_OID"
+  git --git-dir="$GH_FIXTURES/upstream.git" update-ref -d refs/heads/topic
+  capture_diff
+  run bash "$SCRIPTS/review.sh" 7
+  [ "$status" -eq 0 ]
+  git diff --no-ext-diff --no-textconv --no-color --binary --full-index "$BASE_OID...$HEAD_OID" -- >"$GH_FIXTURES/expected.diff"
+  cmp "$GH_FIXTURES/expected.diff" "$GH_FIXTURES/reviewed.diff"
+}
+
+@test "review keeps its pinned diff and refuses a base moved during review (#152)" {
+  git diff --no-ext-diff --no-textconv --no-color --binary --full-index "$BASE_OID...$HEAD_OID" -- >"$GH_FIXTURES/expected.diff"
+  export DEVTOOLS_REVIEW_CMD='cat >/dev/null; cp "$DEVTOOLS_REVIEW_INPUTS/change.diff" "$GH_FIXTURES/reviewed.diff"; printf "{\"object\":{\"sha\":\"5555555555555555555555555555555555555555\"}}\n" >"$GH_FIXTURES/api/repos_{owner}_{repo}_git_ref_heads_main.json"; echo "VERDICT: PASS"'
+  run bash "$SCRIPTS/review.sh" 7
+  [ "$status" -eq 5 ]
+  cmp "$GH_FIXTURES/expected.diff" "$GH_FIXTURES/reviewed.diff"
+  [ ! -e "$(stamp_file)" ]
+}
+
+@test "review refuses missing pinned objects before invoking reviewer (#152)" {
+  pr '.headRefOid = "4444444444444444444444444444444444444444"'
+  capture_diff
+  run bash "$SCRIPTS/review.sh" 7
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Could not fetch the pinned base and head"* ]]
+  [ ! -e "$GH_FIXTURES/reviewed.diff" ]
+  [ ! -e "$(stamp_file)" ]
+}
+
+@test "review uses the merge base when the target has unrelated commits (#152)" {
+  git checkout --quiet main
+  printf 'base-only\n' >base-only.txt
+  git add -- base-only.txt
+  git commit --quiet -m 'test: advance base'
+  BASE_OID=$(git rev-parse HEAD)
+  git push --quiet "$GH_FIXTURES/upstream.git" main
+  base_at "$BASE_OID"
+  capture_diff
+  run bash "$SCRIPTS/review.sh" 7
+  [ "$status" -eq 0 ]
+  git diff --no-ext-diff --no-textconv --no-color --binary --full-index "$BASE_OID...$HEAD_OID" -- >"$GH_FIXTURES/expected.diff"
+  cmp "$GH_FIXTURES/expected.diff" "$GH_FIXTURES/reviewed.diff"
+  ! grep -q base-only "$GH_FIXTURES/reviewed.diff"
+}
+
+@test "review completes shallow history before constructing the pinned diff (#152)" {
+  git clone --quiet --depth=1 --branch topic "file://$GH_FIXTURES/upstream.git" "$GH_FIXTURES/shallow"
+  cd "$GH_FIXTURES/shallow"
+  [ "$(git rev-parse --is-shallow-repository)" = true ]
+  draft
+  capture_diff
+  run bash "$SCRIPTS/review.sh" 7
+  [ "$status" -eq 0 ]
+  [ "$(git rev-parse --is-shallow-repository)" = false ]
+  git diff --no-ext-diff --no-textconv --no-color --binary --full-index "$BASE_OID...$HEAD_OID" -- >"$GH_FIXTURES/expected.diff"
+  cmp "$GH_FIXTURES/expected.diff" "$GH_FIXTURES/reviewed.diff"
 }
