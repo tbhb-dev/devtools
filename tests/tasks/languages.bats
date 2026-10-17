@@ -8,6 +8,7 @@ setup() {
 	mkdir -p "$WORK/.devtools" "$WORK/.config/mise/conf.d"
 	cp -R "$ROOT/.devtools/tasks" "$ROOT/.devtools/scripts" "$ROOT/.devtools/config" "$WORK/.devtools/"
 	cp "$ROOT/.config/mise/conf.d/10-devtools-tools.toml" "$ROOT/.config/mise/conf.d/20-devtools-env.toml" "$WORK/.config/mise/conf.d/"
+	cp "$ROOT/.config/mise/mise.lock" "$WORK/.config/mise/"
 	cat >"$WORK/mise.toml" <<'TOML'
 [task_config]
 includes = [".devtools/tasks/go.toml"]
@@ -15,6 +16,7 @@ TOML
 	cp "$ROOT/.devtools/vendir.yml" "$WORK/vendir.yml"
 	cd "$WORK"
 	export MISE_TRUSTED_CONFIG_PATHS="$WORK"
+	export MISE_LOCKED=1
 	export DEVTOOLS_DIR="$WORK/.devtools"
 	unset DEVTOOLS_GO_PACKAGES DEVTOOLS_GO_MODULE DEVTOOLS_GO_BIN_PACKAGES
 	unset DEVTOOLS_GO_MODULES_MODE DEVTOOLS_PYTHON_SOURCE_DIRS DEVTOOLS_PYTHON_DIRS
