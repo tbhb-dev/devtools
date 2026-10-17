@@ -279,12 +279,7 @@ run = "mise run devtools:lint-go-arch"
 # opens the standalone scripts this gate covers.
 [tasks.lint-shell]
 description = "Lint every non-vendored *.sh git can see via shellcheck"
-run = '''
-#!/usr/bin/env bash
-set -eu
-files=$(git ls-files --cached --others --exclude-standard '*.sh' ':!:vendor/**' ':!:.claude/**')
-if [ -n "$files" ]; then shellcheck $files; fi
-'''
+run = "mise run devtools:lint-shell"
 
 # Aggregates the Go gates, the Python gates, prose (vale), spelling
 # (cspell), Markdown (rumdl), config / JS / TS (biome), YAML (ryl),

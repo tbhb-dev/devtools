@@ -55,7 +55,7 @@ assert steps[-2]["run"] == "bash .devtools/scripts/filter-govulncheck-sarif.sh g
 lint = yaml.safe_load((workflows / "consumer-lint.yml").read_text())["jobs"]["lint"]
 assert lint["name"] == "lint"
 commands = [step["run"] for step in lint["steps"] if "run" in step]
-assert commands == ["mise run devtools:check-vendored", "mise run install-tools", "mise run install-guard-markdown", 'echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"', "mise run lint"]
+assert commands == ["mise run devtools:check-vendored", "mise run install-tools", "mise run install-guard-markdown", 'go_path=$(go env GOPATH)\necho "$go_path/bin" >> "$GITHUB_PATH"\n', "mise run lint"]
 ci = yaml.safe_load((workflows / "ci.yml").read_text())
 assert ci["jobs"]["lint"]["name"] == "lint"
 assert ci["jobs"]["test"]["name"].startswith("test (")

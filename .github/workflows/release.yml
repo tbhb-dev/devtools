@@ -182,15 +182,16 @@ jobs:
           set -o pipefail
           additions_file="$RUNNER_TEMP/additions.jsonl"
           : > "$additions_file"
+          changed_paths="$RUNNER_TEMP/changed-paths"
+          git diff -z --name-only --diff-filter=d HEAD~1 HEAD > "$changed_paths"
           while IFS= read -r -d '' path; do
             base64 -w0 -- "$path" |
               jq -Rs --arg path "$path" \
                 '{path: $path, contents: rtrimstr("\n")}' \
               >> "$additions_file"
-          done < <(git diff -z --name-only --diff-filter=d HEAD~1 HEAD)
+          done < "$changed_paths"
 
-          expected=$(git diff -z --name-only --diff-filter=d HEAD~1 HEAD |
-            tr -cd '\0' | wc -c)
+          expected=$(tr -cd '\0' < "$changed_paths" | wc -c)
           actual=$(jq -s 'length' < "$additions_file")
           if [ "$expected" != "$actual" ]; then
             echo "::error::built $actual file entries for $expected changed files"
@@ -208,6 +209,9 @@ jobs:
           # Reading the file gathers the same stream of objects into
           # the same array with none of it on the command line, and
           # deletions stays inline because it holds paths alone.
+          parent=$(git rev-parse HEAD~1)
+          headline=$(git log -1 --format=%s)
+          body=$(git log -1 --format=%b)
           jq -n \
             --slurpfile additions "$additions_file" \
             --arg query 'mutation($input: CreateCommitOnBranchInput!) {
@@ -215,9 +219,9 @@ jobs:
             }' \
             --arg repo "$REPO" \
             --arg branch "$BRANCH" \
-            --arg parent "$(git rev-parse HEAD~1)" \
-            --arg headline "$(git log -1 --format=%s)" \
-            --arg body "$(git log -1 --format=%b)" \
+            --arg parent "$parent" \
+            --arg headline "$headline" \
+            --arg body "$body" \
             --argjson deletions "$deletions" \
             '{
               query: $query,
@@ -245,7 +249,9 @@ jobs:
           fi
 
           git fetch --quiet origin "$BRANCH"
-          if [ "$(git rev-parse 'HEAD^{tree}')" != "$(git rev-parse "$oid^{tree}")" ]; then
+          expected_tree=$(git rev-parse 'HEAD^{tree}')
+          actual_tree=$(git rev-parse "$oid^{tree}")
+          if [ "$expected_tree" != "$actual_tree" ]; then
             echo "::error::the API commit's tree differs from the one cog built"
             exit 1
           fi

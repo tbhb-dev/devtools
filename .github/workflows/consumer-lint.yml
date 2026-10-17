@@ -42,7 +42,9 @@ jobs:
         run: mise run install-guard-markdown
 
       - name: Add Go binaries to PATH
-        run: echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+        run: |
+          go_path=$(go env GOPATH)
+          echo "$go_path/bin" >> "$GITHUB_PATH"
 
       - name: Run lint gates
         run: mise run lint

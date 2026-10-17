@@ -183,3 +183,18 @@ check_tree_gates() {
 	git add -- src
 	check_tree_gates 1
 }
+
+@test "shared shell lint rejects masked returns and accepts checked substitutions" {
+	printf '#!/usr/bin/env bash\n[[ $(false) == expected ]]\n' >check.sh
+	run mise run devtools:lint-shell
+	[ "$status" -ne 0 ]
+	[[ "$output" == *SC2312* ]]
+	printf '#!/usr/bin/env bash\nvalue=$(false) || exit\n[[ $value == expected ]]\n' >check.sh
+	run mise run devtools:lint-shell
+	[ "$status" -eq 0 ]
+	# SC2155 must remain enabled alongside the optional rule.
+	printf '#!/usr/bin/env bash\ncheck() { local value=$(false); echo "$value"; }; check\n' >check.sh
+	run mise run devtools:lint-shell
+	[ "$status" -ne 0 ]
+	[[ "$output" == *SC2155* ]]
+}
