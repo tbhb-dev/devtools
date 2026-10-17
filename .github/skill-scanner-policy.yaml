@@ -1,0 +1,17 @@
+---
+# Custom policies inherit the scanner's balanced defaults.
+# ALLOWED_TOOLS_BASH_VIOLATION only recognizes unrestricted Bash in
+# allowed-tools. It flags these writers' scoped Bash(...) entries and
+# would be satisfied only by widening their permissions. Keep the
+# exception on each named writer's manifest across generated and deployed
+# copies. Paths are relative to each skill directory. Every other rule,
+# skill, and file remains subject to scanning.
+suppressions:
+  - rule_id: ALLOWED_TOOLS_BASH_VIOLATION
+    skills: [write-pr-description]
+    paths: [SKILL.md]
+    reason: Scoped Bash command permissions are not recognized by scanner 2.3.0.
+  - rule_id: ALLOWED_TOOLS_BASH_VIOLATION
+    skills: [write-prose-fix]
+    paths: [SKILL.md]
+    reason: Scoped Bash command permissions are not recognized by scanner 2.3.0.

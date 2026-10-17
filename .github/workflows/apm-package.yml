@@ -33,6 +33,7 @@ on:
       - .claude/apm-hooks.json
       - .agents/**
       - .github/workflows/apm-package.yml
+      - .github/skill-scanner-policy.yaml
       # The apm pin and its checksums: a bump changes what every step
       # below runs, so it has to trigger this workflow.
       - mise.toml
@@ -50,6 +51,7 @@ on:
       - .claude/apm-hooks.json
       - .agents/**
       - .github/workflows/apm-package.yml
+      - .github/skill-scanner-policy.yaml
       # The apm pin and its checksums: a bump changes what every step
       # below runs, so it has to trigger this workflow.
       - mise.toml
@@ -131,3 +133,4 @@ jobs:
       skill_path: packages/agents
       format: sarif
       fail_on_severity: high
+      policy: .github/skill-scanner-policy.yaml
