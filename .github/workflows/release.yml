@@ -193,7 +193,7 @@ jobs:
 
           expected=$(tr -cd '\0' < "$changed_paths" | wc -c)
           actual=$(jq -s 'length' < "$additions_file")
-          if [ "$expected" != "$actual" ]; then
+          if [ "$expected" -ne "$actual" ]; then
             echo "::error::built $actual file entries for $expected changed files"
             exit 1
           fi
