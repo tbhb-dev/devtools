@@ -265,10 +265,14 @@ func TestAgentLifetime(t *testing.T) {
 	t.Parallel()
 	a := fixture(t)
 	startFixture(t, a)
-	a.Config.TTL = time.Second
 	require.NoError(t, a.Ensure(t.Context()))
+	// Limit the short lifetime to the expiry check.
+	a.Config.TTL = time.Second
+	require.NoError(t, a.load(t.Context()))
 	time.Sleep(1500 * time.Millisecond)
 	require.Error(t, a.Probe(t.Context()))
+	// The reloaded key must survive runner delays after Ensure returns.
+	a.Config.TTL = time.Hour
 	require.NoError(t, a.Ensure(t.Context()))
 	require.NoError(t, a.Probe(t.Context()))
 }
