@@ -35,6 +35,8 @@ Under Claude the skill's frontmatter also declares a guard hook. It's a rail rat
 
 ## Pull requests
 
+Publication checks the description before leak scans, lint, the independent review, and tests. Use `create-pr.sh --check-description` to run only description checks. PR and commit workflows can use gate passes from a clean committed tree for an hour when the command matches and the gate definitions and tool versions match. Description gates also bind the draft. Records stay under the Git directory. The scripts print each cached pass they use, and `--rerun-gates` forces fresh checks. Leak scans and independent reviews always run.
+
 Run the `pr` skill. It drafts the description and publishes it after a review, and it routes what follows to three sibling skills. This section only summarizes them.
 
 Draft every pull request description in the repo-root file `PR_AGENTDESC.md`, which a gitignore entry keeps out of history. The post-commit hook deletes the commit draft. This one remains after the publish as the working copy of the description while the pull request is open, and `merge-pr` removes it once the branch merges. A leftover draft that matches no open pull request has gone stale, so the `pr` preflight removes it rather than letting the next run inherit abandoned text.

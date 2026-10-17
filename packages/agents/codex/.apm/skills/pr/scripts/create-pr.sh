@@ -39,13 +39,14 @@
 # of the description for as long as the pull request is open, and the
 # merge-pr skill removes it once the branch lands.
 #
-# Usage: create-pr.sh [--confirmed] [--rewrite] [--dry-run]
+# Usage: create-pr.sh [--confirmed] [--rewrite] [--dry-run] [--check-description] [--rerun-gates]
 #   --confirmed  the operator answered yes to this publish in this session
 #   --rewrite    the branch was rebased on purpose: replace origin's copy
 #   --dry-run    run every check, say what the push would do, and stop
 #                before confirming, pushing, or publishing anything
 # Exit:  0 published (or the dry run passed), 1 refused, 75 held:
 #        nobody has confirmed the publish; ask, then pass --confirmed
+# shellcheck disable=SC2034,SC2154 # publication and properties are sourced below
 set -euo pipefail
 
 # --- environment hardening -------------------------------------------
@@ -70,15 +71,19 @@ die() {
 
 step() { printf '\n--- %s\n' "$1"; }
 
-usage="usage: create-pr.sh [--confirmed] [--rewrite] [--dry-run]"
+usage="usage: create-pr.sh [--confirmed] [--rewrite] [--dry-run] [--check-description] [--rerun-gates]"
 confirmed=false
 rewrite=false
 dry_run=false
+check_description=false
+rerun_gates=false
 for arg in "$@"; do
   case $arg in
   --confirmed) confirmed=true ;;
   --rewrite) rewrite=true ;;
   --dry-run) dry_run=true ;;
+  --check-description) check_description=true ;;
+  --rerun-gates) rerun_gates=true ;;
   *) die "$usage" ;;
   esac
 done
@@ -103,12 +108,26 @@ base=$(pr_field "$draft" base)
 base_ref=$(pr_base_ref "$base")
 [ -n "$base_ref" ] || die "the draft's base, ${base}, names no local or origin branch."
 
-# --- gate 1: the mechanical checks -----------------------------------
+check_identity() {
+  local want login
+  want=$(dt_conf gh_login)
+  if [ -z "$want" ]; then
+    printf 'gh identity: gh_login is not configured, so the account check is skipped\n'
+    return 0
+  fi
+  login=$(dt_gh_login) || exit $?
+  [ "$login" = "$want" ] ||
+    die "gh is signed in as ${login:-nobody}, not ${want}. Nothing was pushed or published."
+  printf 'gh identity: %s\n' "$login"
+}
 
+check_identity
+
+# Cheap description checks precede scans, review, and tests.
 step "validating PR_AGENTDESC.md"
 bash "$here/validate-description.sh" "PR_AGENTDESC.md" ||
   die "the description does not satisfy the template. Fix the findings above and retry."
-printf 'clean\n'
+dt_gate lint-pr-description "$draft" "$rerun_gates" mise run lint-pr-description
 
 # --- gate 2: the independent review ----------------------------------
 #
@@ -135,277 +154,28 @@ Review it again against the current draft, branch, and base:
   bash $here/review.sh"
 }
 
+# shellcheck disable=SC1091 # shares the draft and publication properties
+. "$here/properties.sh"
+if [ "$check_description" = true ]; then
+  rm -f "$copy" "$body_file"
+  exit 0
+fi
+require_reviewed
+
+mise run devtools:lint-leaks
+mise run devtools:gitleaks
+dt_gate lint "" "$rerun_gates" mise run lint
+bash "$here/review.sh"
 step "checking the review stamp"
 require_reviewed
 head=$(dt_head)
-copy=$state/pr.draft
-cp "$draft" "$copy"
 copy_digest=$(dt_digest "$copy") || exit $?
 reviewed_digest=$(dt_stamp_value pr draft) || exit $?
 [ "$copy_digest" = "$reviewed_digest" ] ||
   die "PR_AGENTDESC.md changed while it was being copied. Review it again."
 printf 'stamped for %s on %s\n' "$head" "$base_ref"
 
-# --- parse the reviewed copy -----------------------------------------
+dt_gate test "" "$rerun_gates" mise run test
 
-is_draft=$(pr_field "$copy" draft)
-labels_field=$(pr_field "$copy" labels) || exit $?
-labels=$(pr_sequence "$labels_field") || exit $?
-reviewers_field=$(pr_field "$copy" reviewers) || exit $?
-reviewers=$(pr_sequence "$reviewers_field") || exit $?
-assignees_field=$(pr_field "$copy" assignees) || exit $?
-assignees=$(pr_sequence "$assignees_field") || exit $?
-milestone=$(pr_field "$copy" milestone)
-title=$(pr_title "$copy")
-[ -n "$title" ] || die "the draft carries no level 1 heading to use as the title"
-body_file=$state/pr.body.md
-pr_body "$copy" >"$body_file"
-[ -s "$body_file" ] || die "the description has a title but no body"
-
-# --- gate 3: resolve everything the API has to recognize -------------
-#
-# gh adds labels, reviewers, and the milestone after the pull request
-# exists. An unknown one therefore fails *after* creation, leaving a
-# published pull request missing the properties it was supposed to
-# carry. Resolving them first turns that into a clean refusal.
-
-step "resolving pull request properties"
-command -v gh >/dev/null 2>&1 || die "gh is not installed"
-dt_gh_login >/dev/null || exit $?
-
-known_labels=$(dt_gh label list --limit 200 --json name --jq '.[].name') || exit $?
-while IFS= read -r want; do
-  [ -n "$want" ] || continue
-  printf '%s\n' "$known_labels" | grep -qxF -- "$want" ||
-    die "no label named \"${want}\" in this repository. Preflight printed the label set."
-done <<EOF
-$labels
-EOF
-
-if [ -n "$milestone" ]; then
-  known_milestones=$(dt_gh_repo "query(\$owner:String!,\$name:String!){repository(owner:\$owner,name:\$name){milestones(first:100,states:OPEN){nodes{title} pageInfo{hasNextPage}}}}" --jq '.data.repository.milestones | if .pageInfo.hasNextPage then error("more than 100 open milestones") else .nodes[].title end') || exit $?
-  printf '%s\n' "$known_milestones" | grep -qxF -- "$milestone" ||
-    die "no milestone named \"${milestone}\" in this repository."
-fi
-
-# Every issue or pull request the description points at has to exist. A
-# reference to a number nobody opened is the cheapest kind of invented
-# claim, and it is the one a machine can settle.
-refs=$(grep -o '#[0-9][0-9]*' "$body_file" | sort -u | head -20 || true)
-for ref in $refs; do
-  number=${ref#\#}
-  dt_gh_repo "query(\$owner:String!,\$name:String!,\$number:Int!){repository(owner:\$owner,name:\$name){issueOrPullRequest(number:\$number){__typename}}}" -F "number=$number" --jq '.data.repository.issueOrPullRequest | if . == null then error("reference does not exist") else .__typename end' >/dev/null || {
-    status=$?
-    printf 'could not validate reference #%s\n' "$number" >&2
-    exit "$status"
-  }
-done
-printf 'labels, milestone, and references all resolve\n'
-
-# --- the push, planned -----------------------------------------------
-#
-# plan_push reads what origin holds now, from origin itself rather than
-# from a remote-tracking ref that may be stale, and sets `was` and
-# `push_kind`: new, current, fast-forward, or rewrite. It refuses a push
-# that is neither a fast-forward nor a rewrite --rewrite allows.
-
-plan_push() {
-  was=$(git ls-remote origin "refs/heads/$branch" | cut -f1) ||
-    die "could not read ${branch} from origin; nothing was pushed."
-  if [ -z "$was" ]; then
-    push_kind=new
-  elif [ "$was" = "$head" ]; then
-    push_kind=current
-  elif gitr merge-base --is-ancestor "$was" "$head" 2>/dev/null; then
-    push_kind=fast-forward
-  elif ! gitr cat-file -e "$was^{commit}" 2>/dev/null; then
-    die "origin has ${branch} at ${was}, a commit this checkout never fetched.
-Nothing was pushed. Fetch it and look at what arrived before publishing."
-  elif gitr merge-base --is-ancestor "$head" "$was"; then
-    die "HEAD is behind origin's ${branch} at ${was}, and pushing would drop its
-commits. Nothing was pushed. Bring them in first."
-  elif [ "$rewrite" = true ]; then
-    push_kind=rewrite
-  elif [ "$dry_run" = true ]; then
-    push_kind=non-fast-forward
-  else
-    die "origin has ${branch} at ${was}, which HEAD does not contain, so the push
-is not a fast-forward and nothing was pushed. Where the branch was rebased
-on purpose, run this again with --rewrite on the operator's word: it
-replaces only that exact commit. Otherwise merge the base or the remote
-commits into the branch rather than rebasing it."
-  fi
-}
-
-step "planning the push"
-plan_push
-case $push_kind in
-new) printf 'origin has no %s yet; the push creates it\n' "$branch" ;;
-current) printf 'origin already has %s at %s\n' "$branch" "$head" ;;
-fast-forward) printf 'fast-forward from %s\n' "$was" ;;
-rewrite) printf 'REWRITE: replaces origin %s at %s, leasing on that exact commit\n' "$branch" "$was" ;;
-non-fast-forward)
-  printf 'WARNING: origin has %s at %s, which HEAD does not contain. The real run\n' "$branch" "$was"
-  printf 'refuses this push unless --rewrite is passed on the operator'"'"'s word.\n'
-  ;;
-esac
-
-# gh acts as whoever is signed in. A grant to publish says nothing about
-# whose account it publishes under, so before any write the signed-in
-# login has to be the configured agent account. gh_login is machine-level
-# configuration, never a repository file.
-check_identity() {
-  local want login
-  want=$(dt_conf gh_login)
-  if [ -z "$want" ]; then
-    printf 'gh identity: gh_login is not configured, so the account check is skipped\n'
-    return 0
-  fi
-  login=$(dt_gh_login) || exit $?
-  [ "$login" = "$want" ] ||
-    die "gh is signed in as ${login:-nobody}, not ${want}. Nothing was pushed or published."
-  printf 'gh identity: %s\n' "$login"
-}
-
-if [ "$dry_run" = true ]; then
-  step "dry run"
-  check_identity
-  printf 'dry run: nothing confirmed, pushed, or published\n'
-  rm -f "$copy" "$body_file"
-  exit 0
-fi
-
-# --- confirmation ----------------------------------------------------
-
-step "confirming"
-status=0
-dt_confirm pr "$confirmed" || status=$?
-case $status in
-0) ;;
-1) exit 1 ;;
-*) exit "$DT_HELD" ;;
-esac
-
-# The confirmation may have run another program. Check the stamp again,
-# then the copy against it, and only then write anything.
-require_reviewed
-copy_digest=$(dt_digest "$copy") || exit $?
-reviewed_digest=$(dt_stamp_value pr draft) || exit $?
-[ "$copy_digest" = "$reviewed_digest" ] ||
-  die "the copy of PR_AGENTDESC.md no longer matches the review stamp. Review it again."
-check_identity
-
-# --- push ------------------------------------------------------------
-
-step "pushing ${branch}"
-plan_push
-case $push_kind in
-current) printf 'nothing to push\n' ;;
-rewrite)
-  git push --set-upstream --force-with-lease="refs/heads/$branch:$was" origin "HEAD:refs/heads/$branch" ||
-    die "the rewrite push failed; origin may have moved past ${was}. Nothing was published."
-  printf 'REWRITE: %s on origin went from %s to %s\n' "$branch" "$was" "$head"
-  ;;
-*)
-  git push --set-upstream origin "HEAD:refs/heads/$branch" ||
-    die "git push failed; nothing was published."
-  ;;
-esac
-
-# A pre-push hook, or a server that rewrites a ref, could leave something
-# other than the reviewed commit on the branch.
-current_head=$(dt_head) || exit $?
-[ "$current_head" = "$head" ] ||
-  die "HEAD moved during the push. No pull request was touched; review again."
-remote=$(git ls-remote origin "refs/heads/$branch" | cut -f1)
-[ "$remote" = "$head" ] ||
-  die "origin has ${remote:-no ${branch}} after the push, not the reviewed ${head}. No pull request was touched."
-
-# --- publish ---------------------------------------------------------
-
-open_number=$(dt_gh pr list --head "$branch" --state open --json number --jq '.[0].number // empty') || exit $?
-
-if [ -n "$open_number" ]; then
-  step "updating pull request #${open_number}"
-  current=$(dt_gh pr view "$open_number" \
-    --json baseRefName,isDraft,labels,reviewRequests,assignees,milestone)
-  dt_gh pr edit "$open_number" --base "$base" --title "$title" --body-file "$body_file" >/dev/null
-
-  # reconcile <add-flag> <remove-flag> <desired> <current>: bring one
-  # property set to what the draft says, removals included.
-  reconcile() {
-    local item
-    while IFS= read -r item; do
-      [ -n "$item" ] || continue
-      printf '%s\n' "$3" | grep -qxF -- "$item" ||
-        dt_gh pr edit "$open_number" "$2" "$item" >/dev/null
-    done <<EOF
-$4
-EOF
-    while IFS= read -r item; do
-      [ -n "$item" ] || continue
-      printf '%s\n' "$4" | grep -qxF -- "$item" ||
-        dt_gh pr edit "$open_number" "$1" "$item" >/dev/null
-    done <<EOF
-$3
-EOF
-  }
-
-  current_labels=$(printf '%s' "$current" | jq -r '.labels[].name') || exit $?
-  reconcile --add-label --remove-label "$labels" "$current_labels"
-  current_reviewers=$(printf '%s' "$current" | jq -r '.reviewRequests[].login // empty') || exit $?
-  reconcile --add-reviewer --remove-reviewer "$reviewers" "$current_reviewers"
-  current_assignees=$(printf '%s' "$current" | jq -r '.assignees[].login') || exit $?
-  reconcile --add-assignee --remove-assignee "$assignees" "$current_assignees"
-
-  current_milestone=$(printf '%s' "$current" | jq -r '.milestone.title // empty') || exit $?
-  if [ -n "$milestone" ]; then
-    dt_gh pr edit "$open_number" --milestone "$milestone" >/dev/null
-  elif [ -n "$current_milestone" ]; then
-    dt_gh pr edit "$open_number" --remove-milestone >/dev/null
-  fi
-  current_draft=$(printf '%s' "$current" | jq -r '.isDraft')
-  if [ "$is_draft" = true ] && [ "$current_draft" = false ]; then
-    dt_gh pr ready "$open_number" --undo >/dev/null
-  elif [ "$is_draft" = false ] && [ "$current_draft" = true ]; then
-    dt_gh pr ready "$open_number" >/dev/null
-  fi
-  dt_gh pr view "$open_number" --json url --jq '.url'
-  rm -f "$copy" "$body_file"
-  step "done"
-  printf 'description updated at %s. PR_AGENTDESC.md stays for the next edit.\n' "$head"
-  exit 0
-fi
-
-step "opening the pull request"
-set -- --base "$base" --head "$branch" --title "$title" --body-file "$body_file"
-if [ "$is_draft" = true ]; then
-  set -- "$@" --draft
-fi
-while IFS= read -r item; do
-  [ -n "$item" ] || continue
-  set -- "$@" --label "$item"
-done <<EOF
-$labels
-EOF
-while IFS= read -r item; do
-  [ -n "$item" ] || continue
-  set -- "$@" --reviewer "$item"
-done <<EOF
-$reviewers
-EOF
-while IFS= read -r item; do
-  [ -n "$item" ] || continue
-  set -- "$@" --assignee "$item"
-done <<EOF
-$assignees
-EOF
-if [ -n "$milestone" ]; then
-  set -- "$@" --milestone "$milestone"
-fi
-
-dt_gh pr create "$@" || exit $?
-rm -f "$copy" "$body_file"
-
-step "done"
-printf 'pull request open at %s. PR_AGENTDESC.md stays until merge-pr lands the branch.\n' "$head"
+# shellcheck disable=SC1091 # publication shares the checked state above
+. "$here/publish.sh"

@@ -202,7 +202,7 @@ It also compares the commit's tree with the tree the reviewer read. When a pre-c
 
 The script pins `commit.cleanup=whitespace` for you. At the default of `strip`, git drops every body line opening with a number sign, and it does so after the review has hashed the file. The bytes the reviewer cleared would then stop matching the bytes git records.
 
-Only `--amend` and `--confirmed` pass through. `--amend` is the form `fix-pr` routes here for, and it needs a review run with `--amend` too. The script refuses every other flag, because a check on the command line sees `bash commit.sh` and none of the flags underneath it.
+Only `--amend`, `--confirmed`, `--dry-run`, and `--rerun-gates` pass through. `--amend` is the form `fix-pr` routes here for, and it needs a review run with `--amend` too. The script refuses every other flag, because a check on the command line sees `bash commit.sh` and none of the flags underneath it.
 
 Then rebase onto the base from step 1, without asking. Skip this when step 1 found nothing to rebase onto.
 
@@ -221,3 +221,5 @@ Report the resulting commit, then the groups still waiting from step 2, if any.
 ## Preconditions
 
 Preflight checks the toolchain this skill assumes, and `references/PRECONDITIONS.md` beside this file lists it. When a precondition is missing, tell the operator rather than improvising a substitute. The workflow commits only the repository holding the session. A sibling checkout has no stamp of its own, so open a session there to commit it.
+
+The wrapper runs `lint-commit-msg`, `lint`, and `test`. Use `--dry-run` to run these checks without committing, or `--rerun-gates` to force fresh checks even when the wrapper holds successful results from the past hour for the same clean committed tree. It prints each cached result it uses. Leak scans and the scripted review always run.

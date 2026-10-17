@@ -8,6 +8,9 @@
 # empty.
 
 setup() {
+  source "${BATS_TEST_DIRNAME}/../../../test_helper.bash"
+  isolate_git
+  stub_gates
   ROOT="${BATS_TEST_DIRNAME}/../../../.."
   SCRIPTS="${ROOT}/packages/agents/claude/.apm/skills/pr/scripts"
   REPO="${BATS_TEST_TMPDIR}/repo"
@@ -553,4 +556,59 @@ STUB
     run bash "$SCRIPTS/create-pr.sh" --confirmed
     [ "$status" -eq 9 ]
   done
+}
+
+@test "description failure leaves the test log untouched (#198)" {
+  export FAIL_GATE=lint-pr-description
+  test_log=.git/agent-skills/gates/9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08.log
+  mkdir -p .git/agent-skills/gates
+  printf 'earlier test output\n' >"$test_log"
+  run bash "$SCRIPTS/create-pr.sh" --dry-run
+  [ "$status" -ne 0 ]
+  [ "$(cat "$GATE_LOG")" = lint-pr-description ]
+  [ "$(cat "$test_log")" = 'earlier test output' ]
+}
+
+@test "check-description runs only description checks without a review (#198)" {
+  run bash "$SCRIPTS/create-pr.sh" --check-description
+  [ "$status" -eq 0 ]
+  [ "$(cat "$GATE_LOG")" = lint-pr-description ]
+  [ ! -f .git/agent-skills/pr.stamp ]
+  [ -z "$(remote_topic)" ]
+}
+
+@test "dry run then publication reuses gates but runs scans and review (#161)" {
+  export DEVTOOLS_REVIEW_CMD='cat >/dev/null; echo review >>"$GATE_LOG"; echo "VERDICT: PASS"'
+  bash "$SCRIPTS/review.sh"
+  : >"$GATE_LOG"
+  bash "$SCRIPTS/create-pr.sh" --dry-run
+  run bash "$SCRIPTS/create-pr.sh" --confirmed
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"mise run test passed at"*"(reused)"* ]]
+  [ "$(cat "$GATE_LOG")" = $'lint-pr-description\ndevtools:lint-leaks\ndevtools:gitleaks\nlint\nreview\ntest\ndevtools:lint-leaks\ndevtools:gitleaks\nreview' ]
+}
+
+@test "check-description rejects an unknown label before other gates (#198)" {
+  export GH_LABELS=bug
+  run bash "$SCRIPTS/create-pr.sh" --check-description
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"no label named"* ]]
+  [ "$(cat "$GATE_LOG")" = lint-pr-description ]
+}
+
+@test "a scripted review failure exits before test (#198)" {
+  bash "$SCRIPTS/review.sh"
+  export DEVTOOLS_REVIEW_CMD='cat >/dev/null; echo "VERDICT: CHANGES REQUIRED"; echo finding'
+  run bash "$SCRIPTS/create-pr.sh" --dry-run
+  [ "$status" -ne 0 ]
+  refute_grep '^test$' "$GATE_LOG"
+}
+
+@test "publisher rerun-gates overrides cached passes (#161)" {
+  bash "$SCRIPTS/review.sh"
+  bash "$SCRIPTS/create-pr.sh" --dry-run
+  run bash "$SCRIPTS/create-pr.sh" --dry-run --rerun-gates
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"(reused)"* ]]
+  [ "$(grep -c '^test$' "$GATE_LOG")" -eq 2 ]
 }
