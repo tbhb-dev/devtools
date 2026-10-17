@@ -11,7 +11,7 @@ setup() {
     run sort -cu "$words"
     [ "$status" -eq 0 ]
     while IFS= read -r word; do
-      run rg --ignore-case --word-regexp --fixed-strings "$word" \
+      run grep -riwF -- "$word" \
         "$repo_root/.devtools/tasks" "$repo_root/.config/mise/conf.d"
       [ "$status" -eq 0 ]
     done < "$words"

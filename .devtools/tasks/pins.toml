@@ -241,11 +241,11 @@ read_sites() {
       # The Renovate preset extends. A tag ref is the version outright; a
       # SHA ref carries its version in the comment beside it, and without
       # one the site still joins the SHA comparison.
-      /github>tbhb-dev\/devtools\/\/\.github\/[^/"]+\.json5/ {
+      /github>tbhb-dev\/devtools\/\/\.github\/[^\/"]+\.json5/ {
         line = $0
         ref = line
-        if (ref ~ /[^/"]+\.json5#/) {
-          sub(/.*[^/"]+\.json5#/, "", ref); sub(/".*$/, "", ref)
+        if (ref ~ /[^\/"]+\.json5#/) {
+          sub(/.*[^\/"]+\.json5#/, "", ref); sub(/".*$/, "", ref)
         } else {
           ref = ""
         }

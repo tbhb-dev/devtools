@@ -46,7 +46,7 @@ setup() {
 install_fixture_policy() {
   local config="${BATS_TEST_DIRNAME}/../../.devtools/config/gitleaks.toml"
   # Activate the documented example exactly as a consumer would.
-  sed 's/^# \(\[\[allowlists\]\]\|description =\|paths =\)/\1/' "$config" > .gitleaks.toml
+  sed -E 's/^# (\[\[allowlists\]\]|description =|paths =)/\1/' "$config" > .gitleaks.toml
   git init -q
 }
 

@@ -122,6 +122,42 @@ jobs:
       - name: Run tests with branch coverage
         run: mise run cover-py
 
+  test-bats:
+    name: "test-bats (${{ matrix.os }})"
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-24.04
+          - macos-15
+    steps:
+      - name: Harden the runner
+        if: runner.os == 'Linux'
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up mise
+        uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
+        with:
+          # renovate: datasource=github-releases depName=jdx/mise
+          version: 2026.10.3
+
+      - name: Sync Vale styles and Python dependencies
+        run: mise run install-tools
+
+      - name: Run hook regression suites
+        run: mise run test-hooks
+
+      - name: Run leak scanner regression suite
+        run: mise run test-leaks
+
   test:
     name: "test (${{ matrix.os }})"
     runs-on: ${{ matrix.os }}

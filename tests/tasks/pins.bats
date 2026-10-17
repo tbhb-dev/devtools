@@ -107,7 +107,8 @@ YAML
 }
 
 @test "check rejects guard version drift" {
-  sed -i 's/v0.10.0/v0.9.0/' mise.toml
+  sed 's/v0.10.0/v0.9.0/' mise.toml > changed
+  mv changed mise.toml
   run bash "$CHECK_SCRIPT"
   [ "$status" -eq 1 ]
   [[ "$output" == *'pins disagree on the version'* ]]
