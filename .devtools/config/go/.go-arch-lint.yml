@@ -26,7 +26,8 @@ allow:
 # directories from component analysis. Without this, every vendored file
 # shows up as "not attached to any component" — the architecture rules
 # are about *our* code, not theirs.
-# Add consumer-generated directories to this list as well.
+# Add consumer-generated and tool-installed directories to this list as well.
+# Direct go-arch-lint calls cannot read .gitignore.
 exclude:
   - apm_modules
   - .claude

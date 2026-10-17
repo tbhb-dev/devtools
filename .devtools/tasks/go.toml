@@ -62,7 +62,7 @@ golangci-lint run --modules-download-mode=${DEVTOOLS_GO_MODULES_MODE:-readonly} 
 
 ["devtools:lint-go-arch"]
 description = "Enforce intra-project layering rules from .go-arch-lint.yml"
-run = "go-arch-lint check"
+run = 'uv run --script "$DEVTOOLS_DIR/scripts/lint-go-arch.py"'
 
 ["devtools:lint-go-all"]
 description = "Aggregate every Go-flavored lint gate"

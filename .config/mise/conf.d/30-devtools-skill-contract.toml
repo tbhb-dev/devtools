@@ -24,6 +24,7 @@ description = "Run every linter that operates on the source tree"
 [task_templates."devtools:lint-prose"]
 description = "Lint prose via vale"
 usage = 'arg "<paths>..." default="."'
+run = "mise run devtools:lint-source-files -- prose $usage_paths"
 
 [task_templates."devtools:lint-draft"]
 description = "Lint one drafted document through every prose gate at once"

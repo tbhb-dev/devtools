@@ -41,7 +41,7 @@ export GH_PROMPT_DISABLED=1
 unset CDPATH GH_REPO GH_HOST GREP_OPTIONS
 IFS=$' \t\n'
 
-root=$(command git rev-parse --show-toplevel)
+root=$(env git rev-parse --show-toplevel)
 cd "$root"
 
 # The identity release.yml tags under, and the identity GitHub verifies
@@ -72,7 +72,7 @@ finish() {
   exit 0
 }
 
-latest=$(command git describe --tags --abbrev=0 2>/dev/null || true)
+latest=$(env git describe --tags --abbrev=0 2>/dev/null || true)
 tag=${1:-$latest}
 case $tag in
 '')
@@ -85,7 +85,7 @@ esac
 
 # --- The tag exists locally ---
 
-if ! command git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+if ! env git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
   fail "tag $tag exists locally" "run \`git fetch --tags\` and try again"
   finish
 fi
@@ -97,14 +97,14 @@ ok "tag $tag exists locally"
 # pointing straight at the commit, so cat-file reports commit rather
 # than tag, and nothing below it can hold.
 
-kind=$(command git cat-file -t "refs/tags/$tag")
+kind=$(env git cat-file -t "refs/tags/$tag")
 if [ "$kind" != "tag" ]; then
   fail "tag $tag is annotated" "it is a lightweight tag pointing at a $kind; cog's tag survived instead of the signed replacement"
   finish
 fi
 ok "tag $tag is annotated"
 
-body=$(command git cat-file tag "refs/tags/$tag")
+body=$(env git cat-file tag "refs/tags/$tag")
 
 # --- Signed ---
 
@@ -137,8 +137,8 @@ fi
 # to keep log.showSignature out of its output, and there is no wrapper
 # in this script to reach for.
 
-tag_commit=$(command git rev-parse "refs/tags/$tag^{commit}")
-commit_object=$(command git cat-file commit "$tag_commit")
+tag_commit=$(env git rev-parse "refs/tags/$tag^{commit}")
+commit_object=$(env git cat-file commit "$tag_commit")
 
 if printf '%s\n' "$commit_object" | grep -q '^gpgsig'; then
   ok "the release commit carries a signature"
@@ -155,8 +155,8 @@ fi
 
 # --- The remote carries the same tag object ---
 
-remote_tag=$(command git ls-remote origin "refs/tags/$tag" | cut -f1)
-local_tag=$(command git rev-parse "refs/tags/$tag")
+remote_tag=$(env git ls-remote origin "refs/tags/$tag" | cut -f1)
+local_tag=$(env git rev-parse "refs/tags/$tag")
 if [ -z "$remote_tag" ]; then
   fail "origin carries $tag" "origin has no such tag; --follow-tags may have left it behind"
 elif [ "$remote_tag" = "$local_tag" ]; then
@@ -206,11 +206,11 @@ esac
 # to what the remote actually reports keeps a stale fetch caught while
 # leaving the answer the same wherever it runs.
 
-tracking=$(command git rev-parse -q --verify "refs/remotes/origin/$RELEASE_BRANCH" || true)
-remote_branch=$(command git ls-remote origin "refs/heads/$RELEASE_BRANCH" | cut -f1)
+tracking=$(env git rev-parse -q --verify "refs/remotes/origin/$RELEASE_BRANCH" || true)
+remote_branch=$(env git ls-remote origin "refs/heads/$RELEASE_BRANCH" | cut -f1)
 if [ -z "$tracking" ] || [ "$tracking" != "$remote_branch" ]; then
   fail "$tag is reachable from $RELEASE_BRANCH" "origin/$RELEASE_BRANCH is not current with origin; run \`git fetch origin\` before verifying"
-elif command git merge-base --is-ancestor "$tag_commit" "$tracking"; then
+elif env git merge-base --is-ancestor "$tag_commit" "$tracking"; then
   ok "$tag is reachable from $RELEASE_BRANCH"
 else
   fail "$tag is reachable from $RELEASE_BRANCH" "the tagged commit $tag_commit is not an ancestor of $RELEASE_BRANCH"

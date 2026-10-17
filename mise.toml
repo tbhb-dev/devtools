@@ -384,7 +384,7 @@ run = "mise run devtools:lint-bandit"
 # repo-specific.
 [tasks.lint-prose]
 extends = "devtools:lint-prose"
-run = "vale --output=ai-tells-agent.tmpl --glob='!{LICENSE,CHANGELOG.md,.vale/*,apm_modules/*,tmp/*,vendor/*,.venv/*,.claude/worktrees/*,.pytest_cache/*,.complexipy_cache/*,COMMIT_AGENTMSG,PR_AGENTDESC.md,SQUASH_AGENTMSG}' $usage_paths"
+run = "DEVTOOLS_PROSE_GLOB='!{LICENSE,CHANGELOG.md,.vale/*,apm_modules/*,tmp/*,vendor/*,.venv/*,.claude/worktrees/*,.pytest_cache/*,.complexipy_cache/*,COMMIT_AGENTMSG,PR_AGENTDESC.md,SQUASH_AGENTMSG}' mise run devtools:lint-source-files -- prose $usage_paths"
 
 # This repository's own check, applied to itself. `go run` rather than an
 # installed binary so the gate reflects the working tree: a change to the
