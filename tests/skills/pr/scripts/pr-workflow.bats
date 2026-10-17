@@ -538,3 +538,19 @@ CHECKER
   [ -z "$(remote_topic)" ]
   refute_grep '^pr create' "$GH_LOG"
 }
+
+@test "updating a PR rejects fields printed before jq fails" {
+  bash "$SCRIPTS/review.sh"
+  export GH_OPEN_PR=1 REAL_JQ FAIL_FILTER
+  REAL_JQ=$(command -v jq)
+  cat >"${BATS_TEST_TMPDIR}/bin/jq" <<'STUB'
+#!/usr/bin/env bash
+"$REAL_JQ" "$@" || exit $?
+[ "$*" != "-r $FAIL_FILTER" ] || exit 9
+STUB
+  chmod +x "${BATS_TEST_TMPDIR}/bin/jq"
+  for FAIL_FILTER in '.labels[].name' '.reviewRequests[].login // empty' '.assignees[].login' '.milestone.title // empty'; do
+    run bash "$SCRIPTS/create-pr.sh" --confirmed
+    [ "$status" -eq 9 ]
+  done
+}

@@ -110,7 +110,10 @@ fi
 
 [ -n "$transcript" ] || cannot_resolve "not a readable file: $arg"
 
-transcript=$(cd "$(dirname "$transcript")" && printf '%s/%s' "$(pwd)" "$(basename "$transcript")")
+transcript_dir=$(dirname "$transcript") || exit $?
+transcript_name=$(basename "$transcript") || exit $?
+transcript_dir=$(cd "$transcript_dir" && pwd) || exit $?
+transcript=$transcript_dir/$transcript_name
 head -c 1 "$transcript" >/dev/null 2>&1 || cannot_resolve "cannot read: $transcript"
 case $(head -c 1 "$transcript") in
 '{') ;;

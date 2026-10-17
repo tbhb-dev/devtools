@@ -68,9 +68,10 @@ dt_git_dir() { gitr rev-parse --absolute-git-dir; }
 # The name the machine configuration knows the repository by: the
 # directory of the main checkout, whichever worktree the caller is in.
 dt_repo_name() {
-  local common
-  common=$(gitr rev-parse --path-format=absolute --git-common-dir)
-  basename "$(dirname "$common")"
+  local common parent
+  common=$(gitr rev-parse --path-format=absolute --git-common-dir) || return $?
+  parent=$(dirname "$common") || return $?
+  basename "$parent"
 }
 
 # Per worktree, so parallel agent worktrees never read each other's
@@ -78,17 +79,20 @@ dt_repo_name() {
 # format this one keeps.
 dt_state_dir() {
   local dir
-  dir=$(dt_git_dir)/agent-skills
-  mkdir -p "$dir"
+  dir=$(dt_git_dir) || return $?
+  dir=$dir/agent-skills
+  mkdir -p "$dir" || return $?
   printf '%s\n' "$dir"
 }
 
 dt_digest() {
+  local digest
   if command -v sha256sum >/dev/null 2>&1; then
-    sha256sum "$1" | cut -d' ' -f1
+    digest=$(sha256sum "$1") || return $?
   else
-    shasum -a 256 "$1" | cut -d' ' -f1
+    digest=$(shasum -a 256 "$1") || return $?
   fi
+  printf '%s\n' "${digest%% *}"
 }
 
 # dt_head prints the commit at HEAD, or `unborn` before the first commit.
@@ -151,14 +155,15 @@ _dt_conf_file() {
 
 # dt_conf <key> [default]: the configured value, or the default.
 dt_conf() {
-  local key=$1 default=${2:-} env_name value dir
+  local key=$1 default=${2:-} env_name value dir repo
   env_name=DEVTOOLS_$(printf '%s' "$key" | tr '[:lower:]' '[:upper:]')
   if [ -n "${!env_name+set}" ]; then
     printf '%s\n' "${!env_name}"
     return 0
   fi
   dir=${XDG_CONFIG_HOME:-$HOME/.config}/devtools
-  if value=$(_dt_conf_file "$dir/$(dt_repo_name).conf" "$key") ||
+  repo=$(dt_repo_name) || return $?
+  if value=$(_dt_conf_file "$dir/$repo.conf" "$key") ||
     value=$(_dt_conf_file "$dir/devtools.conf" "$key"); then
     printf '%s\n' "$value"
     return 0
@@ -207,7 +212,7 @@ dt_policy_ref() {
 # Comparing from the merge base also catches policy edits in earlier
 # commits on the branch, beyond the currently staged change.
 dt_review_policy() {
-  local inputs=$1 head=$2 tree=$3 path=.agents/review-instructions.md base blob
+  local inputs=$1 head=$2 tree=$3 path=.agents/review-instructions.md base blob mode
   DT_POLICY_REF=$(dt_policy_ref)
   DT_POLICY_OID=$(gitr rev-parse --verify --quiet "$DT_POLICY_REF^{commit}" || printf 'none\n')
   DT_POLICY_HASH=none
@@ -221,7 +226,8 @@ dt_review_policy() {
       DT_POLICY_STATUS=changed-built-in-only
     elif blob=$(gitr rev-parse --verify --quiet "$DT_POLICY_OID:$path"); then
       # Only a regular blob is text policy; symlinks are not instructions.
-      [ "$(gitr ls-tree "$DT_POLICY_OID" -- "$path" | cut -d' ' -f1)" = 100644 ] ||
+      mode=$(gitr ls-tree "$DT_POLICY_OID" -- "$path") || return $?
+      [ "${mode%% *}" = 100644 ] ||
         dt_die "Review policy must be a regular non-executable file: $path"
       gitr cat-file blob "$blob" >"$inputs/review-policy.txt"
       DT_POLICY_HASH=$(dt_digest "$inputs/review-policy.txt")
@@ -233,14 +239,19 @@ dt_review_policy() {
 }
 
 dt_policy_current() {
-  [ "$(dt_policy_ref)" = "$DT_POLICY_REF" ] &&
-    [ "${DT_POLICY_OID:-none}" = "$(gitr rev-parse --verify --quiet "${DT_POLICY_REF:-refs/remotes/origin/HEAD}^{commit}" || printf 'none\n')" ]
+  local ref oid
+  ref=$(dt_policy_ref) || return $?
+  oid=$(gitr rev-parse --verify --quiet "${DT_POLICY_REF:-refs/remotes/origin/HEAD}^{commit}" || printf 'none\n') || return $?
+  [ "$ref" = "$DT_POLICY_REF" ] && [ "${DT_POLICY_OID:-none}" = "$oid" ]
 }
 
 # dt_review_prompt <criteria-file> <arguments> <inputs-dir>: the review
 # skill's own instructions without their frontmatter, with $ARGUMENTS
 # filled in, followed by the gathered inputs and the reply format.
 dt_review_prompt() {
+  local files
+  files=$(find "$3" -type f) || return $?
+  files=$(printf '%s\n' "$files" | sort) || return $?
   awk -v args="$2" '
     NR == 1 && /^---$/ { front = 1; next }
     front && /^---$/ { front = 0; next }
@@ -251,7 +262,7 @@ dt_review_prompt() {
       }
       print
     }
-  ' "$1"
+  ' "$1" || return $?
   cat <<EOF
 
 ## Inputs for this run
@@ -264,7 +275,7 @@ so read those rather than the live repository, which may have moved.
 Read every one of them before you judge anything. You may also read and
 search other files in the repository for context.
 
-$(find "$3" -type f | sort)
+$files
 
 EOF
   if [ -f "$3/operator-note.txt" ]; then
@@ -315,8 +326,10 @@ dt_reviewer_label() {
   local custom
   custom=$(dt_conf review_cmd)
   if [ -n "$custom" ]; then
+    # shellcheck disable=SC2312 # Diagnostic text cannot change the confirmation or review verdict.
     printf 'review_cmd: %s\n' "$(printf '%s' "$custom" | tr '\n\r' '  ')"
   else
+    # shellcheck disable=SC2312 # Diagnostic text cannot change the confirmation or review verdict.
     printf '%s headless, model %s, effort %s\n' "$(dt_harness)" \
       "$(dt_conf review_model default)" "$(dt_conf review_effort default)"
   fi
@@ -381,7 +394,12 @@ dt_run_reviewer() {
 dt_verdict() {
   # A NUL or another control byte can end a line early for one reader
   # and not another. A reply carrying one is no verdict.
-  if [ "$(tr -d '\000-\010\013\014\016-\037' <"$1" | wc -c)" -ne "$(wc -c <"$1")" ]; then
+  local filtered_bytes bytes filtered
+  filtered=$(tr -d '\000-\010\013\014\016-\037' <"$1" && printf '.') || return $?
+  filtered=${filtered%.}
+  filtered_bytes=$(printf '%s' "$filtered" | wc -c) || return $?
+  bytes=$(wc -c <"$1") || return $?
+  if [ "$filtered_bytes" -ne "$bytes" ]; then
     printf 'unreadable\n'
     return 0
   fi
@@ -403,7 +421,9 @@ dt_verdict() {
 # dt_new_inputs <kind>: a fresh directory for one review's gathered
 # inputs, so one run never overwrites what another's reviewer is reading.
 dt_new_inputs() {
-  mktemp -d "$(dt_state_dir)/$1.inputs.XXXXXX"
+  local state
+  state=$(dt_state_dir) || return $?
+  mktemp -d "$state/$1.inputs.XXXXXX"
 }
 
 # dt_review <kind> <draft> <snapshot> <criteria> <arguments> <inputs> <still-current> [name value]...
@@ -425,10 +445,10 @@ dt_new_inputs() {
 dt_review() {
   local kind=$1 draft=$2 snapshot=$3 criteria=$4 arguments=$5 inputs=$6 still_current=$7
   shift 7
-  local state reply before verdict root
-  state=$(dt_state_dir)
+  local state reply before verdict root prompt draft_digest snapshot_digest
+  state=$(dt_state_dir) || return 4
   reply=$state/$kind.review
-  root=$(dt_root)
+  root=$(dt_root) || return 4
 
   [ -s "$draft" ] || dt_die "review: $draft is missing or empty"
   [ -f "$criteria" ] || dt_die "review: no review criteria at $criteria"
@@ -437,7 +457,7 @@ dt_review() {
 
   # A review that does not pass leaves nothing behind it to commit on.
   rm -f "$state/$kind.stamp"
-  before=$(dt_digest "$snapshot")
+  before=$(dt_digest "$snapshot") || return 4
   if [ -f "$inputs/review-policy-report.txt" ]; then
     cat "$inputs/review-policy-report.txt"
     set -- "$@" policy_ref "$DT_POLICY_REF" policy_oid "$DT_POLICY_OID" policy_hash "$DT_POLICY_HASH" policy_status "$DT_POLICY_STATUS"
@@ -445,11 +465,14 @@ dt_review() {
     printf 'Review policy: none applied; sha256: none\n'
   fi
 
-  if ! dt_review_prompt "$criteria" "$arguments" "$inputs" | dt_run_reviewer "$root" "$inputs" >"$reply"; then
+  prompt=$(dt_review_prompt "$criteria" "$arguments" "$inputs") || return 4
+  if ! dt_run_reviewer "$root" "$inputs" <<<"$prompt" >"$reply"; then
     printf 'review: the reviewer failed to run; nothing stamped\n' >&2
     return 4
   fi
-  if [ "$(dt_digest "$draft")" != "$before" ] || [ "$(dt_digest "$snapshot")" != "$before" ]; then
+  draft_digest=$(dt_digest "$draft") || return 5
+  snapshot_digest=$(dt_digest "$snapshot") || return 5
+  if [ "$draft_digest" != "$before" ] || [ "$snapshot_digest" != "$before" ]; then
     printf 'review: %s is not the text the reviewer was given; review it again\n' "$(basename "$draft")" >&2
     return 5
   fi
@@ -458,10 +481,10 @@ dt_review() {
     return 5
   fi
 
-  verdict=$(dt_verdict "$reply")
+  verdict=$(dt_verdict "$reply") || return 4
   case $verdict in
   pass)
-    _dt_stamp "$state/$kind.stamp" "$before" "$@"
+    _dt_stamp "$state/$kind.stamp" "$before" "$@" || return 4
     printf 'VERDICT: PASS (stamped)\n'
     return 0
     ;;
@@ -478,7 +501,7 @@ dt_review() {
 }
 
 _dt_stamp() {
-  local stamp=$1 digest=$2
+  local stamp=$1 digest=$2 binding
   shift 2
   # Bindings first, one a line. The reviewer label is free text from the
   # configuration, so it goes last, flattened onto one line, where it
@@ -486,10 +509,13 @@ _dt_stamp() {
   {
     printf 'draft %s\n' "$digest"
     while [ $# -ge 2 ]; do
-      printf '%s %s\n' "$1" "$(printf '%s' "$2" | tr '\n\r' '  ')"
+      binding=$(printf '%s' "$2" | tr '\n\r' '  ') || return $?
+      printf '%s %s\n' "$1" "$binding" || return $?
       shift 2
     done
+    # shellcheck disable=SC2312 # Diagnostic text cannot change the confirmation or review verdict.
     printf 'at %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    # shellcheck disable=SC2312 # Diagnostic text cannot change the confirmation or review verdict.
     printf 'reviewer %s\n' "$(dt_reviewer_label)"
   } >"$stamp"
 }
@@ -497,34 +523,39 @@ _dt_stamp() {
 # dt_stamp_value <kind> <name>: the value a stamp recorded, or nothing.
 dt_stamp_value() {
   local stamp
-  stamp=$(dt_state_dir)/$1.stamp
+  stamp=$(dt_state_dir) || return $?
+  stamp=$stamp/$1.stamp
   [ -f "$stamp" ] || return 0
-  sed -n "s/^$2 //p" "$stamp" | head -n 1
+  sed -n "/^$2 /{s/^$2 //;p;q;}" "$stamp"
 }
 
 # dt_require_stamp <kind> <draft> [name value]...: fail unless the stamp
 # covers these exact bytes and every named value still matches.
 dt_require_stamp() {
-  local kind=$1 draft=$2 recorded
+  local kind=$1 draft=$2 recorded state digest current_ref current_oid
   shift 2
-  [ -f "$(dt_state_dir)/$kind.stamp" ] ||
+  state=$(dt_state_dir) || return $?
+  [ -f "$state/$kind.stamp" ] ||
     dt_die "No independent review has cleared $(basename "$draft"). Run the review script first."
-  recorded=$(dt_stamp_value "$kind" draft)
-  [ "$recorded" = "$(dt_digest "$draft")" ] ||
+  recorded=$(dt_stamp_value "$kind" draft) || return $?
+  digest=$(dt_digest "$draft") || return $?
+  [ "$recorded" = "$digest" ] ||
     dt_die "$(basename "$draft") changed after its review. Run the review script again."
   while [ $# -ge 2 ]; do
-    recorded=$(dt_stamp_value "$kind" "$1")
+    recorded=$(dt_stamp_value "$kind" "$1") || return $?
     [ "$recorded" = "$2" ] ||
       dt_die "The $1 changed after the review (reviewed ${recorded:-nothing}, now $2). Run the review script again."
     shift 2
   done
   local policy_ref policy_oid
-  policy_ref=$(dt_stamp_value "$kind" policy_ref)
-  policy_oid=$(dt_stamp_value "$kind" policy_oid)
+  policy_ref=$(dt_stamp_value "$kind" policy_ref) || return $?
+  policy_oid=$(dt_stamp_value "$kind" policy_oid) || return $?
   if [ -n "$policy_ref" ]; then
-    [ "$(dt_policy_ref)" = "$policy_ref" ] ||
+    current_ref=$(dt_policy_ref) || return $?
+    [ "$current_ref" = "$policy_ref" ] ||
       dt_die "Review policy authority changed after review. Run the review script again."
-    [ "$(gitr rev-parse --verify --quiet "$policy_ref^{commit}" || printf 'none\n')" = "$policy_oid" ] ||
+    current_oid=$(gitr rev-parse --verify --quiet "$policy_ref^{commit}" || printf 'none\n') || return $?
+    [ "$current_oid" = "$policy_oid" ] ||
       dt_die "Review policy authority changed after review. Run the review script again."
   fi
 }
@@ -559,23 +590,28 @@ dt_clear() {
 # dt_preapproval <action>: print the grant line for this session, or
 # fail when there is none.
 dt_preapproval() {
-  local session
-  session=$(dt_session_id)
+  local session dir grant
+  session=$(dt_session_id) || return $?
   [ -n "$session" ] || return 1
-  grep "^$1 " "$(dt_git_dir)/preapprovals/$session" 2>/dev/null | head -n 1 | grep .
+  dir=$(dt_git_dir) || return $?
+  grant=$(awk -v action="$1" '$1 == action { print; exit }' "$dir/preapprovals/$session" 2>/dev/null) || return $?
+  [ -n "$grant" ] || return 1
+  printf '%s\n' "$grant"
 }
 
 # dt_delegation <action>: ask the machine's delegation checker.
 #   0 granted, 1 refused, 75 deferred (no checker, or no decision)
 # A broken checker never lets an action through.
 dt_delegation() {
-  local checker status
-  checker=$(dt_path "$(dt_conf delegation_check)")
+  local checker status repo configured
+  configured=$(dt_conf delegation_check) || return "$DT_HELD"
+  checker=$(dt_path "$configured") || return "$DT_HELD"
   if [ -z "$checker" ] || [ ! -x "$checker" ]; then
     return "$DT_HELD"
   fi
   status=0
-  "$checker" check "$(dt_repo_name)" "$1" || status=$?
+  repo=$(dt_repo_name) || return "$DT_HELD"
+  "$checker" check "$repo" "$1" || status=$?
   case $status in
   0 | 1) return "$status" ;;
   *) return "$DT_HELD" ;;
@@ -592,6 +628,7 @@ dt_confirm() {
     return 0
   fi
   if grant=$(dt_preapproval "$action"); then
+    # shellcheck disable=SC2312 # Diagnostic text cannot change the confirmation or review verdict.
     printf 'confirmation: pre-approval for session %s (%s)\n' "$(dt_session_id)" "${grant##* }"
     return 0
   fi
@@ -599,10 +636,12 @@ dt_confirm() {
   dt_delegation "$action" || status=$?
   case $status in
   0)
+    # shellcheck disable=SC2312 # Diagnostic text cannot change the confirmation or review verdict.
     printf 'confirmation: delegation_check granted %s in %s\n' "$action" "$(dt_repo_name)"
     return 0
     ;;
   1)
+    # shellcheck disable=SC2312 # Diagnostic text cannot change the confirmation or review verdict.
     printf 'REFUSED: the delegation check refuses %s in %s, and no operator answered.\n' "$action" "$(dt_repo_name)" >&2
     return 1
     ;;

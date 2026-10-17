@@ -88,6 +88,7 @@ snapshot() {
       cat "$gh_err" >&2
       exit 76
     fi
+    # shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
     grep -q 'no checks reported' "$gh_err" ||
       fail "could not read checks for #${number}: $(head -n 1 "$gh_err")"
     raw_checks='[]'
@@ -107,12 +108,14 @@ snapshot() {
 waited=0
 while [ "$waited" -lt "$APPEAR_TIMEOUT" ]; do
   snapshot
-  [ "$(printf '%s\n' "$checks" | jq 'length')" != "0" ] && break
+  check_count=$(printf '%s\n' "$checks" | jq 'length') || fail "could not count checks for #${number}"
+  [ "$check_count" != "0" ] && break
   sleep 5
   waited=$((waited + 5))
 done
 snapshot
-if [ "$(printf '%s\n' "$checks" | jq 'length')" = "0" ]; then
+check_count=$(printf '%s\n' "$checks" | jq 'length') || fail "could not count checks for #${number}"
+if [ "$check_count" = "0" ]; then
   printf 'NO CHECKS #%s registered after %ss\n' "$number" "$APPEAR_TIMEOUT"
   exit 2
 fi

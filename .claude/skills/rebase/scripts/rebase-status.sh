@@ -57,12 +57,14 @@ read_state() { [ -f "$state/$1" ] && tr -d '\n' <"$state/$1" || printf '%s' "$2"
 section "where"
 head_name=$(read_state head-name unknown)
 printf 'branch:  %s\n' "${head_name##refs/heads/}"
+# shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
 printf 'onto:    %s' "$(read_state onto unknown)"
 onto=$(read_state onto "")
 if [ -n "$onto" ]; then
   printf '  %s' "$(gitr log -1 --format='%h %s' "$onto" 2>/dev/null || true)"
 fi
 printf '\n'
+# shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
 printf 'progress: commit %s of %s\n' "$(read_state msgnum '?')" "$(read_state end '?')"
 
 stopped=$(read_state stopped-sha "")
@@ -113,6 +115,7 @@ if [ -z "$settled" ]; then
   none
 else
   printf '%s\n' "$settled"
+  # shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
   if [ "$(git config --get rerere.enabled || echo false)" = "true" ]; then
     printf '\nrerere is enabled, so some of these may be resolutions replayed from a\n'
     printf 'recording made against different surrounding code. Read any path here\n'
@@ -127,6 +130,7 @@ fi
 # disagree about a given file.
 section "conflict markers in the worktree"
 candidates=()
+# shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
 while IFS= read -r path; do
   [ -n "$path" ] && candidates+=("$path")
 done <<EOF

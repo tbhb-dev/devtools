@@ -138,6 +138,7 @@ if ! git rev-parse --verify --quiet "$base_ref" >/dev/null; then
   base_ref="refs/heads/$default_branch"
 fi
 printf 'comparing against: %s\n' "$base_ref"
+# shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
 printf '%s vs base:  %s\n' "$branch" "$(ahead_behind HEAD "$base_ref")"
 merge_base=$(git merge-base HEAD "$base_ref" 2>/dev/null || echo unknown)
 printf 'merge base: %s\n' "$merge_base"
@@ -175,6 +176,7 @@ fi
 section "diff"
 if [ "$landing" != "0" ]; then
   patch=$(gitr diff --no-ext-diff "$base_ref...HEAD")
+  # shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
   if [ "$(printf '%s\n' "$patch" | wc -l)" -le "$DIFF_LINE_CAP" ]; then
     printf '%s\n' "$patch"
   else
@@ -197,6 +199,7 @@ if [ "$upstream" = none ]; then
   printf 'pushed: no upstream yet; creating the pull request pushes the branch\n'
 else
   printf 'upstream:  %s\n' "$upstream"
+  # shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
   printf 'vs upstream: %s\n' "$(ahead_behind HEAD "$upstream")"
 fi
 
@@ -278,11 +281,13 @@ how() {
   esac
 }
 if grant=$(dt_preapproval pr); then
+  # shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
   printf 'pr:    GRANTED, %s — the confirmation step is skipped once every gate and the review pass\n' "$(how "$grant")"
 else
   printf 'pr:    not granted — the confirmation step asks the operator as written\n'
 fi
 if grant=$(dt_preapproval merge); then
+  # shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
   printf 'merge: GRANTED, %s — a pre-approved run routes through to the squash merge\n' "$(how "$grant")"
 else
   printf 'merge: not granted — a pre-approved run stops once the checks are green\n'
@@ -301,9 +306,12 @@ else
 fi
 
 section "review"
+# shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
 printf 'harness:  %s\n' "$(dt_harness)"
+# shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
 printf 'reviewer: %s\n' "$(dt_reviewer_label)"
-if [ -f "$(dt_state_dir)/pr.stamp" ]; then
+state=$(dt_state_dir) || exit $?
+if [ -f "$state/pr.stamp" ]; then
   printf 'stamp:    present from an earlier review; create-pr.sh checks it is still current\n'
 else
   printf 'stamp:    none\n'
@@ -330,6 +338,7 @@ done
 if [ ! -s "$DRAFT" ]; then
   printf '%s: absent or empty (expected before drafting)\n' "$DRAFT"
 elif [ "$gh_state" != ok ]; then
+  # shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
   printf '%s: present, %s line(s). Cannot tell whether it is stale because\n' \
     "$DRAFT" "$(wc -l <"$DRAFT" | tr -d ' ')"
   printf 'the pull request lookup did not run. Read it before overwriting.\n'

@@ -113,6 +113,7 @@ else
 fi
 
 section "commits being collapsed"
+# shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
 printf 'count: %s\n\n' "$(jq -r '.commits | length' "$view")"
 jq -r '.commits[] | "--- " + .oid[0:7] + "\n" + .messageHeadline + "\n" + (.messageBody // "")' "$view" |
   head -n "$((COMMIT_CAP * 8))" || true
@@ -145,7 +146,8 @@ fi
 # machine's delegation_check, reported here as configured rather than
 # called, because asking it is the merge's job.
 section "pre-approval"
-if [ -n "$(dt_session_id)" ] && grant=$(dt_preapproval merge); then
+session=$(dt_session_id) || exit $?
+if [ -n "$session" ] && grant=$(dt_preapproval merge); then
   case ${grant##* } in
   touchid) how="a Touch ID prompt stands behind it" ;;
   *) how="no biometric prompt stood behind it" ;;
@@ -162,9 +164,13 @@ else
 fi
 
 section "review"
+# shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
 printf 'harness:  %s\n' "$(dt_harness)"
+# shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
 printf 'reviewer: %s\n' "$(dt_reviewer_label)"
-if [ -f "$(dt_state_dir)/squash.stamp" ]; then
+state=$(dt_state_dir) || exit $?
+if [ -f "$state/squash.stamp" ]; then
+  # shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
   printf 'stamp:    present for #%s from an earlier review; review.sh replaces it\n' \
     "$(dt_stamp_value squash pr)"
 else

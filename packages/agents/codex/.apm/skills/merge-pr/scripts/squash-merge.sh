@@ -156,7 +156,10 @@ step "checking #${number}"
 wait_limit=${MERGE_MERGEABLE_WAIT:-60}
 poll_every=${MERGE_MERGEABLE_POLL:-3}
 waited=0
-while [ "$(mp_field "$view" mergeable)" = UNKNOWN ] || [ "$(mp_field "$view" mergeStateStatus)" = UNKNOWN ]; do
+while :; do
+  mergeable=$(mp_field "$view" mergeable) || exit $?
+  merge_state=$(mp_field "$view" mergeStateStatus) || exit $?
+  [ "$mergeable" = UNKNOWN ] || [ "$merge_state" = UNKNOWN ] || break
   [ "$waited" -lt "$wait_limit" ] ||
     die "#${number} still reports its mergeability as UNKNOWN after ${wait_limit}s. Try again shortly."
   [ "$waited" -gt 0 ] || printf 'GitHub is still computing mergeability; waiting up to %ss\n' "$wait_limit"
@@ -168,7 +171,8 @@ done
 
 pr_state=$(mp_field "$view" state)
 [ "$pr_state" = OPEN ] || die "#${number} is ${pr_state}, not OPEN."
-[ "$(mp_field "$view" isDraft)" = false ] || die "#${number} is a draft. Mark it ready before merging."
+is_draft=$(mp_field "$view" isDraft) || exit $?
+[ "$is_draft" = false ] || die "#${number} is a draft. Mark it ready before merging."
 mergeable=$(mp_field "$view" mergeable)
 [ "$mergeable" = MERGEABLE ] || die "#${number} is not mergeable (${mergeable:-unknown})."
 mp_require_reviews "$view" "$number"
@@ -233,7 +237,9 @@ read_live
 require_reviewed
 message=$state/merge.message
 cp "$SQUASH_DRAFT" "$message"
-[ "$(dt_digest "$message")" = "$(dt_stamp_value squash draft)" ] ||
+message_digest=$(dt_digest "$message") || exit $?
+reviewed_digest=$(dt_stamp_value squash draft) || exit $?
+[ "$message_digest" = "$reviewed_digest" ] ||
   die "${SQUASH_DRAFT} changed while it was being copied. Review it again."
 subject=$(head -1 "$message")
 body=$state/merge.body

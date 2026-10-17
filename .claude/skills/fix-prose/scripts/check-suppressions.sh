@@ -126,16 +126,21 @@ snapshot_dictionaries() {
 # baseline beyond the lines the operator allowed. Silence means the
 # departure is exactly the sanctioned additions.
 unsanctioned_changes() {
-  local state=$1 path=$2 snap="$1/watched/$2" empty line
+  local state=$1 path=$2 snap="$1/watched/$2" empty line delta status=0
   [ -f "$snap" ] || {
     empty=$(mktemp)
     snap=$empty
   }
   if [ -f "$path" ]; then
-    diff "$snap" "$path" || true
+    delta=$(diff "$snap" "$path") || status=$?
   else
-    diff "$snap" /dev/null || true
-  fi | while IFS= read -r line; do
+    delta=$(diff "$snap" /dev/null) || status=$?
+  fi
+  if [ "$status" -gt 1 ]; then
+    [ -z "${empty:-}" ] || rm -f "$empty"
+    return "$status"
+  fi
+  while IFS= read -r line; do
     case $line in
     '< '*) printf 'removed the line: %s\n' "${line#< }" ;;
     '> '*)
@@ -143,7 +148,7 @@ unsanctioned_changes() {
         printf 'added a line the operator did not allow: %s\n' "${line#> }"
       ;;
     esac
-  done
+  done <<<"$delta"
   [ -z "${empty:-}" ] || rm -f "$empty"
 }
 
@@ -294,11 +299,12 @@ case $mode in
       # A dictionary the operator sanctioned lines in is judged line by
       # line. Without a record for the path, any change fails as before.
       if sanctionable "$path" && grep -qF -- "$path$TAB" "$BASE/allow" 2>/dev/null; then
+        changes=$(unsanctioned_changes "$BASE" "$path") || exit $?
         while IFS= read -r reason; do
           [ -n "$reason" ] || continue
           report "$path" 1 linter-config-changed \
             "beyond the lines the operator sanctioned, the dictionary $reason; revert that part and record the finding as unresolved"
-        done < <(unsanctioned_changes "$BASE" "$path")
+        done <<<"$changes"
       else
         report "$path" 1 linter-config-changed \
           "the fixer changed linter configuration, which clears findings by changing the rules rather than the prose; revert it and record the finding as unresolved"

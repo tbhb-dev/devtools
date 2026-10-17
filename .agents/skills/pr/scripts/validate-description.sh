@@ -302,9 +302,10 @@ fi
 base_ref=""
 if [ -n "$fm_base" ]; then
   base_ref=$(pr_base_ref "$fm_base")
+  current_branch=$(git rev-parse --abbrev-ref HEAD) || exit $?
   if [ -z "$base_ref" ]; then
     report "$fm_base_line" base-unknown "\"${fm_base}\" names no local or origin branch"
-  elif [ "$fm_base" = "$(git rev-parse --abbrev-ref HEAD)" ]; then
+  elif [ "$fm_base" = "$current_branch" ]; then
     report "$fm_base_line" base-is-head "\"${fm_base}\" is the branch this pull request comes from"
   fi
 fi
@@ -398,6 +399,7 @@ EOF
 if [ "$draft_ordered" != "$present_ordered" ]; then
   wanted=$(printf '%s' "$present_ordered" | tr '\n' '|' | sed 's/|$//; s/## //g; s/|/, /g')
   first_wrong=$(printf '%s' "$draft_ordered" | head -1)
+  # shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
   report "$(line_of "$first_wrong")" section-order \
     "the template's sections run in this order: ${wanted}"
 fi
@@ -432,6 +434,7 @@ while IFS= read -r head; do
   case $section in
   *'`'*) ;;
   *)
+    # shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
     report "$(line_of "$head")" verification-names-no-command \
       "\"${head}\" names no command; put what you ran in backticks"
     ;;

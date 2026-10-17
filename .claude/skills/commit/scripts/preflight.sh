@@ -159,10 +159,13 @@ if [ "$DO_FETCH" = "1" ]; then
 fi
 printf 'fetch:  %s\n' "$fetch_state"
 printf 'default branch: %s\n' "$default_branch"
+# shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
 printf '%s vs origin/%s:  %s\n' "$default_branch" "$default_branch" \
   "$(ahead_behind "refs/heads/$default_branch" "refs/remotes/origin/$default_branch")"
+# shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
 printf '%s vs %s:  %s\n' "$branch" "$default_branch" \
   "$(ahead_behind HEAD "refs/heads/$default_branch")"
+# shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
 printf '%s vs origin/%s:  %s\n' "$branch" "$default_branch" \
   "$(ahead_behind HEAD "refs/remotes/origin/$default_branch")"
 
@@ -223,6 +226,7 @@ for hook in commit-msg pre-commit post-commit; do
   fi
 done
 if [ -s COMMIT_AGENTMSG ]; then
+  # shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
   printf 'COMMIT_AGENTMSG: present, %s line(s) — a leftover draft; overwrite it\n' \
     "$(wc -l <COMMIT_AGENTMSG | tr -d ' ')"
 else
@@ -254,9 +258,12 @@ else
 fi
 
 section "review"
+# shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
 printf 'harness:  %s\n' "$(dt_harness)"
+# shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
 printf 'reviewer: %s\n' "$(dt_reviewer_label)"
-if [ -f "$(dt_git_dir)/agent-skills/commit.stamp" ]; then
+git_dir=$(dt_git_dir) || exit $?
+if [ -f "$git_dir/agent-skills/commit.stamp" ]; then
   printf 'stamp:    present from an earlier review; review.sh replaces it\n'
 else
   printf 'stamp:    none\n'
@@ -287,6 +294,7 @@ patch=$(
   gitr diff --no-ext-diff --cached
   gitr diff --no-ext-diff
 )
+# shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
 if [ -z "$patch" ]; then
   printf '(no tracked changes)\n'
 elif [ "$(printf '%s\n' "$patch" | wc -l)" -le "$DIFF_LINE_CAP" ]; then

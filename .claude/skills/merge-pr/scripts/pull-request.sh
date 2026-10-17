@@ -128,7 +128,9 @@ mp_local_diff() {
   local repository
   repository=$(dt_gh repo view --json url --jq .url) || exit $?
   [ -n "$repository" ] || dt_die "Could not locate the pull request repository."
-  if [ "$(gitr rev-parse --is-shallow-repository)" = true ]; then
+  local shallow
+  shallow=$(gitr rev-parse --is-shallow-repository) || return $?
+  if [ "$shallow" = true ]; then
     gitr -c credential.helper= -c 'credential.helper=!gh auth git-credential' fetch --no-tags --no-write-fetch-head --unshallow "$repository" "$1" "$2" ||
       dt_die "Could not fetch the complete pinned base and head histories."
   else

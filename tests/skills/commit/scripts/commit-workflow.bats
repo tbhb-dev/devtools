@@ -367,3 +367,20 @@ CHECKER
   [ "$(cat "$CHECK_ARGS")" = $'check repo commit\ncheck repo commit' ]
   [ "$(git show HEAD:tracked.txt)" = reviewed ]
 }
+
+@test "post-commit verification rejects landed paths printed before git fails" {
+  initial_commit
+  stage tracked.txt reviewed
+  bash "$SCRIPTS/review.sh"
+  export REAL_GIT
+  REAL_GIT=$(command -v git)
+  mkdir -p "$BATS_TEST_TMPDIR/bin"
+  cat >"$BATS_TEST_TMPDIR/bin/git" <<'STUB'
+#!/usr/bin/env bash
+"$REAL_GIT" "$@" || exit $?
+case " $* " in *' diff-tree '*) exit 9 ;; esac
+STUB
+  chmod +x "$BATS_TEST_TMPDIR/bin/git"
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH" run bash "$SCRIPTS/commit.sh" --confirmed
+  [ "$status" -eq 9 ]
+}

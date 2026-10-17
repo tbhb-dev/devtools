@@ -49,7 +49,10 @@ while [ $# -gt 0 ]; do
   --note)
     [ $# -ge 2 ] || dt_die "usage: review.sh [--amend] [--note <file>]"
     [ -f "$2" ] || dt_die "Operator note is not a file: $2"
-    note=$(cd "$(dirname "$2")" && pwd)/$(basename "$2")
+    note_dir=$(dirname "$2") || exit $?
+    note_name=$(basename "$2") || exit $?
+    note_dir=$(cd "$note_dir" && pwd) || exit $?
+    note=$note_dir/$note_name
     shift 2
     ;;
   *) dt_die "usage: review.sh [--amend] [--note <file>]" ;;
@@ -98,8 +101,15 @@ fi
 
 # shellcheck disable=SC2329 # dt_review calls it by name
 still_as_gathered() {
-  [ "$(gitr write-tree)" = "$tree" ] && [ "$(dt_head)" = "$head" ] &&
-    { [ "$note_digest" = none ] || [ "$(dt_digest "$inputs/operator-note.txt")" = "$note_digest" ]; }
+  local live_tree live_head
+  live_tree=$(gitr write-tree) || return $?
+  live_head=$(dt_head) || return $?
+  [ "$live_tree" = "$tree" ] && [ "$live_head" = "$head" ] &&
+    { [ "$note_digest" = none ] || {
+      local live_note_digest
+      live_note_digest=$(dt_digest "$inputs/operator-note.txt") || return $?
+      [ "$live_note_digest" = "$note_digest" ]
+    }; }
 }
 
 dt_review_policy "$inputs" "$head" "$tree"

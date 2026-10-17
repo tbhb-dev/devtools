@@ -83,9 +83,12 @@ else
 fi
 
 section "what landed"
+# shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
 printf 'branch: %s\n' "$(git rev-parse --abbrev-ref HEAD)"
+# shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
 printf 'head:   %s\n' "$(git rev-parse --short HEAD)"
 if [ -n "$base" ]; then
+  # shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
   printf 'base:   %s\n' "$(git rev-parse --short "$base" 2>/dev/null || printf '%s' "$base")"
   printf '\ncommits above the base:\n'
   gitr log --oneline --no-decorate "$base..HEAD" 2>/dev/null || true
@@ -100,6 +103,7 @@ if [ -z "$before" ]; then
   printf 'and ORIG_HEAD). Pass it as an argument to get this comparison.\n'
   flagged=1
 else
+  # shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
   printf 'comparing against %s (%s)\n\n' "$(git rev-parse --short "$before")" "$origin"
 
   # Each range has to be spelled out. The three-dot shorthand takes the
@@ -144,6 +148,7 @@ if [ -n "${spec:-}" ]; then
   # shellcheck disable=SC2086  # spec is one or two ranges, deliberately split
   rd=$(git --no-pager -c color.ui=false range-diff --no-color \
     --creation-factor=90 $spec 2>/dev/null || true)
+  # shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
   if [ -z "$rd" ]; then
     printf 'range-diff produced nothing. The two ranges may share no merge base.\n'
     flagged=1
@@ -250,6 +255,7 @@ if command -v mise >/dev/null 2>&1; then
   printf 'hooks in isolation; this combination has never been tested.\n'
   printf '\nWhere the branch is long enough for a mid-history break to matter, the\n'
   printf 'thorough form runs the gate at every commit:\n\n'
+  # shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
   printf '  git -c rebase.updateRefs=false rebase --exec "mise run lint" %s\n' \
     "$(git rev-parse --short "${base:-HEAD}" 2>/dev/null || printf '<base>')"
 else

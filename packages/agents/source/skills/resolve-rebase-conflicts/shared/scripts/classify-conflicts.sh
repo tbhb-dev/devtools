@@ -171,10 +171,12 @@ while IFS= read -r path; do
       printf '\n  what %s changed, against the common ancestor:\n' "$label"
       d=$(gitr diff --no-ext-diff --no-index -- "$scratch/1" "$scratch/$stage" 2>/dev/null || true)
       body=$(printf '%s\n' "$d" | tail -n +5)
+      # shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
       if [ "$(printf '%s\n' "$body" | wc -l)" -le "$SIDE_DIFF_CAP" ]; then
         printf '%s\n' "$body" | sed 's/^/    /'
       else
         hint="git diff :1:$path :$stage:$path" # hygiene-ok: advice to print, not a call
+        # shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
         printf '    (%s lines. Read it with: %s)\n' \
           "$(printf '%s\n' "$body" | wc -l | tr -d ' ')" "$hint"
       fi

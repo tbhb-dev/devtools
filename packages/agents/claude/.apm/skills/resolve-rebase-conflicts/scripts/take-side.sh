@@ -79,8 +79,10 @@ stages=$(git ls-files -u -- "$path" | awk '{ printf "%s", $3 }')
 stopped=$(tr -d '\n' <"$git_dir/rebase-merge/stopped-sha" 2>/dev/null || true)
 onto=$(tr -d '\n' <"$git_dir/rebase-merge/onto" 2>/dev/null || true)
 
+# shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
 printf 'base-side     = %s\n' \
   "$(gitr log -1 --format='%h %s' "$onto" 2>/dev/null || printf 'the rebase target')"
+# shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
 printf 'replayed-side = %s\n' \
   "$(gitr log -1 --format='%h %s' "$stopped" 2>/dev/null || printf 'the commit being replayed')"
 printf 'taking: %s (stage %s) for %s\n\n' "$side" "$stage" "$path"
@@ -102,6 +104,7 @@ esac
 git cat-file blob ":$stage:$path" >"$path"
 git add -- "$path"
 
+# shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
 printf 'staged %s lines from the %s\n' "$(wc -l <"$path" | tr -d ' ')" "$side"
 
 declared=$(git check-attr rebase-resolve -- "$path" | sed 's/.*: //')
