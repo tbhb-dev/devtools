@@ -70,7 +70,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Harden the runner
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
         with:
           egress-policy: audit
 
@@ -88,7 +88,7 @@ jobs:
         uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
         with:
           # renovate: datasource=github-releases depName=jdx/mise
-          version: 2026.10.3
+          version: 2026.10.8
           install_args: apm
 
       # The frozen install comes first because the root manifest carries
@@ -121,7 +121,7 @@ jobs:
       actions: read
       security-events: write
     # yamllint disable-line rule:line-length
-    uses: cisco-ai-defense/skill-scanner/.github/workflows/scan-skills.yml@9f8ad1a3774ff395939f23f675af27987d98bc2a # 2.2.1
+    uses: cisco-ai-defense/skill-scanner/.github/workflows/scan-skills.yml@ef5cfee8d15fe207e09d808ccb5be4b9ae6d321a # 2.2.2
     with:
       # scan-skills' default scan_mode is scan-all, which always adds
       # --recursive --check-overlap, and its own docs say skill_path
