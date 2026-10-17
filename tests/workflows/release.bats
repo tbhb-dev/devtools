@@ -62,6 +62,12 @@ SH
 #!/bin/bash
 if [[ $1 == -s ]]; then echo 1; else cat >/dev/null; echo '{}'; fi
 SH
+	# The release job runs on Ubuntu; macOS base64 rejects its GNU flags.
+	# Encoding the empty fixture produces no output on either platform.
+	cat >"$BATS_TEST_TMPDIR/bin/base64" <<'SH'
+#!/bin/bash
+[[ $* == '-w0 -- file' && ! -s file ]]
+SH
 	printf '#!/bin/bash\ntouch published; echo oid\n' >"$BATS_TEST_TMPDIR/bin/gh"
 	chmod +x "$BATS_TEST_TMPDIR/bin/"*
 	cd "$BATS_TEST_TMPDIR"
