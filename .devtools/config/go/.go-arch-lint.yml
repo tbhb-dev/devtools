@@ -26,7 +26,12 @@ allow:
 # directories from component analysis. Without this, every vendored file
 # shows up as "not attached to any component" — the architecture rules
 # are about *our* code, not theirs.
+# Add consumer-generated directories to this list as well.
 exclude:
+  - apm_modules
+  - .claude
+  - .agents
+  - .codex
   - vendor
   - testdata
   - tools
