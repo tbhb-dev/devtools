@@ -40,9 +40,11 @@ Draft every pull request description in the repo-root file `PR_AGENTDESC.md`, wh
 The file supplies three things the template can't. YAML frontmatter holds the pull request properties, a level 1 heading holds the title, and the rest fills in the sections from `.github/pull_request_template.md`.
 
 1. Draft the description, with a title in the Conventional Commits shape. A squash merge turns that title into the commit subject on the default branch.
-2. Review the draft with the `review-pr-description` skill, which runs as an independent agent.
+2. Review the draft through `.claude/skills/pr/scripts/review.sh`, which runs a fresh read-only reviewer with `review-pr-description` as its criteria.
 3. Run `mise run lint-pr-description` and resolve whatever it reports.
 4. Confirm with the operator, then publish through `.claude/skills/pr/scripts/create-pr.sh`.
+
+Review stamps bind the draft's bytes, `HEAD`, the base resolved to `origin/<base>` where origin has one, that ref's commit, and the merge base. Both the validator and the reviewer compare against that same resolved base, so a stale local default branch never counts merged commits as landing. `create-pr.sh` checks every binding before and after resolving the confirmation (`--confirmed`, then a pre-approval, then the machine's delegation check). Before any write, the active `gh` account must match the machine's `gh_login`, and the output says when the machine has no configured login. Pushing requires a fast-forward from the commit read through `git ls-remote`. After a rebase, a branch goes up only with `--rewrite`, which leases on that exact remote commit and refuses when `HEAD` is behind origin or origin holds a commit never fetched here. `--dry-run` warns before the real run meets a non-fast-forward.
 
 `mise run lint-pr-description` runs a mechanical validator plus vale and cspell. The validator is offline and settles only what looking can settle:
 
@@ -56,7 +58,7 @@ Each finding states a line and the fix. Resolving one means opening the draft at
 
 The rest of the lifecycle splits into three skills, each usable on its own:
 
-- `watch-pr` waits for the checks. Because it streams one event per check through the `Monitor` tool, a wait costs one turn rather than one per look.
+- `watch-pr` waits for the checks. Because it streams one event per check, through the `Monitor` tool under Claude Code, a wait costs one turn rather than one per look. Each poll reads the checks once, a bad response produces an error, a rerun replaces the run it repeats, and a pull request with no checks is inconclusive rather than green.
 - `fix-pr` diagnoses a red pull request. One call reads the failing logs and names the local task reproducing each failure.
 - `merge-pr` squash merges under a message this toolchain writes. Its briefing script prints the published description, every commit the squash collapses, and the diffstat, then leaves a `SQUASH_AGENTMSG` skeleton whose body the agent writes. That message then passes `mise run lint-squash-msg` and a headless reviewer that `review.sh` starts with `review-squash-message` as its criteria. The stamp it writes binds the draft, the pull request's head, its base, and the commit that base points at. `squash-merge.sh` checks them all again and resolves the confirmation through the `merge` action. It then merges pinned to the reviewed head before it clears both drafts. It also works on a pull request nobody here authored, a dependency bump being the usual case.
 

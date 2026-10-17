@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # watch-checks — emit one line per check as it settles, then exit.
 #
-# Written as an event stream for the Monitor tool. Each stdout line
-# becomes a notification, so the caller learns about the first failure
-# when it happens rather than after the slowest job finishes, and waits
-# without spending a turn per look.
+# Written as an event stream. Under Claude Code the Monitor tool turns
+# each stdout line into a notification; under Codex one long-running
+# exec session reads them as they arrive. Either way the caller learns
+# about the first failure when it happens rather than after the slowest
+# job finishes, and waits without spending a turn per look.
 #
-# The contract Monitor needs:
+# The caller needs:
 #
 #   * one line per event, flushed as it happens
 #   * every terminal state emits, not only the passing one, because a
@@ -15,8 +16,15 @@
 #   * the command exits once nothing is pending, so the watch ends by
 #     itself rather than sitting armed until the timeout
 #
+# Each poll reads the checks once, through one gh call, and a response
+# that isn't a list of checks stops the watch with an error rather than
+# reading as "nothing pending". A rerun replaces the run it repeats: the
+# newest run per workflow and job name is the one reported, keyed on
+# both so two workflows sharing a job name stay apart.
+#
 # It also works as a plain blocking call, where the exit code carries
-# the outcome: 0 all passed, 1 something failed, 2 the wait ran out.
+# the outcome: 0 all passed, 1 something failed, 2 inconclusive (the
+# wait ran out, no check ever registered, or gh failed).
 #
 # Usage: watch-checks.sh [pull-request-number]
 # Written to bash 3.2.
@@ -62,30 +70,41 @@ printf 'WATCHING #%s\n' "$number"
 
 # gh sorts checks into buckets: pass, fail, pending, skipping, cancel.
 # Anything outside pending has finished moving.
-settled() {
-  gh pr checks "$number" --json name,bucket,link 2>/dev/null |
-    jq -r '.[] | select(.bucket != "pending") | "\(.bucket)\t\(.name)\t\(.link)"' 2>/dev/null |
-    sort
-}
-pending_count() {
-  gh pr checks "$number" --json bucket 2>/dev/null |
-    jq -r '[.[] | select(.bucket == "pending")] | length' 2>/dev/null || printf '0\n'
-}
-total_count() {
-  gh pr checks "$number" --json name 2>/dev/null | jq -r 'length' 2>/dev/null || printf '0\n'
+#
+# gh answers a pull request with no checks yet by failing, with "no
+# checks reported" on stderr, rather than with an empty list. That one
+# failure means an empty set; any other is an error.
+gh_err=$(mktemp)
+trap 'rm -f "$gh_err"' EXIT
+snapshot() {
+  if ! raw_checks=$(gh pr checks "$number" --json name,bucket,link,workflow 2>"$gh_err"); then
+    grep -q 'no checks reported' "$gh_err" ||
+      fail "could not read checks for #${number}: $(head -n 1 "$gh_err")"
+    raw_checks='[]'
+  fi
+  printf '%s\n' "$raw_checks" | jq -e 'type == "array"' >/dev/null 2>&1 ||
+    fail "gh returned an invalid checks response for #${number}"
+  checks=$(printf '%s\n' "$raw_checks" | jq '
+    map(. + {sort_id: ((((.link // "") | capture("(?<id>[0-9]+)$") | .id) // "0") | tonumber)})
+    | sort_by(.workflow, .name, .sort_id)
+    | group_by(.workflow, .name)
+    | map(last | del(.sort_id))
+  ') || fail "could not normalize checks for #${number}"
 }
 
 # A pull request opened seconds ago reports no checks at all. Waiting for
 # the first one to register keeps an empty set from reading as success.
 waited=0
 while [ "$waited" -lt "$APPEAR_TIMEOUT" ]; do
-  [ "$(total_count)" != "0" ] && break
+  snapshot
+  [ "$(printf '%s\n' "$checks" | jq 'length')" != "0" ] && break
   sleep 5
   waited=$((waited + 5))
 done
-if [ "$(total_count)" = "0" ]; then
+snapshot
+if [ "$(printf '%s\n' "$checks" | jq 'length')" = "0" ]; then
   printf 'NO CHECKS #%s registered after %ss\n' "$number" "$APPEAR_TIMEOUT"
-  exit 0
+  exit 2
 fi
 
 prev=""
@@ -94,7 +113,13 @@ elapsed=0
 failures=0
 
 while :; do
-  current=$(settled)
+  snapshot
+  pending=$(printf '%s\n' "$checks" |
+    jq '[.[] | select(.bucket == "pending")] | length')
+  current=$(printf '%s\n' "$checks" |
+    jq -r --argjson pending "$pending" \
+      '.[] | select(.bucket != "pending" and (.bucket != "cancel" or $pending == 0)) | "\(.bucket)\t\(.workflow):\(.name)\t\(.name)\t\(.link)"' |
+    sort)
 
   # Emit only what has settled since the previous look.
   #
@@ -103,12 +128,12 @@ while :; do
   # one way and compare another, and the mismatch drops a FAIL line
   # instead of reporting it. Silence and success would then look alike,
   # which is the one thing this script exists to prevent.
-  while IFS="$(printf '\t')" read -r bucket name link; do
+  while IFS="$(printf '\t')" read -r bucket key name link; do
     [ -n "$name" ] || continue
     case "$seen" in
-    *"|${name}|"*) continue ;;
+    *"|${key}|"*) continue ;;
     esac
-    seen="${seen}|${name}|"
+    seen="${seen}|${key}|"
     case $bucket in
     pass) printf 'PASS  %s\n' "$name" ;;
     skipping) printf 'SKIP  %s\n' "$name" ;;
@@ -124,7 +149,7 @@ EOF
 
   prev=$current
 
-  if [ "$(pending_count)" = "0" ]; then
+  if [ "$pending" = "0" ]; then
     break
   fi
 

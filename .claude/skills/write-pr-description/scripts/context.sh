@@ -2,11 +2,12 @@
 # context — everything drafting a pull request description needs, and
 # nothing else.
 #
-# The write-pr-description SKILL.md inlines this through the !`...`
-# preprocessor, so a forked writer starts from a settled picture rather
-# than spending its first several calls rediscovering one. That fork is
-# the point: the branch diff lands in the writer's context instead of
-# the caller's, and the caller never pays for it.
+# The Claude write-pr-description SKILL.md inlines this through the
+# !`...` preprocessor, and the Codex one runs it first, so a delegated
+# writer starts from a settled picture rather than spending its first
+# several calls rediscovering one. That delegation is the point: the
+# branch diff lands in the writer's context instead of the caller's,
+# and the caller never pays for it.
 #
 # Read-only throughout. The pr preflight owns the workflow
 # preconditions and the stale-draft sweep; this gathers material.

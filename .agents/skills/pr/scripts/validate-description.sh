@@ -71,6 +71,9 @@ readonly REQUIRED_KEYS="base draft labels"
 readonly OPTIONAL_KEYS="reviewers assignees milestone"
 readonly SEQUENCE_KEYS="labels reviewers assignees"
 
+# shellcheck disable=SC1091 # description.sh is deployed beside this script
+. "$(dirname "${BASH_SOURCE[0]}")/description.sh"
+
 root=$(git rev-parse --show-toplevel)
 cd "$root"
 
@@ -170,8 +173,9 @@ while IFS= read -r line || [ -n "$line" ]; do
     '' | '#'*) ;;
     *:*)
       key=${line%%:*}
-      value=${line#*:}
-      value=${value# }
+      # The same reading create-pr.sh applies, so a value this accepts is
+      # the value that publishes: `null`, `~`, and `""` all mean absent.
+      value=$(pr_scalar "${line#*:}")
       fm_keys="${fm_keys}${key} "
       if ! contains "$REQUIRED_KEYS $OPTIONAL_KEYS" "$key"; then
         report "$line_no" frontmatter-unknown-key \
@@ -291,10 +295,14 @@ if contains "$fm_keys" labels; then
 fi
 
 # A base naming no ref fails at creation time, and a base equal to the
-# branch fails more confusingly than that.
+# branch fails more confusingly than that. The comparisons below run
+# against origin's copy of the base where one exists, the same commit
+# the reviewer and the publisher read, because a stale local branch
+# would count commits that already merged as landing here.
+base_ref=""
 if [ -n "$fm_base" ]; then
-  if ! git rev-parse --verify --quiet "refs/heads/$fm_base" >/dev/null &&
-    ! git rev-parse --verify --quiet "refs/remotes/origin/$fm_base" >/dev/null; then
+  base_ref=$(pr_base_ref "$fm_base")
+  if [ -z "$base_ref" ]; then
     report "$fm_base_line" base-unknown "\"${fm_base}\" names no local or origin branch"
   elif [ "$fm_base" = "$(git rev-parse --abbrev-ref HEAD)" ]; then
     report "$fm_base_line" base-is-head "\"${fm_base}\" is the branch this pull request comes from"
@@ -335,8 +343,8 @@ else
     title_type=${title_text%%:*}
     title_type=${title_type%%\(*}
     title_type=${title_type%!}
-    if [ -n "$fm_base" ] && git rev-parse --verify --quiet "$fm_base" >/dev/null; then
-      landing_types=$(gitr log --format='%s' "$fm_base..HEAD" |
+    if [ -n "$base_ref" ]; then
+      landing_types=$(gitr log --format='%s' "$base_ref..HEAD" |
         sed -n 's/^\([a-z][a-z]*\)[(!:].*/\1/p' | sort -u | tr '\n' ' ')
       if [ -n "$landing_types" ] && ! contains "$landing_types" "$title_type"; then
         report "$title_line" title-type-unused \
@@ -465,8 +473,8 @@ fi
 # Every path the description puts in backticks exists in the tree or in
 # the diff. This is the one truthfulness rule a machine can settle: an
 # invented path is invented whatever the surrounding prose claims.
-if [ -n "$fm_base" ] && git rev-parse --verify --quiet "$fm_base" >/dev/null; then
-  changed=$(gitr diff --no-ext-diff --name-only "$fm_base...HEAD" 2>/dev/null || true)
+if [ -n "$base_ref" ]; then
+  changed=$(gitr diff --no-ext-diff --name-only "$base_ref...HEAD" 2>/dev/null || true)
 else
   changed=""
 fi
