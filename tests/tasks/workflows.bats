@@ -5,6 +5,7 @@ setup() {
 	WORK="${BATS_TEST_TMPDIR}/consumer"
 	mkdir -p "$WORK/.devtools/tasks" "$WORK/.config/mise/conf.d"
 	cp "$ROOT/.config/mise/conf.d/10-devtools-tools.toml" "$WORK/.config/mise/conf.d/"
+	cp "$ROOT/.config/mise/mise.lock" "$WORK/.config/mise/"
 	cp "$ROOT/.devtools/tasks/lint.toml" "$WORK/.devtools/tasks/"
 	cat >"$WORK/mise.toml" <<'TOML'
 [task_config]
@@ -13,6 +14,7 @@ TOML
 	cd "$WORK"
 	git init -q
 	export MISE_TRUSTED_CONFIG_PATHS="$WORK"
+	export MISE_LOCKED=1
 }
 
 @test "workflow lint skips missing and empty workflow directories" {
