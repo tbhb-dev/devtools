@@ -66,6 +66,7 @@ description = "Check spelling against the project dictionary (.cspell-words.txt)
 usage = 'arg "<paths>..." default="."'
 run = "cspell --config .cspell.jsonc --no-summary --no-progress --no-must-find-files --exclude COMMIT_AGENTMSG --exclude PR_AGENTDESC.md --exclude SQUASH_AGENTMSG $usage_paths"
 
+# Skip repositories without workflow YAML files.
 # actionlint walks `.github/workflows/` by default, parses each
 # workflow, and flags unknown actions, mis-typed expressions, shellcheck
 # issues inside `run:` blocks, and SHA-pin drift. Complements the
@@ -77,7 +78,15 @@ run = "cspell --config .cspell.jsonc --no-summary --no-progress --no-must-find-f
 # silently vanish on a machine with no shellcheck rather than fail.
 ["devtools:lint-workflows"]
 description = "Lint GitHub Actions workflow files via actionlint"
-run = "actionlint"
+run = """
+#!/usr/bin/env bash
+for workflow in .github/workflows/*.yml .github/workflows/*.yaml; do
+  if [[ -f "$workflow" ]]; then
+    exec actionlint
+  fi
+done
+echo "No workflow files found; skipping actionlint."
+"""
 
 # Format-check the mise configuration with mise's own formatter, so the
 # files that define the toolchain and most of the gates are themselves
