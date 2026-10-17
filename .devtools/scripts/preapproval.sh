@@ -6,7 +6,7 @@ preapproval_scopes() {
   local scope extra declared configured=${DEVTOOLS_PREAPPROVAL_SCOPES:-}
   local -a extras
   read -r -a extras <<<"${configured//$'\n'/ }"
-  for scope in "${extras[@]}"; do
+  for scope in ${extras[@]+"${extras[@]}"}; do
     if [[ ! $scope =~ ^[a-z][a-z0-9-]*$ ]] || [[ $scope == all ]]; then
       echo "invalid configured preapproval scope '$scope'" >&2
       return 1
@@ -22,7 +22,7 @@ preapproval_scopes() {
     commit | pr | merge) printf '%s\n' "$scope" ;;
     *)
       declared=0
-      for extra in "${extras[@]}"; do
+      for extra in ${extras[@]+"${extras[@]}"}; do
         [[ $extra != "$scope" ]] || declared=1
       done
       if [[ $declared == 0 ]]; then
