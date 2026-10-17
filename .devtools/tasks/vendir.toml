@@ -56,7 +56,7 @@ env -u GIT_DIR -u GIT_COMMON_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE \
     -u GIT_OBJECT_DIRECTORY vendir sync
 rc=0
 git diff --stat --exit-code -- vendir.yml vendir.lock.yml .config/mise/conf.d .devtools || rc=1
-untracked=$(git ls-files --others --exclude-standard -- .config/mise/conf.d .devtools)
+untracked=$(git ls-files --others --exclude-per-directory=.gitignore -- .config/mise/conf.d .devtools)
 if [ -n "$untracked" ]; then
   printf '?? %s\n' $untracked
   rc=1
