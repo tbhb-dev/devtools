@@ -63,7 +63,8 @@ export LC_ALL=C
 exec 3>&2
 
 # git runs quietly: its own messages can repeat a path or a ref.
-git() { command git "$@" 2>/dev/null; }
+# Bash 3.2 applies errexit to `command` even when the caller tests its status.
+git() { env git "$@" 2>/dev/null; }
 
 # Repository-owned ERE allow list: patterns only, never private literals.
 # Read relative to the repository root in every mode.
@@ -183,7 +184,7 @@ scan() {
       }
       if (r < 0) unreadable = 1
       close(pf)
-      exempt = ENVIRON["PATTERN_EXEMPT"]
+      exempt = "^\\.devtools/scripts/check-leaks\\.bats$|" ENVIRON["PATTERN_EXEMPT"]
       for (i = 1; i < 256; i++) ord[sprintf("%c", i)] = i
       # Split so a search for the literal finds only real uses of it.
       op_ref = "op:" "//"
@@ -411,7 +412,7 @@ emit_objects() {
       close(file)
     }
     BEGIN {
-      exempt = ENVIRON["PATTERN_EXEMPT"]
+      exempt = "^\\.devtools/scripts/check-leaks\\.bats$|" ENVIRON["PATTERN_EXEMPT"]
       load(ENVIRON["TYPES"], "types")
       load(ENVIRON["PAIRS"], "paths")
       load(ENVIRON["NAMES"], "paths")

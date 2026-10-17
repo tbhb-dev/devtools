@@ -217,7 +217,7 @@ Sync `.devtools/scripts/` alongside `.devtools/tasks/` in your consumer's `vendi
 
 Findings report the location and rule without printing matched text. Sensitive locations become opaque identifiers.
 
-Add the `leaks-staged`, `leaks-commit-msg`, and `leaks-pre-push` hook IDs from this repository to prek. Run `mise run devtools:prek-install` after syncing: it installs a wrapper before prek's pre-push hook so the scan receives Git's ref lines. The pre-push hook ID verifies the wrapper installation. The wrapper scans the exact outgoing objects before prek consumes the ref lines. In CI, fetch full history and run `mise run --quiet devtools:lint-leaks -- --range "$BASE..$HEAD"` for the pull request's base and head commits.
+Add the `leaks-staged`, `leaks-commit-msg`, and `leaks-pre-push` hook IDs from this repository to prek. Run `mise run devtools:prek-install` followed by `mise run devtools:install-leak-hook` after syncing, and include both steps in your bootstrap task. The latter installs a wrapper before prek's pre-push hook so the scan receives Git's ref lines. The pre-push hook ID verifies the wrapper installation. The wrapper scans the exact outgoing objects before prek consumes the ref lines. In CI, fetch full history and run `mise run --quiet devtools:lint-leaks -- --range "$BASE..$HEAD"` for the pull request's base and head commits.
 
 Keep private literals in `mise.local.toml`, which Git ignores:
 
