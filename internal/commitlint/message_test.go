@@ -6,6 +6,7 @@ package commitlint_test
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -139,6 +140,11 @@ func TestRun(t *testing.T) {
 	dir := t.TempDir()
 	file := filepath.Join(dir, "message")
 	writeFile(t, file, "fix: a thing\n\nSigned-off-by: T")
+	missing := filepath.Join(dir, "missing")
+	_, missingErr := os.ReadFile(missing)
+	if !errors.Is(missingErr, os.ErrNotExist) {
+		t.Fatalf("expected a missing-file error, got %v", missingErr)
+	}
 	for _, tt := range []struct {
 		name   string
 		args   []string
@@ -150,7 +156,7 @@ func TestRun(t *testing.T) {
 		{"unknown flag", []string{"--bogus"}, 2, "flag provided but not defined"},
 		{"bad rules", []string{"--rules", "bogus"}, 2, "expected --rules"},
 		{"extra file", []string{file, file}, 2, "expected --rules"},
-		{"missing file", []string{filepath.Join(dir, "missing")}, 2, "no such file"},
+		{"missing file", []string{missing}, 2, "commit-lint: " + missingErr.Error() + "\n"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
@@ -184,7 +190,7 @@ func TestRun(t *testing.T) {
 		dir,
 		func(string) string { return "" },
 	); status != 2 ||
-		!strings.Contains(output.String(), "permission denied") {
+		!strings.Contains(output.String(), "commit-lint: "+os.ErrPermission.Error()+"\n") {
 		t.Fatalf("got %d, %s", status, &output)
 	}
 }
