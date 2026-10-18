@@ -56,9 +56,10 @@ STUB
 @test "real commit-msg hook rejects unsigned draft and accepts git commit -s" {
 	git config core.hooksPath "$work/.git/hooks"
 	git config commit.gpgsign false
+	(cd "$root" && go build -o "$work/bin/commit-lint" ./cmd/commit-lint)
 	cat >.git/hooks/commit-msg <<HOOK
 #!/usr/bin/env bash
-bash "$root/scripts/commitlint.sh" "\$1" && bash "$root/scripts/commit-trailers.sh" "\$1"
+"$work/bin/commit-lint" "\$1"
 HOOK
 	chmod +x .git/hooks/commit-msg
 	run git -c user.name=Author -c user.email=author@example.invalid commit --allow-empty -F COMMIT_AGENTMSG
