@@ -39,6 +39,7 @@ none() { printf '(none)\n'; }
 
 root=$(dt_root)
 cd "$root"
+ma_context
 
 section "gh"
 gh_state=ok
@@ -75,7 +76,7 @@ printf 'pull request: #%s\n' "$number"
 
 view=$(dt_state_dir)/merge-preflight.json
 mp_view "$number" "$view" \
-  number,title,state,isDraft,author,baseRefName,headRefName,headRefOid,isCrossRepository,mergeable,mergeStateStatus,reviewDecision,url,statusCheckRollup,commits,body,files || exit $?
+  number,title,state,isDraft,author,baseRefName,headRefName,headRefOid,isCrossRepository,mergeable,mergeStateStatus,reviewDecision,url,statusCheckRollup,commits,body,files,labels,reviews || exit $?
 
 section "state"
 jq -r '
@@ -90,6 +91,11 @@ jq -r '
 ' "$view"
 
 mp_require_reviews "$view" "$number"
+if [ "${DT_UNATTENDED:-0}" = 1 ]; then
+  pinned_base=$(mp_field "$view" baseRefName)
+  pinned_base=$(mp_base_oid "$pinned_base")
+  ma_gates "$view" "$number" "$pinned_base"
+fi
 
 section "checks"
 status=0
@@ -154,7 +160,7 @@ if [ -n "$session" ] && grant=$(dt_preapproval merge); then
   esac
   printf 'merge: GRANTED, %s — step 6 skips the confirmation once every gate and the review pass\n' "$how"
 else
-  printf 'merge: not granted — step 6 confirms with the operator as written\n'
+  printf 'merge: not granted — merge holds until an authority grants it\n'
 fi
 checker=$(dt_conf delegation_check)
 if [ -n "$checker" ]; then
@@ -183,7 +189,11 @@ if git check-ignore --quiet "$DRAFT" 2>/dev/null; then
 else
   printf '%s gitignored: NO — add it to .gitignore before drafting\n' "$DRAFT"
 fi
-if command -v mise >/dev/null 2>&1 && mise task info lint-squash-msg >/dev/null 2>&1; then
+if [ "${DT_UNATTENDED:-0}" = 1 ]; then
+  configured_lint=$(dt_repo_conf lint_squash_cmd 'mise run lint-squash-msg')
+  [ -n "$configured_lint" ] || dt_die "lint_squash_cmd must not be empty"
+  printf 'configured squash lint: %s\n' "$configured_lint"
+elif command -v mise >/dev/null 2>&1 && mise task info lint-squash-msg >/dev/null 2>&1; then
   printf 'mise run lint-squash-msg: present\n'
 else
   printf 'mise run lint-squash-msg: ABSENT — stop and tell the operator\n'

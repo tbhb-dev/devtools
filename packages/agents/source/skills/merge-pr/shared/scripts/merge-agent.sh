@@ -1,0 +1,160 @@
+#!/usr/bin/env bash
+# shellcheck disable=SC2034,SC2154 # state comes from the sourcing merge scripts
+# Unattended merge policy shared by the interactive merge entry points.
+export LC_ALL=C GH_PAGER=cat GH_PROMPT_DISABLED=1 PYTHONUTF8=1
+unset CDPATH GH_REPO GH_HOST GREP_OPTIONS
+IFS=$' \t\n'
+set -o pipefail
+
+ma_context() {
+  [ "${DT_UNATTENDED:-0}" = 1 ] || return 0
+  dt_agent_context || return $?
+  local dirty login
+  dirty=$(gitr status --porcelain --untracked-files=all) || return $?
+  [ -z "$dirty" ] || dt_die "Commit the work first; unattended merging requires a clean tree."
+  login=$(dt_conf gh_login) || return $?
+  [ -n "$login" ] || dt_die "gh_login must be configured on the machine"
+  command -v uv >/dev/null || dt_die "uv is required for the YAML policy reader"
+  command -v agentrepo >/dev/null || dt_die "agentrepo is required for check judgement"
+}
+
+ma_lint() {
+  local cmd
+  if [ "${DT_UNATTENDED:-0}" = 1 ]; then
+    cmd=$(dt_repo_conf lint_squash_cmd 'mise run lint-squash-msg') || return $?
+    [ -n "$cmd" ] || dt_die "lint_squash_cmd must not be empty"
+    bash -c "$cmd"
+  else
+    mise run lint-squash-msg
+  fi
+}
+
+ma_policy() { uv run --quiet --script "$DT_LIB_DIR/merge-policy.py" "$@"; }
+
+# Latest decisive review, on the exact head, from machine-selected authority.
+ma_approved() {
+  [ -n "$2" ] || return 1
+  jq -e --arg login "$2" --arg head "$3" '
+    [.reviews[] | select(.author.login == $login) |
+      select(.state == "APPROVED" or .state == "CHANGES_REQUESTED" or .state == "DISMISSED")]
+    | sort_by(.submittedAt) | last | .state == "APPROVED" and .commit.oid == $head
+  ' "$1" >/dev/null
+}
+
+ma_identity() {
+  local want actual
+  want=$(dt_conf gh_login) || return $?
+  [ -n "$want" ] || dt_die "gh_login must be configured on the machine"
+  actual=$(dt_gh_login) || return $?
+  [ "$want" = "$actual" ] || dt_die "gh is signed in as $actual, not $want"
+}
+
+# Reused before review and again immediately before every merge write.
+ma_gates() {
+  [ "${DT_UNATTENDED:-0}" = 1 ] || return 0
+  local view=$1 pr=$2 base_oid=$3 final=${4:-false} head base reviewer label ready config key value required default dir st root encoded
+  ma_context || return $?
+  st=$(dt_state_dir) || return $?
+  root=$(dt_root) || return $?
+  head=$(mp_field "$view" headRefOid) || return $?
+  base=$(mp_field "$view" baseRefName) || return $?
+  jq -e ' .state == "OPEN" and .isDraft == false and .mergeable == "MERGEABLE" and .mergeStateStatus == "CLEAN"' "$view" >/dev/null || dt_die "PR is not open, ready, MERGEABLE, and CLEAN"
+  ma_identity || return $?
+  reviewer=$(dt_conf required_reviewer) || return $?
+  [ -n "$reviewer" ] || dt_die "required_reviewer must be configured on the machine"
+  ma_approved "$view" "$reviewer" "$head" || dt_die "WAITING_REVIEW: $reviewer must approve the current head"
+  label=$(dt_repo_conf owner_review_label owner-review) || return $?
+  [ -n "$label" ] || dt_die "owner_review_label must not be empty"
+  if jq -e --arg label "$label" '.labels | any(.name == $label)' "$view" >/dev/null; then
+    dt_die "needs-owner: the PR has the owner-review label"
+  fi
+  if [ "$final" != true ]; then
+    mp_local_diff "$base_oid" "$head" "$st" || return $?
+    config='{}'
+    for key in golden_paths loosening_markers gate_config_paths owner_paths disposable_ignored; do
+      value=$(dt_repo_conf "$key") || return $?
+      config=$(printf '%s' "$config" | jq --arg key "$key" --arg value "$value" '. + {($key):$value}') || return $?
+    done
+    ma_policy inspect "$base_oid" "$head" <<<"$config" >"$st/merge.policy.json" || return $?
+  fi
+  if [ "$final" != true ]; then MA_POLICY=$(cat "$st/merge.policy.json") || return $?; fi
+  MA_OWNER_OVERRIDE=''
+  if jq -e '.findings | length > 0' <<<"$MA_POLICY" >/dev/null; then
+    jq -r '.findings[] | @json' <<<"$MA_POLICY" >&2
+    value=$(dt_conf merge_owner) || return $?
+    ma_approved "$view" "$value" "$head" || dt_die "needs-owner: golden files or loosened gates require merge_owner approval on the current head"
+    MA_OWNER_OVERRIDE=$value
+    printf 'owner override: %s approved %s\n' "$value" "$head"
+  fi
+  if [ "$final" != true ]; then
+    dir=$(dt_repo_conf ruleset_dir .github/rulesets) || return $?
+    default=$(dt_gh repo view --json defaultBranchRef --jq .defaultBranchRef.name) || return $?
+    encoded=$(jq -nr --arg base "$base" '$base|@uri') || return $?
+    dt_gh api "repos/{owner}/{repo}/rules/branches/$encoded" >"$st/merge.rules.json" || return $?
+    required=$(ma_policy required "$base_oid" "$base" "$default" "$dir" <"$st/merge.rules.json") || return $?
+    MA_REQUIRED=$required
+  else
+    required=$MA_REQUIRED
+  fi
+  [ -n "$required" ] || dt_die "No required checks are known for the base"
+  set -- checks evaluate --file "$view" --expected-head "$head"
+  while IFS= read -r value; do set -- "$@" --required "$value"; done <<<"$required"
+  agentrepo "$@" || return $?
+  ready=$(dt_repo_conf merge_ready_cmd) || return $?
+  if [ "$final" != true ] && [ -n "$ready" ]; then
+    ready=$(dt_path "$ready") || return $?
+    [ -x "$ready" ] || dt_die "merge_ready_cmd must name an executable"
+    "$ready" "$root" "$pr" "$head" || return $?
+  fi
+}
+
+ma_prepare_children() {
+  [ "${DT_UNATTENDED:-0}" = 1 ] || return 0
+  [ "$cross_repo" = false ] || return 0
+  local children child count
+  children=$(dt_gh pr list --base "$head_ref" --state open --limit 500 --json number) || return $?
+  count=$(printf '%s' "$children" | jq 'length') || return $?
+  [ "$count" -lt 500 ] || dt_die "Too many dependent PRs to retarget safely"
+  children=$(printf '%s' "$children" | jq -r '.[].number') || return $?
+  for child in $children; do
+    ma_identity || return $?
+    [ "$child" = "$number" ] || dt_gh pr edit "$child" --base "$base_ref" || return $?
+  done
+}
+
+# Verify the remote message before deleting any evidence or branch.
+ma_verify() {
+  [ "${DT_UNATTENDED:-0}" = 1 ] || return 0
+  local repository wanted actual live_base
+  repository=$(dt_gh repo view --json url --jq .url) || return $?
+  live_base=$(mp_base_oid "$base_ref") || return $?
+  gitr -c credential.helper= -c 'credential.helper=!gh auth git-credential' fetch --no-tags --no-write-fetch-head "$repository" "$live_base" "$merge_commit" || return $?
+  gitr merge-base --is-ancestor "$merge_commit" "$live_base" || dt_die "merged-not-as-reviewed: merge commit is not on the live base"
+  wanted=$(git stripspace <"$message") || return $?
+  actual=$(gitr cat-file commit "$merge_commit" | sed '1,/^$/d' | git stripspace) || return $?
+  [ "$actual" = "$wanted" ] || dt_die "merged-not-as-reviewed: the remote message differs; preserve evidence and inspect"
+}
+
+ma_report() {
+  [ "${DT_UNATTENDED:-0}" = 1 ] || return 0
+  local text owners
+  owners=$(jq -c '.owner_paths' <<<"$MA_POLICY") || return $?
+  text="Merged #$number as $merge_commit. Owner override: ${MA_OWNER_OVERRIDE:-none}. Owner paths: $owners."
+  jq --arg owner "${MA_OWNER_OVERRIDE:-}" --argjson paths "$owners" '. + {owner_override:$owner,owner_paths:$paths}' "$result" >"$result.next" || return $?
+  mv "$result.next" "$result"
+  dt_agent_report fixed "$number" "$text" || return $?
+  printf '%s\n' "$text"
+}
+
+# Holds and uncertain writes report without changing their original status.
+ma_exit() {
+  local status=$1 text
+  [ "${BASH_SUBSHELL:-0}" -eq 0 ] || return "$status"
+  trap - EXIT
+  [ "$status" -ne 0 ] || return 0
+  set +e
+  text="Merge workflow for #${number:-unknown} held with status $status. Inspect the preserved draft, review, and merge result before retrying."
+  dt_agent_report blocker "${number:-}" "$text" || printf '%s\n' "$text" >&2
+  exit "$status"
+}
+if [ "${DT_UNATTENDED:-0}" = 1 ]; then trap 'ma_exit "$?"' EXIT; fi

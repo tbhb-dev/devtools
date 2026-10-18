@@ -43,7 +43,7 @@ The skill requires SSH signing and the repository's executable hooks. Verificati
 
 Repository behavior comes from `.agents/agent-skills.conf`, outside the deployed skills. The reader accepts declarative `key = value` lines and never sources the file. It rejects unknown and duplicate keys. Supported settings are `lint_commit_cmd`, `required_hooks`, `hook_marker`, and `review_max_rounds`. Reviewer selection and delegation still come only from machine configuration. The review stamp binds repository configuration as well as the draft and Git state.
 
-The [consumer migration note](docs/agent-skills-migration.md) covers settings, local files to remove, and the remaining publication and merge work. The package includes `agent-commit` and `agent-pr`. Keep local `agent-merge-pr` until its replacement is available.
+The [consumer migration note](docs/agent-skills-migration.md) covers settings, local files to remove, and the remaining commit policy work. The package includes `agent-commit`, `agent-pr`, and `agent-merge-pr`.
 
 ## Unattended pull requests
 
@@ -52,6 +52,18 @@ Run `agent-pr` to publish a committed agent branch without a confirmation prompt
 Repository config also accepts `pr_template`, `lint_pr_cmd`, `pr_log_entry`, `pr_related_pattern`, `pr_title_check_cmd`, and `owner_paths`. Scaffolding, validation, and the review snapshot use the same template. Owner paths supply a restrictive `--owner-path` signal to the machine delegation checker for any matching changed path across the branch. This includes deletions and renames. The checker still supplies the authority.
 
 Publication records the PR number, URL, full head, base, draft state, and push kind under the worktree's Git directory. Reports print locally unless `mail_cmd` and `mail_to` configure a transport, with optional `mail_from`. A reporting failure prints the unsent report without repeating publication. The migration note defines the command interfaces and what consumers can remove.
+
+## Unattended merges
+
+Run `agent-merge-pr` for unattended squash merges. Its generated entry points use the shared merge scripts, independent review, gates, stamps, and confirmation chain. Machine `gh_login` and `required_reviewer` are mandatory. The required reviewer must approve the exact current head. Only session pre-approval or machine delegation grants `merge`. The skill refuses `--confirmed`.
+
+Repository configuration supplies squash lint, readiness, ruleset location, owner-review label, protected paths, suppression patterns, and disposable ignored paths. Check judgement calls `agentrepo checks evaluate`. Required checks come from applied GitHub rules and ruleset files at the pinned base. No checks or known requirements means no unattended merge. The YAML policy reader requires `uv`.
+
+Golden files and detected gate loosening require an exact-head APPROVED review by machine `merge_owner`, also available as `DEVTOOLS_MERGE_OWNER`. Repositories can't choose this authority, and pushing invalidates approval.
+
+When using an override, the merge report specifies the approving login. It doesn't waive the owner-review label, required checks, independent review, or write authority.
+
+From the base commit's lockfile, the scan reads non-local APM deployments and preserves local overrides. It skips comments and quoted marker text and matches exclusion keys. Policy configuration changes require owner approval. After delegation and changing dependent pull requests' base branches, the merger checks live approvals. It pins the merge to the reviewed head and verifies the remote message before cleanup. Cleanup preserves fork branches, newer work, current worktrees, and valuable ignored files. The migration note for consumers defines settings and remaining commit work.
 
 ## Pull requests
 
@@ -131,6 +143,8 @@ PR publication, merge, and watch scripts read the active account through GraphQL
 For a rate-limit error, the shared reader returns status 76 and prints the affected quota and its reset time. It stops without retrying the request. A reset header supplies Unix seconds. Otherwise one REST `GET /rate_limit` reads the relevant resource's reset in Unix seconds without consuming core quota. If that lookup also fails, the message says the reset is unavailable and keeps the original error. Authentication and permission failures keep the original command status rather than becoming an identity mismatch. For ordinary check-read errors, the watcher retains status 2.
 
 ### Calls per invocation
+
+This table describes interactive workflows. Unattended merge policy also reads GitHub's applied branch rules through REST when evaluating the pinned base. At the final check, it reuses those pinned requirements and re-reads live approvals and check results. It doesn't poll CI.
 
 These counts describe the explicit readers in the published scripts. GitHub CLI may make extra repository discovery requests or paginate a connection. No reader caches identity across invocations.
 

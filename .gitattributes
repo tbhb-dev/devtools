@@ -103,3 +103,9 @@ packages/agents/claude/.apm/skills/agent-pr/** rebase-resolve=regenerate
 packages/agents/codex/.apm/skills/agent-pr/** rebase-resolve=regenerate
 .claude/skills/agent-pr/** rebase-resolve=regenerate
 .agents/skills/agent-pr/** rebase-resolve=regenerate
+
+# Unattended merge skills are generated from shared sources.
+packages/agents/claude/.apm/skills/agent-merge-pr/** rebase-resolve=regenerate
+packages/agents/codex/.apm/skills/agent-merge-pr/** rebase-resolve=regenerate
+.agents/skills/agent-merge-pr/** rebase-resolve=regenerate
+.claude/skills/agent-merge-pr/** rebase-resolve=regenerate

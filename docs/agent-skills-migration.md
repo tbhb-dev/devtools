@@ -1,20 +1,20 @@
 # Migrating unattended skills
 
-The package includes generated `agent-commit` and `agent-pr` skills for Claude and Codex. `agent-merge-pr` remains pending under [issue 241](https://github.com/tbhb-dev/devtools/issues/241). Keep the local merge skill and its tests until its replacement is available. The package version comes from the release workflow.
+The package includes generated `agent-commit`, `agent-pr`, and `agent-merge-pr` skills for Claude and Codex. The package version comes from the release workflow. Commit owner-path delegation and external reporting remain under [issue 241](https://github.com/tbhb-dev/devtools/issues/241).
 
 ## Consumer cleanup
 
-Before installing, preserve the remaining local merge dependency as described below.
+Move the supported settings and machine authorities before replacing local skills. The generated merge skill requires `uv` for its pinned YAML reader and `agentrepo checks evaluate` for check judgement.
 
-For avirt and the other existing consumers, pin the harness package containing the replacement skill, then install it. Remove each replaced local skill's APM dependency and `apm.yml`. Delete its local scripts and Bats suite under `.agents/skills/agent-commit/`, `.agents/skills/agent-pr/`, and their `.claude/skills/` counterparts as applicable, allowing APM to deploy the generated copies. In avirt, remove the commit and publication suites from `test-skills` after migration. Keep the merge suite and keep `check` calling `test-skills` until merge migrates. Other consumers remove the same replaced suites from their test tasks. devtools runs the shared regression coverage through `mise run test`. Consumers keep tests for their own hooks and repository settings.
+For avirt and the other existing consumers, pin the harness package containing the replacement skill, then install it. Remove each replaced local skill's APM dependency and `apm.yml`. Delete its local scripts and Bats suite under `.agents/skills/agent-commit/`, `.agents/skills/agent-pr/`, `.agents/skills/agent-merge-pr/`, and their `.claude/skills/` counterparts as applicable, allowing APM to deploy the generated copies. In avirt, remove the replaced commit, publication, and merge suites from `test-skills`. Remove that task and its call from `check` only when no consumer tests remain. Other consumers remove the same replaced suites from their test tasks. devtools runs the shared regression coverage through `mise run test`. Consumers keep tests for their own hooks and repository settings.
 
 Keep a local commit skill if its delegation checker requires protected-path arguments or its workflow requires external reports: the commit delivery doesn't support those settings yet. Publication now supports both owner-path delegation and reporting.
 
 Keep the old configuration while any local skill still reads it. Move supported behavior to `.agents/agent-skills.conf` and authorities to machine configuration before deleting it.
 
-The local merge skill still sources the old commit library. Before replacing that directory, keep the layout `legacy-agent-skills/scripts/lib.sh` and `legacy-agent-skills/agent-skills.conf` in a repository-owned directory outside deployed skills. Update the local merge skill's `common.sh` and its tests to source that retained library. Keep the compatibility copy until merge migration removes the dependency. The generated `agent-commit` entry points don't provide the old library interface.
+After replacing the local merge skill, remove its compatibility copy of `legacy-agent-skills/scripts/lib.sh` and `legacy-agent-skills/agent-skills.conf` outside the deployed directories. Keep that copy only while a local commit awaiting replacement still needs it. A consumer retaining its local commit for owner-path delegation or reporting must keep that skill's configuration and tests until those features migrate.
 
-Install the sibling `commit`, `pr`, and review skills from the same package. The unattended entry points delegate to them. These skills supply the shared gates and publication machinery.
+Install the sibling `commit`, `pr`, `merge-pr`, and review skills from the same package. The unattended entry points delegate to them. These skills supply the shared gates and publication machinery.
 
 Their interfaces remain available for the later `agentrepo` port.
 
@@ -32,15 +32,23 @@ lint_pr_cmd = mise run lint-pr-description
 pr_log_entry = optional
 pr_related_pattern =
 pr_title_check_cmd =
-owner_paths =
+owner_paths = ^$
 mail_cmd =
 mail_to =
 mail_from =
+lint_squash_cmd = mise run lint-squash-msg
+owner_review_label = owner-review
+ruleset_dir = .github/rulesets
+golden_paths = ^$
+loosening_markers = nolint|shellcheck disable|vale (off|disable)
+gate_config_paths = ^(lint|hooks)\.(yaml|toml)$
+disposable_ignored = ^cache/
+merge_ready_cmd =
 ```
 
-These are the defaults. The round bound accepts integers from 1 to 9. Success resets the corresponding finding counter. Reaching the bound blocks further reviews even after preflight or a new commit.
+The commit and publication values preceding are defaults. Merge requires explicit nonempty `golden_paths`, `loosening_markers`, `gate_config_paths`, `owner_paths`, and `disposable_ignored` patterns. Use `^$` for a deliberately empty set. The merge examples are placeholders for consumer policy, not built-in protected paths. The round bound accepts integers from 1 to 9. Success resets the corresponding finding counter. Reaching the bound blocks further reviews even after preflight or a new commit.
 
-Inspect the last review before an operator clears the worktree's `agent-skills/commit.rounds` or `agent-skills/pr.rounds` file under its Git directory. Failed reviewer execution and changed inputs don't count as findings.
+Inspect the last review before an operator clears the worktree's `agent-skills/commit.rounds` , `agent-skills/pr.rounds`, or `agent-skills/squash.rounds` file under its Git directory. Failed reviewer execution and changed inputs don't count as findings.
 
 `pr_template` names a file inside the repository. Scaffolding, shared validation, and the committed review snapshot use it. An empty `lint_pr_cmd` fails. The existing `PR_TEMPLATE` environment variable remains the fallback when the repository doesn't specify a template.
 
@@ -50,7 +58,7 @@ The optional `pr_title_check_cmd` receives `AS_BASE`, `AS_HEAD`, and `AS_TITLE`,
 
 `owner_paths` is an extended regular expression, preserving the previous setting's syntax. It matches each changed path from the branch's merge base. The pattern `^(docs|policy)/` covers either directory. Deletions and both sides of renames count. Matching reads paths delimited by the null character (`NUL`), so a newline in a filename doesn't split it. A match adds `--owner-path` to the machine checker invocation: `<checker> check <repository> pr --owner-path`. Without a match, its existing arguments stay the same. Authority doesn't come from this signal. Session pre-approval still covers the `pr` action.
 
-Reports print locally unless both `mail_cmd` and `mail_to` are nonempty. The command must be an executable path. Shell expressions aren't accepted. Publication invokes it as `send --to <recipient> --kind fixed --body <report> --pr <number>`, adding `--from <sender>` when configured. A delivery failure prints `REPORT NOT SENT` with the report and leaves publication successful. It never repeats the GitHub write.
+Reports print locally unless both `mail_cmd` and `mail_to` are nonempty. The command must be an executable path. Shell expressions aren't accepted. Publication invokes it as `send --to <recipient> --kind fixed --body <report> --pr <number>`, adding `--from <sender>` when configured. A delivery failure prints `REPORT NOT SENT` with the report and leaves publication successful. It never repeats the GitHub write. Merge success uses the same transport with kind `fixed`. Merge holds and uncertain outcomes use kind `blocker` and preserve the original exit status.
 
 ## Settings mapping
 
@@ -59,13 +67,13 @@ Reports print locally unless both `mail_cmd` and `mail_to` are nonempty. The com
 | `lint_commit_cmd`, `required_hooks`, `hook_marker`, `review_max_rounds` | Same keys in `.agents/agent-skills.conf` |
 | Template selection | `pr_template` in repository config |
 | `lint_pr_cmd`, `pr_log_entry`, `pr_related_pattern`, `pr_title_check_cmd` | Same keys in repository config |
-| `owner_paths` | Same key for publication delegation. Commit and merge migration remain pending |
-| `mail_cmd`, `mail_to`, `mail_from` | Same keys for publication reports. Commit and merge reporting remain pending |
-| `review_cmd`, `review_model`, `review_effort`, `delegation_check`, `gh_login` | Machine configuration under `~/.config/devtools/` or corresponding `DEVTOOLS_` variables |
-| `review_commit_criteria`, `review_pr_criteria` | Installed review skills plus the existing trusted repository review policy |
-| `lint_squash_cmd`, `review_squash_criteria`, `owner_review_label`, `required_reviewer`, `ruleset_dir` | Keep local merge configuration until its replacement arrives |
-| `golden_paths`, `loosening_markers`, `gate_config_paths` | Protected-path merge policy remains pending |
-| `disposable_ignored`, `merge_verify_tries`, `merge_ready_cmd` | Cleanup and readiness migration remain pending with merge |
+| `owner_paths` | Same key for publication and merge delegation and reporting. Commit migration remains pending |
+| `mail_cmd`, `mail_to`, `mail_from` | Same keys for publication and merge reports. Commit reporting remains pending |
+| `review_cmd`, `review_model`, `review_effort`, `delegation_check`, `gh_login`, `required_reviewer`, `merge_owner` | Machine configuration under `~/.config/devtools/` or corresponding `DEVTOOLS_` variables |
+| `review_commit_criteria`, `review_pr_criteria`, `review_squash_criteria` | Installed review skills plus the existing trusted repository review policy |
+| `lint_squash_cmd`, `owner_review_label`, `ruleset_dir`, `merge_ready_cmd` | Repository configuration. Readiness can refuse but can't grant authority |
+| `golden_paths`, `loosening_markers`, `gate_config_paths`, `disposable_ignored` | Repository configuration. Inspect patterns before migration |
+| `merge_verify_tries` | Retired: shared merge execution reads the result once and never retries the write |
 
 Repository configuration can't select a reviewer, GitHub account, or delegation checker. Unattended publication requires a nonempty machine `gh_login` with no built-in account default. It rejects `--confirmed`. Either session pre-approval or machine delegation must grant the action, and neither skill prompts or grants itself authority.
 
@@ -88,4 +96,20 @@ The public source is the [avirt local skill family](https://github.com/tbhb-dev/
 
 A successful publication records `pr.result.json` under the worktree's Git `agent-skills` directory, containing the PR number, URL, full head, base, draft state, and push kind. Final output reports the URL, head, and draft state. Inspect a failed or uncertain GitHub write before retrying. After publication, the skill stops.
 
-Merge migration still needs its configured reviewer policy, owner labels and protected paths, required-check judgement, readiness, remote message verification, dependent-branch updates, and branch and worktree cleanup. Prefer the available `agentrepo checks evaluate` command for check judgement. Existing devtools already supplies pinned-head merging, review gates, and base-bound stamps. Both consumers can delete their remaining merge directories, manifests, suites, and old configuration once that replacement supports their settings.
+## Merge policy and authority
+
+Machine configuration must name `gh_login` and `required_reviewer`. The latest decisive review from that reviewer must approve the exact current PR head. A comment or pending review supplies no approval, and a later change request or dismissal blocks. The shared reviewer CLI remains selected only through machine review settings.
+
+Golden-file changes and detected gate loosening require an APPROVED review from optional machine `merge_owner` on the same exact head. Configure it through `dt_conf`, such as `merge_owner` in machine configuration or `DEVTOOLS_MERGE_OWNER`. Repository configuration can't name that login. A push invalidates approval.
+
+Reports record whether execution used an override and the approving login. The owner-review label still holds a PR for the owner, and the override doesn't waive it or any other merge gate.
+
+The scan skips full comment lines. It recognizes exclusion keys instead of matching words inside values and ignores suppression text inside quoted values. Non-local APM deployments come from `apm.lock.yaml` at the pinned base commit. Local deployment overrides stay in scope. A missing lockfile means no deployment exemptions. Malformed ownership data refuses the scan. A PR can't grant itself an exemption by editing its lockfile. Changes to `.agents/agent-skills.conf` always require the owner approval so a policy edit can't waive its own check. The scan is a backstop and doesn't replace review.
+
+Required checks come from GitHub's applied branch rules and active ruleset JSON files in `ruleset_dir` at the pinned base. Requirements match names exactly. The merge requires a nonempty list of known required checks and a nonempty rollup. Skipped required checks, unknown states, and missing results refuse the merge. Check judgement uses `agentrepo checks evaluate` instead of another check judge. A configured `merge_ready_cmd` must be an executable path and receives `<repo-root> <pr> <head>`. Its nonzero status blocks, while empty readiness doesn't add a check.
+
+Existing lint, review, stamps, and the `merge` confirmation chain serve these scripts. Unattended execution rejects `--confirmed`. Use session pre-approval or machine delegation. Owner paths add `--owner-path` to merge delegation and appear in the report. `merge.sh <pr> <expected-head>` preserves the previous explicit head interface. Shared stamps also pin that head. Failed reviewer execution, timeout, and input drift don't consume a finding round.
+
+Before merging, execution changes the base of dependent pull requests only for a same-repository head. Execution never retries a GitHub write automatically. It verifies the resulting merge commit and its message before cleanup. An unknown outcome or message mismatch preserves evidence. Remote deletion leases on the reviewed head, fork branches stay, and local removal preserves the current worktree, non-agent worktrees, changed branches, dirty trees, and ignored files outside `disposable_ignored`. Reports keep the full merge commit and any owner override, even if later cleanup is incomplete.
+
+The remaining issue 241 work is commit-specific owner-path delegation and external commit reporting. Consumers requiring those behaviors keep their local commit copy until its replacement supports them.

@@ -85,7 +85,7 @@ pr_agent_owner_paths() {
 # Publication succeeded before reporting. A transport failure never retries it.
 pr_agent_report() {
   [ "${DT_UNATTENDED:-0}" = 1 ] || return 0
-  local result number url cmd to from text
+  local result number url text
   result=$(dt_gh pr list --head "$branch" --state open --json number,url --jq '.[0] | [.number,.url] | @tsv') || return $?
   IFS=$'\t' read -r number url <<<"$result"
   [[ $number =~ ^[0-9]+$ ]] && [ -n "$url" ] || dt_die "Published, but the PR result is unreadable. Inspect GitHub before retrying."
@@ -93,17 +93,7 @@ pr_agent_report() {
   jq -n --argjson number "$number" --arg url "$url" --arg head "$head" \
     --arg base "$base" --argjson draft "$is_draft" --arg push "$push_kind" \
     '{number:$number,url:$url,head:$head,base:$base,draft:$draft,push:$push}' >"$state/pr.result.json" || return $?
-  cmd=$(dt_repo_conf mail_cmd) || return $?
-  to=$(dt_repo_conf mail_to) || return $?
-  from=$(dt_repo_conf mail_from) || return $?
-  if [ -n "$cmd" ] && [ -n "$to" ]; then
-    cmd=$(dt_path "$cmd") || return $?
-    set -- send --to "$to" --kind fixed --body "$text" --pr "$number"
-    [ -z "$from" ] || set -- "$@" --from "$from"
-    if ! "$cmd" "$@"; then printf 'REPORT NOT SENT: %s\n' "$text" >&2; fi
-  else
-    printf 'REPORT (fixed): %s\n' "$text"
-  fi
+  dt_agent_report fixed "$number" "$text" || return $?
   dt_clear pr
   printf 'published: %s at %s (draft=%s)\n' "$url" "$head" "$is_draft"
 }

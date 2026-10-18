@@ -66,6 +66,8 @@ done
 mp_need_tools
 root=$(dt_root)
 cd "$root"
+ma_context
+if [ "${DT_UNATTENDED:-0}" = 1 ]; then ma_lint; fi
 draft=$root/SQUASH_AGENTMSG
 [ -s "$draft" ] || dt_die "SQUASH_AGENTMSG is missing or empty. Run squash-message.sh and write the body first."
 drafted_for=$(head -n 1 "$draft" | sed -n 's/.*(#\([0-9][0-9]*\))[[:space:]]*$/\1/p')
@@ -80,7 +82,7 @@ esac
 # response, which names the head and the base it describes.
 inputs=$(dt_new_inputs squash)
 view=$inputs/pull-request.json
-mp_view "$number" "$view" number,title,body,state,baseRefName,headRefName,headRefOid,commits,reviewDecision || exit $?
+mp_view "$number" "$view" number,title,body,state,baseRefName,headRefName,headRefOid,commits,reviewDecision,labels,reviews,statusCheckRollup || exit $?
 pr_state=$(mp_field "$view" state) || exit $?
 [ "$pr_state" = OPEN ] || dt_die "#$number is $pr_state, not OPEN."
 mp_require_reviews "$view" "$number"
@@ -89,6 +91,7 @@ base=$(mp_field "$view" baseRefName)
 [ -n "$head" ] && [ -n "$base" ] || dt_die "#$number names no head or no base."
 base_oid=$(mp_base_oid "$base") || exit $?
 [ -n "$base_oid" ] || dt_die "Could not read where $base points."
+ma_gates "$view" "$number" "$base_oid"
 
 snapshot=$inputs/SQUASH_AGENTMSG
 cp "$draft" "$snapshot"
@@ -113,6 +116,8 @@ jq -r '.commits[] | "--- " + .oid + "\n" + .messageHeadline + "\n\n" + (.message
   "$view" >"$inputs/commits.txt"
 rm -f "$view"
 mp_local_diff "$base_oid" "$head" "$inputs"
+mergebase=$(gitr merge-base "$base_oid" "$head")
+gitr log --reverse --format='--- %H%n%B' "$mergebase..$head" >"$inputs/commits.txt"
 
 # shellcheck disable=SC2329 # dt_review calls it by name
 still_as_gathered() {
