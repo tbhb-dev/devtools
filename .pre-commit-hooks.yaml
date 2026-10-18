@@ -26,9 +26,8 @@
 #
 # The five commit-message hooks arrived here from tbhb/pre-commit-hooks, which
 # this repository replaces. Their ids are unchanged, so a consumer edits the
-# `repo:` line and its `rev:` and nothing else. Each is language: script, so
-# prek runs the checked-out script directly with no managed environment, and
-# the entry paths resolve against this repository's root.
+# `repo:` line and its `rev:` and nothing else. The two Go linters use
+# language: golang, like guard-markdown. The other hooks run scripts directly.
 #
 # The first four run on the commit-msg stage and take the commit-message buffer
 # path as their single argument. clear-commit-agentmsg runs on the post-commit
@@ -36,8 +35,8 @@
 # four admitted. A consumer that installs it needs the stage installed too:
 # prek install -t post-commit.
 #
-# commit-trailers, commitlint, and clear-commit-agentmsg depend only on bash,
-# git, grep, and sed. vale-commit-msg and cspell-commit-msg additionally
+# clear-commit-agentmsg needs only shell utilities.
+# vale-commit-msg and cspell-commit-msg additionally
 # require the consumer to have vale / cspell installed and a .vale.ini /
 # .cspell.jsonc that configures the commit-message scope.
 
@@ -59,8 +58,8 @@
     share: a kernel-style Assisted-by value, Assisted-by before
     Signed-off-by, a required Signed-off-by sign-off, and no LLM
     attribution in Co-authored-by.
-  entry: scripts/commit-trailers.sh
-  language: script
+  entry: commit-lint --rules trailers
+  language: golang
   stages: [commit-msg]
   always_run: true
 
@@ -70,8 +69,8 @@
     Lint the commit message against Conventional Commits: a recognized
     type, header length bounds, body and footer line-length caps, and a
     required Signed-off-by trailer.
-  entry: scripts/commitlint.sh
-  language: script
+  entry: commit-lint --rules shape
+  language: golang
   stages: [commit-msg]
   always_run: true
 

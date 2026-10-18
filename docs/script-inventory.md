@@ -173,8 +173,8 @@ Decision keys: G0 means Go shared internals under #174. G1 means a Go command in
 
 | Script | source lines of code | Callers | Bats coverage / runtime reference | Decision and reason |
 | --- | ---: | --- | --- | --- |
-| `scripts/commitlint.sh` | 109 | prek commit-msg hook. consumer | B08 | B: thin commitlint adapter preserves the published hook entry point. |
-| `scripts/commit-trailers.sh` | 55 | prek commit-msg hook. consumer | B07 | G1: parse trailer order and identity with unit tests. |
+| `scripts/commitlint.sh` | 109 | prek commit-msg hook. consumer | B08 | Full Conventional Commits linter. Migrated to `cmd/commit-lint` with golden Go tests. |
+| `scripts/commit-trailers.sh` | 55 | prek commit-msg hook. consumer | B07 | Trailer checks now run in the Go package. |
 | `scripts/vale-commit-msg.sh` | 12 | prek commit-msg hook. consumer | B02 | B: thin Vale adapter preserves the hook contract. |
 | `scripts/cspell-commit-msg.sh` | 9 | prek commit-msg hook. consumer | None | B: thin cspell adapter preserves the hook contract. |
 | `scripts/clear-commit-agentmsg.sh` | 4 | prek post-commit hook. consumer | B04 | B: remove the draft after a successful commit. |
@@ -310,8 +310,8 @@ Other tests may cover guards whose rows don't identify Bats coverage: `tools/tes
 | B04 | `tests/scripts/clear-commit-agentmsg.bats` | 46 | test-hooks. CI | 0.14 | B: draft cleanup remains a real hook check. |
 | B05 | `tests/scripts/codex-fix-prose-state.bats` | 53 | test-hooks. CI | 0.36 | B: prose state keeps a shell-level contract. |
 | B06 | `tests/scripts/codex-preapproval.bats` | 130 | test-hooks. CI | 2.02 | B: approval grants still need command-level fixtures. |
-| B07 | `tests/scripts/commit-trailers.bats` | 149 | test-hooks. CI | 0.36 | B: trailer adapters require a small integration suite. |
-| B08 | `tests/scripts/commitlint.bats` | 141 | test-hooks. CI | 0.41 | B: the message-lint wrapper stays under shell tests. |
+| B07 | `tests/scripts/commit-trailers.bats` | 149 | test-hooks. CI | 0.36 | Migrated to Go golden cases in `internal/commitlint`. |
+| B08 | `tests/scripts/commitlint.bats` | 141 | test-hooks. CI | 0.41 | Conventional Commits cases now run under Go tests. |
 | B09 | `tests/scripts/skill-tokens-backends.bats` | 77 | test-hooks. CI | 0.37 | P1: assert token backend text and manifest fixtures directly. |
 
 ### Workflow suites: reports

@@ -58,6 +58,7 @@ Each tool under [`cmd/`](cmd/) builds as a standalone binary:
 - `agentstore` stores shared agent state.
 - `agentcontext` assembles shared agent context.
 - `guard-markdown` refuses Markdown whose paragraphs span more than one line.
+- [`commit-lint`](docs/commit-lint.md) checks Conventional Commits and attribution trailers.
 - [`ssh-sign`](docs/agent-signing.md) signs agent commits through a dedicated SSH agent.
 
 Install one directly:

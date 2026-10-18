@@ -34,12 +34,12 @@ repos:
   # Shared commit-msg gates. This repository publishes them (see
   # .pre-commit-hooks.yaml) and applies them to itself, the same way it
   # treats guard-markdown below: the hooks run from the working tree
-  # rather than from a released tag, so an edit to one of these scripts
+  # rather than from a released tag, so an edit to one of these checks
   # gates the very commit that makes it instead of waiting for a release.
   # That is why the ids resolve locally and no `rev:` appears here.
   #
   # The first four run on the commit-msg stage; commitlint and
-  # commit-trailers need only bash/git, while vale-commit-msg and
+  # commit-trailers build Go from this checkout, while vale-commit-msg and
   # cspell-commit-msg lean on this repo's vale/cspell plus the
   # commit-message scope in .vale.ini and .cspell.jsonc.
   - repo: local
@@ -70,15 +70,15 @@ repos:
 
       - id: commit-trailers
         name: commit-trailers
-        entry: scripts/commit-trailers.sh
-        language: script
+        entry: go run ./cmd/commit-lint --rules trailers
+        language: system
         stages: [commit-msg]
         always_run: true
 
       - id: commitlint
         name: commitlint
-        entry: scripts/commitlint.sh
-        language: script
+        entry: go run ./cmd/commit-lint --rules shape
+        language: system
         stages: [commit-msg]
         always_run: true
 

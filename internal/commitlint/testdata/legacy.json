@@ -1,0 +1,743 @@
+[
+  {
+    "name": "accepts a well-formed commit with body and trailers",
+    "rules": "shape",
+    "message": [
+      "feat: add a working thing",
+      "",
+      "A body paragraph that explains the change in enough words.",
+      "",
+      "Assisted-by: claude-code:opus-4.8",
+      "Signed-off-by: Tony Burns <tony@example.com>",
+      ""
+    ],
+    "status": 0,
+    "output": ""
+  },
+  {
+    "name": "accepts a scoped, breaking-change subject",
+    "rules": "shape",
+    "message": [
+      "feat(api)!: change the response envelope shape",
+      "",
+      "Signed-off-by: Tony Burns <tony@example.com>",
+      ""
+    ],
+    "status": 0,
+    "output": ""
+  },
+  {
+    "name": "accepts a body-less commit with only a signoff footer",
+    "rules": "shape",
+    "message": [
+      "fix: correct the off-by-one",
+      "",
+      "Signed-off-by: Tony Burns <tony@example.com>",
+      ""
+    ],
+    "status": 0,
+    "output": ""
+  },
+  {
+    "name": "rejects an unknown type",
+    "rules": "shape",
+    "message": [
+      "feet: do a thing in the tree",
+      "",
+      "Signed-off-by: Tony Burns <tony@example.com>",
+      ""
+    ],
+    "status": 1,
+    "output": "commitlint: unknown type \"feet\"; allowed: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert\n"
+  },
+  {
+    "name": "rejects an uppercase type as malformed",
+    "rules": "shape",
+    "message": [
+      "Feat: do a thing in the tree",
+      "",
+      "Signed-off-by: Tony Burns <tony@example.com>",
+      ""
+    ],
+    "status": 1,
+    "output": "commitlint: subject must follow Conventional Commits: <type>(<scope>)?(!)?: <description>\n"
+  },
+  {
+    "name": "rejects a subject shorter than the minimum",
+    "rules": "shape",
+    "message": [
+      "fix: x",
+      "",
+      "Signed-off-by: Tony Burns <tony@example.com>",
+      ""
+    ],
+    "status": 1,
+    "output": "commitlint: subject is too short (6 < 10): \"fix: x\"\n"
+  },
+  {
+    "name": "rejects a subject longer than the maximum",
+    "rules": "shape",
+    "message": [
+      "feat: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "",
+      "Signed-off-by: T <t@e.com>",
+      ""
+    ],
+    "status": 1,
+    "output": "commitlint: subject is too long (96 > 80): \"feat: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"\n"
+  },
+  {
+    "name": "rejects a subject with no description",
+    "rules": "shape",
+    "message": [
+      "feat:",
+      "",
+      "Signed-off-by: Tony Burns <tony@example.com>",
+      ""
+    ],
+    "status": 1,
+    "output": "commitlint: subject is too short (5 < 10): \"feat:\"\ncommitlint: subject must follow Conventional Commits: <type>(<scope>)?(!)?: <description>\n"
+  },
+  {
+    "name": "rejects a subject with no type prefix",
+    "rules": "shape",
+    "message": [
+      "just some words without any type",
+      "",
+      "Signed-off-by: Tony Burns <tony@example.com>",
+      ""
+    ],
+    "status": 1,
+    "output": "commitlint: subject must follow Conventional Commits: <type>(<scope>)?(!)?: <description>\n"
+  },
+  {
+    "name": "requires a blank line after the subject",
+    "rules": "shape",
+    "message": [
+      "feat: a valid subject here",
+      "body text with no blank line above it",
+      "",
+      "Signed-off-by: Tony Burns <tony@example.com>",
+      ""
+    ],
+    "status": 1,
+    "output": "commitlint: the subject must be separated from the body by a blank line\n"
+  },
+  {
+    "name": "requires a Signed-off-by trailer",
+    "rules": "shape",
+    "message": [
+      "feat: a valid subject here",
+      "",
+      "A body paragraph with no signoff at all.",
+      ""
+    ],
+    "status": 1,
+    "output": "commitlint: missing required Signed-off-by trailer (DCO)\n"
+  },
+  {
+    "name": "rejects a body line over the 72-char cap",
+    "rules": "shape",
+    "message": [
+      "feat: a valid subject here",
+      "",
+      "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "",
+      "Signed-off-by: T <t@e.com>",
+      ""
+    ],
+    "status": 1,
+    "output": "commitlint: body line 3 exceeds 72 chars (73)\n"
+  },
+  {
+    "name": "allows a body line at the 72-char cap",
+    "rules": "shape",
+    "message": [
+      "feat: a valid subject here",
+      "",
+      "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "",
+      "Signed-off-by: T <t@e.com>",
+      ""
+    ],
+    "status": 0,
+    "output": ""
+  },
+  {
+    "name": "holds footer lines to the looser footer cap, not the body cap",
+    "rules": "shape",
+    "message": [
+      "feat: a valid subject here",
+      "",
+      "A body line.",
+      "",
+      "Reviewed-by: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "Signed-off-by: T <t@e.com>",
+      ""
+    ],
+    "status": 0,
+    "output": ""
+  },
+  {
+    "name": "rejects a footer line over the 100-char cap",
+    "rules": "shape",
+    "message": [
+      "feat: a valid subject here",
+      "",
+      "A body line.",
+      "",
+      "Reviewed-by: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "Signed-off-by: T <t@e.com>",
+      ""
+    ],
+    "status": 1,
+    "output": "commitlint: footer line 5 exceeds 100 chars (133)\n"
+  },
+  {
+    "name": "ignores git comment lines",
+    "rules": "shape",
+    "message": [
+      "feat: a valid subject here",
+      "",
+      "A body paragraph.",
+      "# Please enter the commit message for your changes.",
+      "# Lines starting with '#' will be ignored.",
+      "",
+      "Signed-off-by: Tony Burns <tony@example.com>",
+      ""
+    ],
+    "status": 0,
+    "output": ""
+  },
+  {
+    "name": "ignores the verbose-diff scissors block",
+    "rules": "shape",
+    "message": [
+      "feat: a valid subject here",
+      "",
+      "A body line.",
+      "",
+      "Signed-off-by: T <t@e.com>",
+      "# ------------------------ >8 ------------------------",
+      "diff --git a/x b/x",
+      "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      ""
+    ],
+    "status": 0,
+    "output": ""
+  },
+  {
+    "name": "passes a message carrying only a sign-off",
+    "rules": "trailers",
+    "message": [
+      "feat: a change",
+      "",
+      "A body paragraph with no assistant trailers.",
+      "",
+      "Signed-off-by: Tony Burns <tony@example.com>",
+      ""
+    ],
+    "status": 0,
+    "output": ""
+  },
+  {
+    "name": "accepts a well-formed Assisted-by value",
+    "rules": "trailers",
+    "message": [
+      "feat: a change",
+      "",
+      "Assisted-by: claude-code:opus-4.8",
+      "Signed-off-by: Tony Burns <tony@example.com>",
+      ""
+    ],
+    "status": 0,
+    "output": ""
+  },
+  {
+    "name": "accepts the Codex GPT model identity",
+    "rules": "trailers",
+    "message": [
+      "test: exercise codex attribution",
+      "",
+      "Assisted-by: codex:gpt-5.6-sol",
+      "Signed-off-by: Test User <test@example.com>",
+      ""
+    ],
+    "status": 0,
+    "output": ""
+  },
+  {
+    "name": "accepts an Assisted-by value with trailing tool names",
+    "rules": "trailers",
+    "message": [
+      "feat: a change",
+      "",
+      "Assisted-by: claude:opus-4.8 claude-code zed",
+      "Signed-off-by: Tony Burns <tony@example.com>",
+      ""
+    ],
+    "status": 0,
+    "output": ""
+  },
+  {
+    "name": "rejects the older slash-form Assisted-by value",
+    "rules": "trailers",
+    "message": [
+      "feat: a change",
+      "",
+      "Assisted-by: claude-code/opus",
+      "Signed-off-by: Tony Burns <tony@example.com>",
+      ""
+    ],
+    "status": 1,
+    "output": "commit-trailers: malformed Assisted-by value: expected AGENT_NAME:MODEL_VERSION [TOOL...] (line 3: \"claude-code/opus\")\n"
+  },
+  {
+    "name": "rejects an uppercase Assisted-by agent name",
+    "rules": "trailers",
+    "message": [
+      "feat: a change",
+      "",
+      "Assisted-by: Claude:Opus",
+      "Signed-off-by: Tony Burns <tony@example.com>",
+      ""
+    ],
+    "status": 1,
+    "output": "commit-trailers: malformed Assisted-by value: expected AGENT_NAME:MODEL_VERSION [TOOL...] (line 3: \"Claude:Opus\")\n"
+  },
+  {
+    "name": "rejects an Assisted-by value with trailing punctuation",
+    "rules": "trailers",
+    "message": [
+      "feat: a change",
+      "",
+      "Assisted-by: claude-code:opus-4.8,",
+      "Signed-off-by: Tony Burns <tony@example.com>",
+      ""
+    ],
+    "status": 1,
+    "output": "commit-trailers: malformed Assisted-by value: expected AGENT_NAME:MODEL_VERSION [TOOL...] (line 3: \"claude-code:opus-4.8,\")\n"
+  },
+  {
+    "name": "accepts a human Co-authored-by",
+    "rules": "trailers",
+    "message": [
+      "feat: a change",
+      "",
+      "Co-authored-by: Jane Doe <jane@example.com>",
+      "Signed-off-by: Tony Burns <tony@example.com>",
+      ""
+    ],
+    "status": 0,
+    "output": ""
+  },
+  {
+    "name": "does not flag 'ai' inside ordinary words",
+    "rules": "trailers",
+    "message": [
+      "feat: a change",
+      "",
+      "Co-authored-by: Kai Mailer <kai@example.com>",
+      "Signed-off-by: Tony Burns <tony@example.com>",
+      ""
+    ],
+    "status": 0,
+    "output": ""
+  },
+  {
+    "name": "rejects a Co-authored-by crediting an LLM by name",
+    "rules": "trailers",
+    "message": [
+      "feat: a change",
+      "",
+      "Co-authored-by: Claude <noreply@anthropic.com>",
+      "Signed-off-by: Tony Burns <tony@example.com>",
+      ""
+    ],
+    "status": 1,
+    "output": "commit-trailers: forbidden Co-authored-by attribution to an LLM; use Assisted-by instead (line 3: \"Claude <noreply@anthropic.com>\")\n"
+  },
+  {
+    "name": "rejects a standalone 'ai' Co-authored-by token",
+    "rules": "trailers",
+    "message": [
+      "feat: a change",
+      "",
+      "Co-authored-by: ai <ai@example.com>",
+      "Signed-off-by: Tony Burns <tony@example.com>",
+      ""
+    ],
+    "status": 1,
+    "output": "commit-trailers: forbidden Co-authored-by attribution to an LLM; use Assisted-by instead (line 3: \"ai <ai@example.com>\")\n"
+  },
+  {
+    "name": "accepts Assisted-by before Signed-off-by",
+    "rules": "trailers",
+    "message": [
+      "feat: a change",
+      "",
+      "Assisted-by: claude-code:opus-4.8",
+      "Signed-off-by: Tony Burns <tony@example.com>",
+      ""
+    ],
+    "status": 0,
+    "output": ""
+  },
+  {
+    "name": "rejects Signed-off-by before Assisted-by",
+    "rules": "trailers",
+    "message": [
+      "feat: a change",
+      "",
+      "Signed-off-by: Tony Burns <tony@example.com>",
+      "Assisted-by: claude-code:opus-4.8",
+      ""
+    ],
+    "status": 1,
+    "output": "commit-trailers: trailer order: Assisted-by must appear before Signed-off-by (line 4 after line 3)\n"
+  },
+  {
+    "name": "ignores order when only one of the two trailers is present",
+    "rules": "trailers",
+    "message": [
+      "feat: a change",
+      "",
+      "Signed-off-by: Tony Burns <tony@example.com>",
+      ""
+    ],
+    "status": 0,
+    "output": ""
+  },
+  {
+    "name": "rejects a message with no Signed-off-by",
+    "rules": "trailers",
+    "message": [
+      "feat: a change",
+      "",
+      "A body paragraph with an assist trailer but no sign-off.",
+      "",
+      "Assisted-by: claude-code:opus-4.8",
+      ""
+    ],
+    "status": 1,
+    "output": "commit-trailers: missing required Signed-off-by trailer (DCO)\n"
+  },
+  {
+    "name": "reports every violation in one run",
+    "rules": "trailers",
+    "message": [
+      "feat: a change",
+      "",
+      "Assisted-by: bad/value",
+      "Co-authored-by: gpt <gpt@example.com>",
+      "Signed-off-by: Tony Burns <tony@example.com>",
+      ""
+    ],
+    "status": 1,
+    "output": "commit-trailers: malformed Assisted-by value: expected AGENT_NAME:MODEL_VERSION [TOOL...] (line 3: \"bad/value\")\ncommit-trailers: forbidden Co-authored-by attribution to an LLM; use Assisted-by instead (line 4: \"gpt <gpt@example.com>\")\n"
+  },
+  {
+    "name": "reads the message from a file argument",
+    "rules": "trailers",
+    "message": [
+      "feat: a change",
+      "",
+      "Assisted-by: claude-code:opus-4.8",
+      "Signed-off-by: Tony Burns <tony@example.com>",
+      ""
+    ],
+    "status": 0,
+    "output": ""
+  },
+  {
+    "name": "custom types",
+    "rules": "shape",
+    "message": ["custom: a change", "", "Signed-off-by: T"],
+    "status": 0,
+    "output": "",
+    "env": {
+      "COMMITLINT_TYPES": "custom fix"
+    }
+  },
+  {
+    "name": "custom type rejected",
+    "rules": "shape",
+    "message": ["feat: a change", "", "Signed-off-by: T"],
+    "status": 1,
+    "output": "commitlint: unknown type \"feat\"; allowed: custom, fix\n",
+    "env": {
+      "COMMITLINT_TYPES": "custom fix"
+    }
+  },
+  {
+    "name": "minimum override",
+    "rules": "shape",
+    "message": ["fix: x", "", "Signed-off-by: T"],
+    "status": 0,
+    "output": "",
+    "env": {
+      "COMMITLINT_HEADER_MIN_LENGTH": "6"
+    }
+  },
+  {
+    "name": "maximum override",
+    "rules": "shape",
+    "message": ["feat: a change", "", "Signed-off-by: T"],
+    "status": 1,
+    "output": "commitlint: subject is too long (14 > 10): \"feat: a change\"\n",
+    "env": {
+      "COMMITLINT_HEADER_MAX_LENGTH": "10"
+    }
+  },
+  {
+    "name": "body override",
+    "rules": "shape",
+    "message": ["feat: a change", "", "body line", "", "Signed-off-by: T"],
+    "status": 1,
+    "output": "commitlint: body line 3 exceeds 8 chars (9)\n",
+    "env": {
+      "COMMITLINT_BODY_MAX_LINE_LENGTH": "8"
+    }
+  },
+  {
+    "name": "footer override",
+    "rules": "shape",
+    "message": ["feat: a change", "", "Signed-off-by: T"],
+    "status": 1,
+    "output": "commitlint: footer line 3 exceeds 15 chars (16)\n",
+    "env": {
+      "COMMITLINT_FOOTER_MAX_LINE_LENGTH": "15"
+    }
+  },
+  {
+    "name": "signoff disabled",
+    "rules": "shape",
+    "message": ["feat: a change"],
+    "status": 0,
+    "output": "",
+    "env": {
+      "COMMITLINT_REQUIRE_SIGNED_OFF_BY": "0"
+    }
+  },
+  {
+    "name": "non-one signoff disabled",
+    "rules": "shape",
+    "message": ["feat: a change"],
+    "status": 0,
+    "output": "",
+    "env": {
+      "COMMITLINT_REQUIRE_SIGNED_OFF_BY": "2"
+    }
+  },
+  {
+    "name": "empty environment uses defaults",
+    "rules": "shape",
+    "message": ["feat: a change", "", "Signed-off-by: T"],
+    "status": 0,
+    "output": "",
+    "env": {
+      "COMMITLINT_TYPES": "",
+      "COMMITLINT_HEADER_MIN_LENGTH": ""
+    }
+  },
+  {
+    "name": "blank collapse and comment cleanup",
+    "rules": "shape",
+    "message": [
+      "",
+      "# comment",
+      "",
+      "feat: a change   ",
+      "",
+      "",
+      "body\t",
+      "",
+      "Signed-off-by: T",
+      "",
+      ""
+    ],
+    "status": 0,
+    "output": "",
+    "env": {}
+  },
+  {
+    "name": "semicolon scissors",
+    "rules": "shape",
+    "message": [
+      "feat: a change",
+      "",
+      "Signed-off-by: T",
+      "; --- >8 ---",
+      "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    ],
+    "status": 0,
+    "output": "",
+    "env": {}
+  },
+  {
+    "name": "footer continuation",
+    "rules": "shape",
+    "message": [
+      "feat: a change",
+      "",
+      "BREAKING CHANGE: value",
+      " xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "Signed-off-by: T"
+    ],
+    "status": 0,
+    "output": "",
+    "env": {}
+  },
+  {
+    "name": "no footer boundary",
+    "rules": "shape",
+    "message": [
+      "feat: a change",
+      "",
+      "body",
+      "Reviewed-by: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "",
+      "Signed-off-by: T"
+    ],
+    "status": 1,
+    "output": "commitlint: body line 4 exceeds 72 chars (83)\n",
+    "env": {}
+  },
+  {
+    "name": "missing separator second line not length checked",
+    "rules": "shape",
+    "message": [
+      "feat: a change",
+      "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "",
+      "Signed-off-by: T"
+    ],
+    "status": 1,
+    "output": "commitlint: the subject must be separated from the body by a blank line\n",
+    "env": {}
+  },
+  {
+    "name": "empty message",
+    "rules": "shape",
+    "message": [""],
+    "status": 1,
+    "output": "commitlint: subject is too short (0 < 10): \"\"\ncommitlint: subject must follow Conventional Commits: <type>(<scope>)?(!)?: <description>\ncommitlint: missing required Signed-off-by trailer (DCO)\n",
+    "env": {}
+  },
+  {
+    "name": "empty message trailers",
+    "rules": "trailers",
+    "message": [""],
+    "status": 1,
+    "output": "commit-trailers: missing required Signed-off-by trailer (DCO)\n",
+    "env": {}
+  },
+  {
+    "name": "empty signoff shape",
+    "rules": "shape",
+    "message": ["feat: a change", "", "Signed-off-by:"],
+    "status": 1,
+    "output": "commitlint: missing required Signed-off-by trailer (DCO)\n",
+    "env": {}
+  },
+  {
+    "name": "empty signoff trailers",
+    "rules": "trailers",
+    "message": ["feat: a change", "", "Signed-off-by:"],
+    "status": 0,
+    "output": "",
+    "env": {}
+  },
+  {
+    "name": "raw after scissors",
+    "rules": "trailers",
+    "message": [
+      "feat: a change",
+      "",
+      "Signed-off-by: T",
+      "# --- >8 ---",
+      "Assisted-by: bad/value"
+    ],
+    "status": 1,
+    "output": "commit-trailers: malformed Assisted-by value: expected AGENT_NAME:MODEL_VERSION [TOOL...] (line 5: \"bad/value\")\ncommit-trailers: trailer order: Assisted-by must appear before Signed-off-by (line 5 after line 3)\n",
+    "env": {}
+  },
+  {
+    "name": "trim assistant",
+    "rules": "trailers",
+    "message": [
+      "feat: a change",
+      "",
+      "Assisted-by:\t codex:gpt-6 \t",
+      "",
+      "Signed-off-by: T"
+    ],
+    "status": 0,
+    "output": "",
+    "env": {}
+  },
+  {
+    "name": "first signoff controls order",
+    "rules": "trailers",
+    "message": [
+      "feat: a change",
+      "",
+      "Signed-off-by: T",
+      "Assisted-by: codex:gpt-6",
+      "Signed-off-by: T"
+    ],
+    "status": 1,
+    "output": "commit-trailers: trailer order: Assisted-by must appear before Signed-off-by (line 4 after line 3)\n",
+    "env": {}
+  },
+  {
+    "name": "case insensitive author",
+    "rules": "trailers",
+    "message": [
+      "feat: a change",
+      "",
+      "Co-authored-by: OPENAI <person@example.com>",
+      "",
+      "Signed-off-by: T"
+    ],
+    "status": 1,
+    "output": "commit-trailers: forbidden Co-authored-by attribution to an LLM; use Assisted-by instead (line 3: \"OPENAI <person@example.com>\")\n",
+    "env": {}
+  },
+  {
+    "name": "whole word underscore author",
+    "rules": "trailers",
+    "message": [
+      "feat: a change",
+      "",
+      "Co-authored-by: human_ai <person@example.com>",
+      "",
+      "Signed-off-by: T"
+    ],
+    "status": 0,
+    "output": "",
+    "env": {}
+  },
+  {
+    "name": "trailing model dot",
+    "rules": "trailers",
+    "message": [
+      "feat: a change",
+      "",
+      "Assisted-by: codex:gpt-6.",
+      "",
+      "Signed-off-by: T"
+    ],
+    "status": 0,
+    "output": "",
+    "env": {}
+  },
+  {
+    "name": "unicode character length",
+    "rules": "shape",
+    "message": ["fix: caf\u00e9", "", "Signed-off-by: T"],
+    "status": 1,
+    "output": "commitlint: subject is too short (9 < 10): \"fix: caf\u00e9\"\n",
+    "env": {}
+  }
+]
