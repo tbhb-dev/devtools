@@ -357,12 +357,19 @@ dt_reviewer_label() {
 # Both were probed against the installed CLIs (Claude Code 2.1.301,
 # codex-cli 0.162.1): asked to create a file, neither could.
 dt_run_reviewer() {
-  local root=$1 inputs=$2 custom model effort
+  local root=$1 inputs=$2 custom model effort timeout
+  local runner=(env)
+  timeout=$(dt_conf review_timeout 900)
+  if command -v agentrepo >/dev/null 2>&1; then
+    runner=(agentrepo review run --timeout "${timeout}s" --)
+  else
+    printf 'review: unbounded because agentrepo is missing\n' >&2
+  fi
   custom=$(dt_conf review_cmd)
   model=$(dt_conf review_model)
   effort=$(dt_conf review_effort)
   if [ -n "$custom" ]; then
-    (cd "$root" && DEVTOOLS_REVIEW_INPUTS=$inputs bash -c "$custom")
+    (cd "$root" && DEVTOOLS_REVIEW_INPUTS=$inputs "${runner[@]}" bash -c "$custom")
     return
   fi
   case $(dt_harness) in
@@ -373,13 +380,13 @@ dt_run_reviewer() {
     [ -z "$model" ] || set -- "$@" --model "$model"
     [ -z "$effort" ] || set -- "$@" --effort "$effort"
     # The child is a session of its own, not this one.
-    (cd "$root" && env -u CLAUDE_CODE_SESSION_ID "$@")
+    (cd "$root" && "${runner[@]}" env -u CLAUDE_CODE_SESSION_ID "$@")
     ;;
   codex)
     set -- codex exec --sandbox read-only --ephemeral --color never -C "$root"
     [ -z "$model" ] || set -- "$@" -m "$model"
     [ -z "$effort" ] || set -- "$@" -c "model_reasoning_effort=\"$effort\""
-    (cd "$root" && env -u CODEX_THREAD_ID "$@" - 2>/dev/null)
+    (cd "$root" && "${runner[@]}" env -u CODEX_THREAD_ID "$@" - 2>/dev/null)
     ;;
   *)
     printf 'review: no harness detected, so no default reviewer applies. Set DEVTOOLS_REVIEW_CMD\nor DEVTOOLS_HARNESS (claude or codex).\n' >&2
@@ -445,10 +452,11 @@ dt_new_inputs() {
 #   2  changes required; revise and review again
 #   4  the reviewer failed, or its reply had no verdict a script reads
 #   5  the draft or what the review read changed while it ran
+#   124 the reviewer timed out
 dt_review() {
   local kind=$1 draft=$2 snapshot=$3 criteria=$4 arguments=$5 inputs=$6 still_current=$7
   shift 7
-  local state reply before verdict root prompt draft_digest snapshot_digest repo_digest
+  local state reply before verdict root prompt draft_digest snapshot_digest repo_digest status
   state=$(dt_state_dir) || return 4
   reply=$state/$kind.review
   root=$(dt_root) || return 4
@@ -475,7 +483,14 @@ dt_review() {
   fi
 
   prompt=$(dt_review_prompt "$criteria" "$arguments" "$inputs") || return 4
-  if ! dt_run_reviewer "$root" "$inputs" <<<"$prompt" >"$reply"; then
+  if dt_run_reviewer "$root" "$inputs" <<<"$prompt" >"$reply"; then
+    :
+  else
+    status=$?
+    if [ "$status" -eq 124 ]; then
+      printf 'review: reviewer timed out; nothing stamped\n' >&2
+      return 124
+    fi
     printf 'review: the reviewer failed to run; nothing stamped\n' >&2
     return 4
   fi

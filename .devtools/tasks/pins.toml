@@ -112,6 +112,7 @@ if [ -f apm.yml ]; then
 fi
 
 edit mise.toml sed -E "s|^(\"go:github.com/tbhb-dev/devtools/cmd/guard-markdown\"[[:space:]]*=[[:space:]]*)\"[^\"]*\"|\\1\"$version\"|"
+edit mise.toml sed -E "s|^(\"go:github.com/tbhb-dev/devtools/cmd/agentrepo\"[[:space:]]*=[[:space:]]*)\"[^\"]*\"|\\1\"$version\"|"
 
 for wf in .github/workflows/*.yml .github/workflows/*.yaml; do
   [ -f "$wf" ] || continue
@@ -222,7 +223,7 @@ read_sites() {
         emit(v, "-")
       }
 
-      /^"go:github.com\/tbhb-dev\/devtools\/cmd\/guard-markdown"[[:space:]]*=/ {
+      /^"go:github.com\/tbhb-dev\/devtools\/cmd\/(guard-markdown|agentrepo)"[[:space:]]*=/ {
         v = $0; sub(/^[^=]*=[[:space:]]*"/, "", v); sub(/".*$/, "", v)
         emit(v, "-")
       }
@@ -282,8 +283,11 @@ read_sites() {
 }
 
 sites=$(read_sites)
+if ! grep -Eq '^"go:github.com/tbhb-dev/devtools/cmd/agentrepo"[[:space:]]*=' mise.toml; then
+  echo 'recommend declaring "go:github.com/tbhb-dev/devtools/cmd/agentrepo" in mise.toml [tools] for bounded reviews' >&2
+fi
 
-if ! printf '%s\n' "$sites" | grep -q 'mise.toml:'; then
+if ! grep -Eq '^"go:github.com/tbhb-dev/devtools/cmd/guard-markdown"[[:space:]]*=' mise.toml; then
   echo 'missing guard-markdown tool pin in mise.toml [tools]' >&2
   exit 1
 fi

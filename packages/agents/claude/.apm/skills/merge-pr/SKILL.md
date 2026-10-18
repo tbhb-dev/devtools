@@ -154,6 +154,7 @@ This step is mandatory, and the merge script enforces it.
 | 75 | Waiting for an approving review GitHub requires |
 | 2 | Changes required: the output lists the findings |
 | 4 | The reviewer failed or replied without a readable verdict |
+| 124 | The reviewer timed out without a stamp |
 | 5 | The draft or the pull request moved while the review ran |
 
 Fix everything it returns and run it again. Push back only where it's demonstrably wrong about the commits, and say why.

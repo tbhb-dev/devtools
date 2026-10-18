@@ -12,13 +12,22 @@ setup() {
   LIB="${ROOT}/packages/agents/claude/.apm/skills/commit/scripts/lib.sh"
   REPO="${BATS_TEST_TMPDIR}/repo"
   unset CLAUDE_CODE_SESSION_ID CODEX_THREAD_ID CLAUDECODE DEVTOOLS_HARNESS
-  unset DEVTOOLS_REVIEW_CMD DEVTOOLS_REVIEW_MODEL DEVTOOLS_REVIEW_EFFORT DEVTOOLS_DELEGATION_CHECK
+  unset DEVTOOLS_REVIEW_CMD DEVTOOLS_REVIEW_MODEL DEVTOOLS_REVIEW_EFFORT DEVTOOLS_DELEGATION_CHECK DEVTOOLS_REVIEW_TIMEOUT
   export XDG_CONFIG_HOME="${BATS_TEST_TMPDIR}/config"
   export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
   git init --quiet --initial-branch=main "$REPO"
   git -C "$REPO" config user.name Tester
   git -C "$REPO" config user.email tester@example.com
   cd "$REPO"
+  mkdir -p "$BATS_TEST_TMPDIR/bin"
+  cat >"$BATS_TEST_TMPDIR/bin/agentrepo" <<'STUB'
+#!/usr/bin/env bash
+printf '%s\n' "$@" >"$DEVTOOLS_REVIEW_INPUTS/args"
+shift 5
+exec "$@"
+STUB
+  chmod +x "$BATS_TEST_TMPDIR/bin/agentrepo"
+  export PATH="$BATS_TEST_TMPDIR/bin:$PATH"
 }
 
 # lib runs a snippet with the library sourced, in the scratch repository.
@@ -455,4 +464,66 @@ STUB
   [[ "$output" == *"GitHub graphql quota exhausted"* ]]
   grep -q '^api rate_limit --jq .resources.graphql.reset$' "$GH_CALLS"
   [ "$(wc -l <"$GH_CALLS")" -eq 2 ]
+}
+
+@test "review runner receives the default and machine deadline with environment precedence" {
+  review_once 'cat >/dev/null; echo "VERDICT: PASS"'
+  [ "$status" -eq 0 ]
+  grep -Fxq 900s .git/agent-skills/t.inputs.*/args
+  mkdir -p "$XDG_CONFIG_HOME/devtools"
+  printf 'review_timeout = 12\n' >"$XDG_CONFIG_HOME/devtools/repo.conf"
+  printf 'review_timeout = 1\n' >devtools.conf
+  review_once 'cat >/dev/null; echo "VERDICT: PASS"'
+  [ "$status" -eq 0 ]
+  grep -Fxq 12s .git/agent-skills/t.inputs.*/args
+  DEVTOOLS_REVIEW_TIMEOUT=3 review_once 'cat >/dev/null; echo "VERDICT: PASS"'
+  [ "$status" -eq 0 ]
+  grep -Fxq 3s .git/agent-skills/t.inputs.*/args
+}
+
+@test "runner timeout after PASS removes an old stamp and reports timeout" {
+  review_once 'cat >/dev/null; echo "VERDICT: PASS"'
+  printf '#!/usr/bin/env bash\necho "VERDICT: PASS"\nexit 124\n' >"$BATS_TEST_TMPDIR/bin/agentrepo"
+  review_once 'exit 0'
+  [ "$status" -eq 124 ]
+  [[ "$output" == *'reviewer timed out; nothing stamped'* ]]
+  [ ! -e .git/agent-skills/t.stamp ]
+}
+
+@test "runner cancellation and PASS followed by failure never stamp" {
+  for code in 130 1; do
+    review_once 'cat >/dev/null; echo "VERDICT: PASS"'
+    printf '#!/usr/bin/env bash\necho "VERDICT: PASS"\nexit %s\n' "$code" >"$BATS_TEST_TMPDIR/bin/agentrepo"
+    review_once 'exit 0'
+    [ "$status" -eq 4 ]
+    [ ! -e .git/agent-skills/t.stamp ]
+  done
+}
+
+@test "missing agentrepo preserves the reviewer and warns once" {
+  lib '
+    set -u
+    command() {
+      if [ "$*" = "-v agentrepo" ]; then return 1; fi
+      builtin command "$@"
+    }
+    DEVTOOLS_REVIEW_CMD="cat; echo VERDICT: PASS" dt_run_reviewer "$PWD" "$PWD" <<<prompt
+  '
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'unbounded because agentrepo is missing'* ]]
+  [[ "$output" == *prompt*'VERDICT: PASS'* ]]
+  [ "$(printf '%s\n' "$output" | grep -c unbounded)" -eq 1 ]
+}
+
+@test "missing agentrepo preserves reviewer failure without stamping" {
+  lib '
+    command() {
+      if [ "$*" = "-v agentrepo" ]; then return 1; fi
+      builtin command "$@"
+    }
+    DEVTOOLS_REVIEW_CMD="echo VERDICT: PASS; exit 7" dt_run_reviewer "$PWD" "$PWD" </dev/null
+  '
+  [ "$status" -eq 7 ]
+  [[ "$output" == *'unbounded because agentrepo is missing'* ]]
+  [ ! -e .git/agent-skills/t.stamp ]
 }

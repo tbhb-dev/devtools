@@ -100,6 +100,14 @@ The consumer needs mise and vendir before its first sync. Declare vendir, uv and
 "go:github.com/tbhb-dev/devtools/cmd/guard-markdown" = "v0.11.0"
 ```
 
+The optional `agentrepo` declaration enables [reviewer deadlines](docs/reviewer-timeout.md) once pinned to a release containing `review run`. Add it to the root tools table. Replace `<release-containing-review-run>` with the same released devtools version used by the other pins, choosing a release that includes `review run`:
+
+```toml
+"go:github.com/tbhb-dev/devtools/cmd/agentrepo" = "<release-containing-review-run>"
+```
+
+`devtools:update-pins` rewrites this declaration when present. `devtools:check-pins` checks it when present and recommends it when absent without failing.
+
 The baseline payload pins Go, which builds the guard. Keep this tool declaration in the root `mise.toml`: the pin tasks read and update that location. Replacing the old manual `go install` step puts the executable on the mise task PATH and makes its version part of the update contract. Run agent sessions under `mise exec --` so their hooks inherit that PATH too.
 
 ### Configure draft tasks

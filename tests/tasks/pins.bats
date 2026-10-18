@@ -141,3 +141,30 @@ YAML
   grep -Fxq 'run devtools:apm-sync' "$MISE_CALLS"
   ! grep -Fxq 'run devtools:check-pins' "$MISE_CALLS"
 }
+
+@test "optional agentrepo pin updates and participates in drift checks" {
+  printf '\n"go:github.com/tbhb-dev/devtools/cmd/agentrepo" = "v0.9.0"\n' >> mise.toml
+  run bash "$CHECK_SCRIPT"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *'pins disagree on the version'* ]]
+  run env usage_version=v0.11.0 bash "${BATS_TEST_TMPDIR}/update.sh"
+  [ "$status" -eq 0 ]
+  grep -Fq 'agentrepo" = "v0.11.0"' mise.toml
+}
+
+@test "missing agentrepo pin recommends without failing or inserting a pin" {
+  run bash "$CHECK_SCRIPT"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'recommend declaring'*'cmd/agentrepo'* ]]
+  run env usage_version=v0.11.0 bash "${BATS_TEST_TMPDIR}/update.sh"
+  [ "$status" -eq 0 ]
+  ! grep -q 'cmd/agentrepo' mise.toml
+}
+
+@test "agentrepo pin does not replace the required guard pin" {
+  sed 's/guard-markdown/agentrepo/' mise.toml > changed
+  mv changed mise.toml
+  run bash "$CHECK_SCRIPT"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *'missing guard-markdown'* ]]
+}

@@ -7,6 +7,7 @@ It resolves the base to `origin/<base>` where origin has a copy, the same commit
 | 0 | Passed and stamped |
 | 2 | Changes required: the output lists the findings |
 | 4 | The reviewer failed or replied without a readable verdict |
+| 124 | The reviewer timed out without a stamp |
 | 5 | The draft, `HEAD`, or the base moved while the review ran |
 
 On findings, revise the draft in this session or pass them verbatim to the optional `write-pr-description` helper, then run the review again. Bound it at three rounds, counting only the rounds a finding caused. A round the branch caused doesn't count against the bound: a remediation commit or a rebase changes what the description has to describe. Say which kind each round was as you go, so the count is accurate. Past three, stop, report the count with the findings that keep coming back, and let the operator decide whether to go on.
