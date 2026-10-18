@@ -2,12 +2,8 @@
 # context — everything drafting a pull request description needs, and
 # nothing else.
 #
-# The Claude write-pr-description SKILL.md inlines this through the
-# !`...` preprocessor, and the Codex one runs it first, so a delegated
-# writer starts from a settled picture rather than spending its first
-# several calls rediscovering one. That delegation is the point: the
-# branch diff lands in the writer's context instead of the caller's,
-# and the caller never pays for it.
+# Both harnesses run this script before drafting so the optional writer
+# starts from the branch, template, and published properties.
 #
 # Read-only throughout. The pr preflight owns the workflow
 # preconditions and the stale-draft sweep; this gathers material.

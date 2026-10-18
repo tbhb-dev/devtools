@@ -6,7 +6,7 @@ This skill assumes the shared tbhb toolchain:
 - a `mise run lint-pr-description` task
 - a gitignore entry for `PR_AGENTDESC.md`
 - a pull request template at `.github/pull_request_template.md`
-- the `write-pr-description`, `review-pr-description`, and `fix-prose` skills deployed alongside this one
+- the `review-pr-description` and `fix-prose` skills deployed alongside this one
 - the `watch-pr`, `fix-pr`, and `merge-pr` skills deployed for step 8
 
 Preflight checks each. Where one is missing, tell the operator rather than improvising a substitute.

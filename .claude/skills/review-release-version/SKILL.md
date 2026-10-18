@@ -16,7 +16,11 @@ You are reading a release of `tbhb-dev/devtools` that hasn't happened yet. Your 
 
 ## Your material
 
-!`bash ${CLAUDE_SKILL_DIR}/scripts/context.sh $ARGUMENTS`
+Run this script once to gather the material before reviewing:
+
+```text
+bash ${CLAUDE_SKILL_DIR}/scripts/context.sh $ARGUMENTS
+```
 
 That's the whole range. It holds the commits in full, what cog derives from them, the changed paths this repository publishes, and the diff on those paths. Read it before anything else. Where the diff says it truncated, it lists the paths and you can read the rest.
 

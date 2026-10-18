@@ -1,7 +1,7 @@
 ---
 name: pr
 description: >-
-  Open or update a pull request for the current branch. A delegated writer drafts PR_AGENTDESC.md, an independent headless reviewer reads it against the branch, and a mechanical validator checks it against the template. The operator confirms before anything publishes. Use whenever the user asks to open or draft a pull request in a tbhb repository, or when a completed task should end in one. Routes later CI work to watch-pr, fix-pr, and merge-pr.
+  Open or update a pull request for the current branch. The session drafts PR_AGENTDESC.md, an independent headless reviewer reads it against the branch, and a mechanical validator checks it against the template. The operator confirms before anything publishes. Use whenever the user asks to open or draft a pull request in a tbhb repository, or when a completed task should end in one. Routes later CI work to watch-pr, fix-pr, and merge-pr.
 ---
 
 # Open a pull request
@@ -45,13 +45,9 @@ Preflight also settled the draft on disk. It removed a stale `PR_AGENTDESC.md` w
 
 ## Step 2: draft the description
 
-Spawn one subagent with this bounded task:
+Read the branch diff against the resolved base from preflight, the commits that would land, and the repository's pull request template. Write or revise `PR_AGENTDESC.md` in this session. Fill the scaffold's frontmatter properties, a Conventional Commits title describing the whole branch, and every template section. Use the labels and properties preflight reported, and describe only verification you actually ran.
 
-```text
-Use the write-pr-description skill in <repo root>. Write or revise PR_AGENTDESC.md, run its validator, and return only its DRAFT result.
-```
-
-Don't draft the file in this context, because that means reading the diff here. Where the writer reports `DRAFT: BLOCKED`, report the blocker, and stop.
+The `write-pr-description` skill remains an optional helper when delegating the drafting is useful. Publication requires the stamp from step 4's scripted review for either drafting path.
 
 ## Step 3: pass the prose gates
 
@@ -78,7 +74,7 @@ It resolves the base to `origin/<base>` where origin has a copy, the same commit
 | 4 | The reviewer failed or replied without a readable verdict |
 | 5 | The draft, `HEAD`, or the base moved while the review ran |
 
-On findings, send them verbatim to `write-pr-description` in its arguments, then run the review again. Bound it at three rounds, counting only the rounds a finding caused. A round the branch caused doesn't count against the bound: a remediation commit or a rebase changes what the description has to describe. Say which kind each round was as you go, so the count is accurate. Past three, stop, report the count with the findings that keep coming back, and let the operator decide whether to go on.
+On findings, revise the draft in this session or pass them verbatim to the optional `write-pr-description` helper, then run the review again. Bound it at three rounds, counting only the rounds a finding caused. A round the branch caused doesn't count against the bound: a remediation commit or a rebase changes what the description has to describe. Say which kind each round was as you go, so the count is accurate. Past three, stop, report the count with the findings that keep coming back, and let the operator decide whether to go on.
 
 This step is mandatory, and `create-pr.sh` enforces it.
 
@@ -183,7 +179,7 @@ This skill assumes the shared tbhb toolchain:
 - a `mise run lint-pr-description` task
 - a gitignore entry for `PR_AGENTDESC.md`
 - a pull request template at `.github/pull_request_template.md`
-- the `write-pr-description`, `review-pr-description`, and `fix-prose` skills deployed alongside this one
+- the `review-pr-description` and `fix-prose` skills deployed alongside this one
 - the `watch-pr`, `fix-pr`, and `merge-pr` skills deployed for step 8
 
 Preflight checks each. Where one is missing, tell the operator rather than improvising a substitute.

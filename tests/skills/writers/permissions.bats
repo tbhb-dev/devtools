@@ -98,3 +98,24 @@ probe() {
   grep -qx 'run lint-draft probe.md' "$PROBE_LOG"
   jq -e '.result | contains("PROSE: CLEAN")' "$BATS_TEST_TMPDIR/result.json"
 }
+
+@test "context gathering runs as a skill step rather than at load time (#225)" {
+  for manifest in "$SKILLS"/*/SKILL.md "$ROOT"/.claude/skills/*/SKILL.md; do
+    if grep -Eq '^!`.*context\.sh' "$manifest"; then return 1; fi
+  done
+  for writer in write-pr-description write-prose-fix; do
+    grep -Eq '^bash .*scripts/context\.sh' "$SKILLS/$writer/SKILL.md"
+  done
+  grep -Fq 'bash ${CLAUDE_SKILL_DIR}/scripts/context.sh $ARGUMENTS' "$ROOT/.claude/skills/review-release-version/SKILL.md"
+}
+
+@test "PR workflows allow the session to draft on both harnesses (#225)" {
+  for harness in claude codex; do
+    for workflow in pr fix-pr merge-pr; do
+      manifest="$ROOT/packages/agents/$harness/.apm/skills/$workflow/SKILL.md"
+      if grep -q 'guard-draft.sh' "$manifest"; then return 1; fi
+      grep -q 'in this session' "$manifest"
+      grep -q 'optional.*write-pr-description\|write-pr-description.*optional' "$manifest"
+    done
+  done
+}

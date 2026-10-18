@@ -328,7 +328,7 @@ if command -v mise >/dev/null 2>&1 && mise task info lint-pr-description >/dev/n
 else
   printf 'mise run lint-pr-description: ABSENT — stop and tell the operator\n'
 fi
-for skill in pr write-pr-description review-pr-description; do
+for skill in pr review-pr-description; do
   if [ -f "$DT_LIB_DIR/../../$skill/SKILL.md" ]; then
     printf '%s skill deployed: yes\n' "$skill"
   else
@@ -367,7 +367,7 @@ fi
 
 section "draft"
 # Scaffolding here rather than in an instruction keeps the sections
-# matching the template as it stands, and leaves write-pr-description a
+# matching the template as it stands, and leaves the drafting session a
 # file to fill instead of a shape to reproduce from memory. It runs
 # after the sweep above, which decides what should be on disk at all.
 scaffold="$DT_LIB_DIR/scaffold-description.sh"

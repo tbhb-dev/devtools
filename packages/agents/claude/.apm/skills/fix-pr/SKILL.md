@@ -5,10 +5,6 @@ description: >-
   Diagnose the failing checks on a pull request and fix them. One call reads the failing logs and names the local task that reproduces each failure. The work then starts from a reproduction rather than a guess. The correction goes through the commit skill. Use this whenever a pull request is red, whenever the user asks to fix CI, and whenever watch-pr comes back with failures.
 hooks:
   PreToolUse:
-    - matcher: Write|Edit
-      hooks:
-        - type: command
-          command: "${CLAUDE_PROJECT_DIR}/.claude/skills/write-pr-description/scripts/guard-draft.sh"
     - matcher: Bash
       hooks:
         - type: command
@@ -92,7 +88,7 @@ bash .claude/skills/fix-pr/scripts/populate-description.sh <number>
 
 That rebuilds `PR_AGENTDESC.md` from what the pull request currently says, reassembling the frontmatter from the properties set on the pull request. It refuses to overwrite an existing draft without `--force`, because a `pr` workflow further up the stack may have one in flight.
 
-A fix changes what the branch does, so the published description now describes a branch that has moved. Where the change alters what a reader needs to know, invoke `write-pr-description` with the repository root and a note saying which commits arrived since the last publish.
+A fix changes what the branch does, so the published description now describes a branch that has moved. Where the change alters what a reader needs to know, revise `PR_AGENTDESC.md` in this session or invoke the optional `write-pr-description` helper with the repository root and a note saying which commits arrived since the last publish.
 
 Then review it with `bash .claude/skills/pr/scripts/review.sh` and loop on the verdict the same way the `pr` skill does, bounded at three rounds. Publish the result with `bash .claude/skills/pr/scripts/create-pr.sh`, which updates the open pull request rather than opening another and pushes the branch on the way. Pass `--confirmed` only where the operator chose a route including fixes in this session, or answered now. After an amend, pass `--rewrite` as well, because the push replaces the commit stored on origin. The script leases on that exact commit and refuses where origin moved.
 
