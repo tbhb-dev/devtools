@@ -15,10 +15,15 @@ import (
 	"time"
 )
 
-// Run waits for both the reviewer and its output streams. It kills the group
+//nolint:gochecknoinits // Select the process-group implementation before any review runs.
+func init() {
+	run = runUnix
+}
+
+// runUnix waits for both the reviewer and its output streams. It kills the group
 // before returning and waits for the direct child; orphaned descendants are
 // reaped by the operating system. Descendants must remain in the process group.
-func Run(ctx context.Context, timeout time.Duration, args []string, in io.Reader, out, stderr io.Writer) int {
+func runUnix(ctx context.Context, timeout time.Duration, args []string, in io.Reader, out, stderr io.Writer) int {
 	if timeout <= 0 || len(args) == 0 {
 		_, _ = fmt.Fprintln(stderr, "review: a positive timeout and a command are required")
 		return Failed
