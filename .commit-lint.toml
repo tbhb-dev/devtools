@@ -5,3 +5,10 @@ header_max_length = 80
 body_max_line_length = 72
 footer_max_line_length = 100
 require_signed_off_by = true
+
+# tbhb.dev Agent accounts cannot make the responsible person's DCO attestation.
+[identities]
+agents = [
+  { email = "agent@tonyburns.net" },
+  { email = "334376894+tbhb-agent@users.noreply.github.com" },
+]

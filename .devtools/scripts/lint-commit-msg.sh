@@ -3,7 +3,7 @@
 set -euo pipefail
 
 main() {
-  local identity trailers
+  local identity trailers status
   preview_dir=$(mktemp -d "${TMPDIR:-/tmp}/commit-preview.XXXXXX")
   trap 'rm -rf -- "$preview_dir"' EXIT
   preview="$preview_dir/COMMIT_EDITMSG"
@@ -13,8 +13,13 @@ main() {
     identity=$(git var GIT_COMMITTER_IDENT)
     identity=${identity% *}
     identity=${identity% *}
-    git -c trailer.separators=: interpret-trailers --in-place \
-      --trailer "Signed-off-by: $identity" "$preview"
+    if commit-lint --check-signoff "$identity"; then
+      git -c trailer.separators=: interpret-trailers --in-place \
+        --trailer "Signed-off-by: $identity" "$preview"
+    else
+      status=$?
+      [ "$status" -eq 1 ] || return "$status"
+    fi
   fi
   prek run --stage commit-msg --commit-msg-filename "$preview"
 }

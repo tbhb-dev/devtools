@@ -1,7 +1,14 @@
 #!/usr/bin/env bats
 # cspell:ignore gpgsign
 
+setup_file() {
+	local source_root
+	source_root=$(git -C "$BATS_TEST_DIRNAME" rev-parse --show-toplevel)
+	(cd "$source_root" && go build -o "$BATS_FILE_TMPDIR/commit-lint" ./cmd/commit-lint)
+}
+
 setup() {
+	export PATH="$BATS_FILE_TMPDIR:$PATH"
 	helper="$BATS_TEST_DIRNAME/../../.devtools/scripts/lint-commit-msg.sh"
 	root=$(git -C "$BATS_TEST_DIRNAME" rev-parse --show-toplevel)
 	local name
@@ -56,10 +63,9 @@ STUB
 @test "real commit-msg hook rejects unsigned draft and accepts git commit -s" {
 	git config core.hooksPath "$work/.git/hooks"
 	git config commit.gpgsign false
-	(cd "$root" && go build -o "$work/bin/commit-lint" ./cmd/commit-lint)
 	cat >.git/hooks/commit-msg <<HOOK
 #!/usr/bin/env bash
-"$work/bin/commit-lint" "\$1"
+"$BATS_FILE_TMPDIR/commit-lint" "\$1"
 HOOK
 	chmod +x .git/hooks/commit-msg
 	run git -c user.name=Author -c user.email=author@example.invalid commit --allow-empty -F COMMIT_AGENTMSG
@@ -89,4 +95,24 @@ STUB
 	run bash "$helper"
 	[ "$status" -eq 1 ]
 	[[ $output == *ai-tells.FormalTransitions* ]]
+}
+
+@test "denied committer is not injected and real gates report missing sign-off" {
+	printf '[identities]\nagents = [{email = "actual@example.invalid"}]\n' >.commit-lint.toml
+	cat >bin/prek <<'STUB'
+#!/usr/bin/env bash
+cp "$5" captured
+exec commit-lint "$5"
+STUB
+	run bash "$helper"
+	[ "$status" -eq 1 ]
+	grep -Fq 'missing required Signed-off-by' <<<"$output"
+	cmp COMMIT_AGENTMSG captured
+}
+
+@test "preview stops on invalid identity configuration" {
+	printf '[identities]\nagents = [{name = "Agent"}]\n' >.commit-lint.toml
+	run bash "$helper"
+	[ "$status" -eq 2 ]
+	[ ! -e captured ]
 }

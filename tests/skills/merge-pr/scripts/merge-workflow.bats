@@ -10,7 +10,14 @@
 HEAD_OID=1111111111111111111111111111111111111111
 BASE_OID=2222222222222222222222222222222222222222
 
+setup_file() {
+  local source_root
+  source_root=$(git -C "$BATS_TEST_DIRNAME" rev-parse --show-toplevel)
+  (cd "$source_root" && go build -o "$BATS_FILE_TMPDIR/commit-lint" ./cmd/commit-lint)
+}
+
 setup() {
+  export PATH="$BATS_FILE_TMPDIR:$PATH"
   source "${BATS_TEST_DIRNAME}/../../../test_helper.bash"
   isolate_git
   ROOT="${BATS_TEST_DIRNAME}/../../../.."
@@ -814,4 +821,34 @@ assert_cleaned() {
   [ "$status" -eq 1 ]
   [[ "$output" == *"UNKNOWN"* ]]
   assert_preserved
+}
+
+@test "squash assembly drops denied agents while retaining people and bots" {
+  printf '[identities]\nagents = [{email = "agent@example.com"}]\n' >.commit-lint.toml
+  pr '.commits[0].messageBody = "Reason.\n\nSigned-off-by: Agent <agent@example.com>\nSigned-off-by: Tester <tester@example.com>\nSigned-off-by: Renovate <renovate[bot]@users.noreply.github.com>"'
+  run bash "$SCRIPTS/squash-message.sh" 7
+  [ "$status" -eq 0 ]
+  grep -Fq 'Dropped sign-off: Signed-off-by: Agent <agent@example.com>' <<<"$output"
+  run grep -q 'Signed-off-by: Agent' SQUASH_AGENTMSG
+  [ "$status" -eq 1 ]
+  grep -Fx 'Signed-off-by: Tester <tester@example.com>' SQUASH_AGENTMSG
+  grep -Fx 'Signed-off-by: Renovate <renovate[bot]@users.noreply.github.com>' SQUASH_AGENTMSG
+}
+
+@test "squash assembly fails on invalid identity configuration" {
+  printf '[identities]\nagents = [{name = "Agent"}]\n' >.commit-lint.toml
+  run bash "$SCRIPTS/squash-message.sh" 7
+  [ "$status" -eq 2 ]
+  grep -Fq "identity email pattern must not be empty" <<<"$output"
+}
+
+@test "squash assembly drops mixed-case agent sign-offs recognized by Git" {
+  printf '[identities]\nagents = [{email = "agent@example.com"}]\n' >.commit-lint.toml
+  pr '.commits[0].messageBody = "Reason.\n\nsIgNeD-oFf-By: Agent <agent@example.com>\nSigned-off-by: Tester <tester@example.com>"'
+  run bash "$SCRIPTS/squash-message.sh" 7
+  [ "$status" -eq 0 ]
+  grep -Fq 'Dropped sign-off: sIgNeD-oFf-By: Agent <agent@example.com>' <<<"$output"
+  run grep -qi 'signed-off-by: Agent' SQUASH_AGENTMSG
+  [ "$status" -eq 1 ]
+  grep -Fx 'Signed-off-by: Tester <tester@example.com>' SQUASH_AGENTMSG
 }

@@ -126,6 +126,27 @@ trailers=$(printf '%s\n' "$commits" | awk '
   END { flush() }
 ' | awk '!seen[$0]++')
 
+# Validate carried sign-offs through the same repository identity rules.
+filtered=""
+while IFS= read -r trailer; do
+  case $trailer in
+  [Ss][Ii][Gg][Nn][Ee][Dd]-[Oo][Ff][Ff]-[Bb][Yy]:*)
+    identity=${trailer#*:}
+    identity=${identity# }
+    if commit-lint --check-signoff "$identity"; then
+      :
+    else
+      status=$?
+      [ "$status" -eq 1 ] || exit "$status"
+      printf 'Dropped sign-off: %s\n' "$trailer" >&2
+      continue
+    fi
+    ;;
+  esac
+  filtered="${filtered}${trailer}"$'\n'
+done <<<"$trailers"
+trailers=$filtered
+
 # Order follows the shared trailer rule: attribution first, sign-off
 # last. Anything else this repository's rule permits sits between them,
 # where neither constraint reaches it.

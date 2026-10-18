@@ -14,20 +14,24 @@ import (
 	"github.com/pelletier/go-toml/v2"
 )
 
-// Config contains the existing commit-message rule settings. Future identity
-// rules can add an identities table without moving these root keys.
+// Config contains commit-message rules and optional identity restrictions.
 type Config struct {
-	Types               []string `toml:"types"`
-	HeaderMinLength     int      `toml:"header_min_length"`
-	HeaderMaxLength     int      `toml:"header_max_length"`
-	BodyMaxLineLength   int      `toml:"body_max_line_length"`
-	FooterMaxLineLength int      `toml:"footer_max_line_length"`
-	RequireSignedOffBy  bool     `toml:"require_signed_off_by"`
+	Types               []string   `toml:"types"`
+	HeaderMinLength     int        `toml:"header_min_length"`
+	HeaderMaxLength     int        `toml:"header_max_length"`
+	BodyMaxLineLength   int        `toml:"body_max_line_length"`
+	FooterMaxLineLength int        `toml:"footer_max_line_length"`
+	RequireSignedOffBy  bool       `toml:"require_signed_off_by"`
+	Identities          Identities `toml:"identities"`
 }
 
 // DefaultConfig matches the original shell linter defaults.
 func DefaultConfig() Config {
-	return Config{strings.Fields("feat fix docs style refactor perf test build ci chore revert"), 10, 80, 72, 100, true}
+	return Config{
+		strings.Fields("feat fix docs style refactor perf test build ci chore revert"),
+		10, 80, 72, 100, true,
+		Identities{},
+	}
 }
 
 // LoadConfig finds the repository config by walking to the nearest Git root.
@@ -44,6 +48,13 @@ func LoadConfig(dir string, getenv func(string) string) (Config, error) {
 		c.FooterMaxLineLength < 0 ||
 		len(c.Types) == 0 {
 		return c, errInvalidConfig
+	}
+	for _, list := range [][]Identity{c.Identities.Agents, c.Identities.SignOff} {
+		for _, identity := range list {
+			if strings.TrimSpace(identity.Email) == "" {
+				return c, errEmptyIdentityEmail
+			}
+		}
 	}
 	return c, nil
 }
@@ -102,3 +113,5 @@ func overrideConfig(c *Config, getenv func(string) string) error {
 	}
 	return nil
 }
+
+var errEmptyIdentityEmail = errors.New("identity email pattern must not be empty")

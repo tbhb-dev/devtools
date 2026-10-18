@@ -145,6 +145,7 @@ func checkTrailers(m Message, c Config) []string {
 	assisted := slices.IndexFunc(m.Raw, func(line string) bool { return strings.HasPrefix(line, "Assisted-by:") }) + 1
 	signed := slices.IndexFunc(m.Raw, func(line string) bool { return strings.HasPrefix(line, "Signed-off-by:") }) + 1
 	for i, line := range m.Raw {
+		errors = append(errors, checkSignoffLine(c, line, i+1)...)
 		switch {
 		case strings.HasPrefix(line, "Assisted-by:"):
 			value := strings.TrimSpace(strings.TrimPrefix(line, "Assisted-by:"))
@@ -173,4 +174,16 @@ func checkTrailers(m Message, c Config) []string {
 		report("missing required Signed-off-by trailer (DCO)")
 	}
 	return errors
+}
+
+func checkSignoffLine(c Config, line string, number int) []string {
+	key, value, ok := strings.Cut(line, ":")
+	key = strings.TrimRightFunc(key, unicode.IsSpace)
+	if !ok || !strings.EqualFold(key, "Signed-off-by") {
+		return nil
+	}
+	if err := c.CheckSignoff(strings.TrimSpace(value)); err != nil {
+		return []string{fmt.Sprintf("commit-trailers: line %d: %s: %v", number, line, err)}
+	}
+	return nil
 }

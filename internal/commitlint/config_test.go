@@ -34,7 +34,7 @@ require_signed_off_by = false
 [identities]
 `)
 	c, err = commitlint.LoadConfig(nested, empty)
-	want := commitlint.Config{[]string{"custom"}, 1, 120, 80, 150, false}
+	want := commitlint.Config{[]string{"custom"}, 1, 120, 80, 150, false, commitlint.Identities{}}
 	if err != nil || !reflect.DeepEqual(c, want) {
 		t.Fatalf("%#v, %v", c, err)
 	}
@@ -47,7 +47,7 @@ require_signed_off_by = false
 		"COMMITLINT_REQUIRE_SIGNED_OFF_BY":  "1",
 	}
 	c, err = commitlint.LoadConfig(nested, func(key string) string { return env[key] })
-	want = commitlint.Config{[]string{"fix", "feat"}, 2, 90, 70, 99, true}
+	want = commitlint.Config{[]string{"fix", "feat"}, 2, 90, 70, 99, true, commitlint.Identities{}}
 	if err != nil || !reflect.DeepEqual(c, want) {
 		t.Fatalf("%#v, %v", c, err)
 	}
@@ -61,7 +61,9 @@ require_signed_off_by = false
 
 func TestConfigErrors(t *testing.T) {
 	t.Parallel()
-	for _, content := range []string{"invalid = [", "types = []", "header_min_length = -1", "header_min_length = 100", "body_max_line_length = -1", "footer_max_line_length = -1"} {
+	for _, content := range []string{"invalid = [", "types = []", "header_min_length = -1", "header_min_length = 100", "body_max_line_length = -1", "footer_max_line_length = -1", `[identities]
+agents = [{name = "Agent"}]`, `[identities]
+sign_off = [{email = ""}]`} {
 		t.Run(content, func(t *testing.T) {
 			t.Parallel()
 			dir := t.TempDir()

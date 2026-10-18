@@ -18,6 +18,7 @@ const exitInputError = 2
 func Run(args []string, in io.Reader, errOut io.Writer, dir string, getenv func(string) string) int {
 	flags := flag.NewFlagSet("commit-lint", flag.ContinueOnError)
 	flags.SetOutput(errOut)
+	signoff := flags.String("check-signoff", "", "check one Name <email> sign-off identity")
 	rules := flags.String("rules", rulesAll, "rules to check: all, shape, trailers")
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -34,6 +35,9 @@ func Run(args []string, in io.Reader, errOut io.Writer, dir string, getenv func(
 		fmt.Fprintf(errOut, "commit-lint: %v\n", err)
 		return exitInputError
 	}
+	if *signoff != "" {
+		return checkSignoffCommand(config, *signoff, flags.NArg(), errOut)
+	}
 	var data []byte
 	if flags.NArg() == 1 {
 		data, err = os.ReadFile(flags.Arg(0))
@@ -49,6 +53,18 @@ func Run(args []string, in io.Reader, errOut io.Writer, dir string, getenv func(
 		fmt.Fprintln(errOut, finding)
 	}
 	if len(findings) > 0 {
+		return 1
+	}
+	return 0
+}
+
+func checkSignoffCommand(config Config, value string, files int, errOut io.Writer) int {
+	if files != 0 {
+		fmt.Fprintln(errOut, "commit-lint: --check-signoff takes no message file")
+		return exitInputError
+	}
+	if err := config.CheckSignoff(value); err != nil {
+		fmt.Fprintf(errOut, "commit-lint: %v\n", err)
 		return 1
 	}
 	return 0
