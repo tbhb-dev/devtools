@@ -1,6 +1,13 @@
 #!/usr/bin/env bats
 
+setup_file() {
+  local source_root
+  source_root=$(git -C "$BATS_TEST_DIRNAME" rev-parse --show-toplevel)
+  (cd "$source_root" && go build -o "$BATS_FILE_TMPDIR/commit-lint" ./cmd/commit-lint)
+}
+
 setup() {
+  export PATH="$BATS_FILE_TMPDIR:$PATH"
   source "${BATS_TEST_DIRNAME}/../../test_helper.bash"
   isolate_git
   stub_gates
@@ -9,6 +16,9 @@ setup() {
   unset CLAUDE_CODE_SESSION_ID CODEX_THREAD_ID CLAUDECODE DEVTOOLS_HARNESS
   unset DEVTOOLS_REVIEW_MODEL DEVTOOLS_REVIEW_EFFORT DEVTOOLS_DELEGATION_CHECK DT_UNATTENDED
   export XDG_CONFIG_HOME="$BATS_TEST_TMPDIR/config"
+  unset DEVTOOLS_SIGNOFF_IDENTITY
+  mkdir -p "$XDG_CONFIG_HOME/devtools"
+  printf 'signoff_identity = Tester <tester@example.com>\n' >"$XDG_CONFIG_HOME/devtools/devtools.conf"
   export DEVTOOLS_REVIEW_CMD='cat >/dev/null; echo "VERDICT: PASS"'
   export COMMIT_PREFLIGHT_FETCH=0
   git init -q --initial-branch=main "$BATS_TEST_TMPDIR/repo"
