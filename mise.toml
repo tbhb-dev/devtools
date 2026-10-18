@@ -131,7 +131,7 @@ apm = "0.33.0"
 # `# hygiene-ok` to suppress. It stays a repo-local pin because the
 # hygiene gate is repo-local; the skills it checks deploy, the checker
 # does not.
-ast-grep = "0.45.3"
+ast-grep = "0.50.0"
 jq = "1.8.2"
 shfmt = "3.14.1"
 
