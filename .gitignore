@@ -27,6 +27,7 @@ SQUASH_AGENTMSG
 bin/
 /agentcontext
 /agenthooks
+/agentrepo
 /agentstore
 coverage.out
 coverage.html

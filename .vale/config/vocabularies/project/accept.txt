@@ -169,6 +169,7 @@ agent_type
 agentcontext
 agenthooks
 agentic
+agentrepo
 agentstore
 agy
 always_on
