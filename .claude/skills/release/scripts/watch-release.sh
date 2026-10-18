@@ -67,7 +67,7 @@ fail() {
 
 command -v gh >/dev/null 2>&1 || fail "gh is not installed"
 command -v jq >/dev/null 2>&1 || fail "jq is not installed"
-gh auth status >/dev/null 2>&1 || fail "gh is not authenticated"
+gh auth status --active >/dev/null 2>&1 || fail "gh is not authenticated"
 
 baseline=${1:-}
 [ -n "$baseline" ] || fail "no baseline run id; pass the newest run id from before the dispatch, or 'none'"
