@@ -84,7 +84,24 @@ case "${args[0]} ${args[1]:-}" in
 "pr list") echo '[]' | out ;;
 "pr diff") echo "HTTP 406: diff exceeds 20000 lines" >&2; exit 1 ;;
 "repo view") cat "$F/repository" ;;
-"pr merge") printf '%s\n' "${args[*]}" >"$F/merged" ;;
+"pr merge")
+  printf '%s\n' "${args[*]}" >"$F/merged"
+  case ${MERGE_RESULT:-merged} in
+  merged | lost | missing-commit | wrong-head)
+    jq '.state = "MERGED" | .mergeCommit = {oid:"4444444444444444444444444444444444444444"}' "$F/pr.json" >"$F/next.json"
+    mv "$F/next.json" "$F/pr.json"
+    case ${MERGE_RESULT:-merged} in
+    lost) echo 'response lost' >&2; exit 1 ;;
+    missing-commit) jq '.mergeCommit = null' "$F/pr.json" >"$F/next.json"; mv "$F/next.json" "$F/pr.json" ;;
+    wrong-head) jq '.headRefOid = "different"' "$F/pr.json" >"$F/next.json"; mv "$F/next.json" "$F/pr.json" ;;
+    esac ;;
+  queued) ;;
+  refused) echo 'merge refused' >&2; exit 1 ;;
+  unavailable)
+    echo 'read-back unavailable' >"$F/live-error"
+    echo 1 >"$F/live-status" ;;
+  esac ;;
+
 "api rate_limit") echo 1792195200 ;;
 "api user") echo 'HTTP 403: API rate limit exceeded' >&2; exit 1 ;;
 "api graphql")
@@ -717,4 +734,84 @@ STUB
     [ "$status" -eq 9 ]
     [ ! -f "$GH_FIXTURES/merged" ]
   done
+}
+
+# Every result must come from one merge attempt and one read-back.
+merge_result() {
+  export MERGE_RESULT=$1
+  bash "$SCRIPTS/review.sh" 7
+  printf 'draft\n' >PR_AGENTDESC.md
+  cp "$(stamp_file)" "$(dirname "$(stamp_file)")/pr.stamp"
+  git remote add origin "$GH_FIXTURES/upstream.git"
+  git --git-dir="$GH_FIXTURES/upstream.git" symbolic-ref HEAD refs/heads/main
+  run bash "$SCRIPTS/squash-merge.sh" --confirmed 7
+  [ "$(grep -c '^pr merge ' "$GH_FIXTURES/gh.log")" -eq 1 ]
+  [ "$(sed -n '/^pr merge /,$p' "$GH_FIXTURES/gh.log" | grep -c '^pr view ')" -eq 1 ]
+}
+
+assert_preserved() {
+  [ -s SQUASH_AGENTMSG ]
+  [ -s PR_AGENTDESC.md ]
+  [ -s "$(stamp_file)" ]
+  [ -s "$(dirname "$(stamp_file)")/pr.stamp" ]
+  git --git-dir="$GH_FIXTURES/upstream.git" show-ref --verify refs/heads/topic
+}
+
+assert_cleaned() {
+  [ ! -e SQUASH_AGENTMSG ]
+  [ ! -e PR_AGENTDESC.md ]
+  [ ! -e "$(stamp_file)" ]
+  [ ! -e "$(dirname "$(stamp_file)")/pr.stamp" ]
+  ! git --git-dir="$GH_FIXTURES/upstream.git" show-ref --verify refs/heads/topic
+  [[ "$output" == *"MERGED"* ]]
+  [[ "$output" == *"4444444444444444444444444444444444444444"* ]]
+}
+
+@test "merge result: confirmed merge cleans up and records the commit" {
+  merge_result merged
+  [ "$status" -eq 0 ]
+  assert_cleaned
+  grep -q 4444444444444444444444444444444444444444 "$(dirname "$(stamp_file)")/merge.result.json"
+}
+
+@test "merge result: queued merge preserves drafts stamps and branch" {
+  merge_result queued
+  [ "$status" -eq 75 ]
+  [[ "$output" == *"PENDING"* ]]
+  [[ "$output" == *"gh pr view 7"* ]]
+  assert_preserved
+}
+
+@test "merge result: lost response after server merge still succeeds" {
+  merge_result lost
+  [ "$status" -eq 0 ]
+  assert_cleaned
+}
+
+@test "merge result: refused merge reads back before reporting failure" {
+  merge_result refused
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"FAILED"* ]]
+  assert_preserved
+}
+
+@test "merge result: unavailable read-back leaves the outcome unknown" {
+  merge_result unavailable
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"UNKNOWN"* ]]
+  assert_preserved
+}
+
+@test "merge result: merged without a commit leaves the outcome unknown" {
+  merge_result missing-commit
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"UNKNOWN"* ]]
+  assert_preserved
+}
+
+@test "merge result: merged at another head leaves the outcome unknown" {
+  merge_result wrong-head
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"UNKNOWN"* ]]
+  assert_preserved
 }
