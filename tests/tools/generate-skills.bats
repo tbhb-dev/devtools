@@ -14,6 +14,8 @@ setup() {
   mkdir -p "$src/parts" "$src/shared/scripts" "$src/claude/scripts" packages/agents/source/lib
   printf 'lib\n' >packages/agents/source/lib/lib.sh
   printf 'gate helper\n' >packages/agents/source/lib/gates.py
+  printf 'agent helper\n' >packages/agents/source/lib/agent.sh
+  printf 'signing helper\n' >packages/agents/source/lib/signing.sh
   printf -- '---\nname: demo\n---\n\n# Claude\n\n@include parts/body.md\n' >"$src/SKILL.claude.md"
   printf -- '---\nname: demo\n---\n\n# Codex\n\n@include parts/body.md\n' >"$src/SKILL.codex.md"
   printf 'Shared body.\n' >"$src/parts/body.md"
@@ -38,6 +40,8 @@ setup() {
   [ ! -e "$CODEX_OUT/scripts/guard.sh" ]
   [ "$(cat "$CODEX_OUT/scripts/lib.sh")" = lib ]
   [ "$(cat "$CODEX_OUT/scripts/gates.py")" = 'gate helper' ]
+  [ "$(cat "$CODEX_OUT/scripts/agent.sh")" = 'agent helper' ]
+  [ "$(cat "$CODEX_OUT/scripts/signing.sh")" = 'signing helper' ]
   [ ! -e "$CODEX_OUT/parts" ]
 }
 

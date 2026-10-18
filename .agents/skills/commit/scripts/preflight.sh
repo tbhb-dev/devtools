@@ -98,6 +98,10 @@ behind_count() {
 
 root=$(git rev-parse --show-toplevel)
 cd "$root"
+if [ "${DT_UNATTENDED:-0}" = 1 ]; then
+  dt_agent_context
+  dt_agent_signing
+fi
 # symbolic-ref rather than rev-parse: before the first commit HEAD names
 # a branch that does not exist yet, and rev-parse fails on it.
 branch=$(git symbolic-ref --quiet --short HEAD || printf 'detached\n')
@@ -208,7 +212,11 @@ if git check-ignore --quiet COMMIT_AGENTMSG 2>/dev/null; then
 else
   printf 'COMMIT_AGENTMSG gitignored: NO — add it to .gitignore before drafting\n'
 fi
-if command -v mise >/dev/null 2>&1 && mise task info lint-commit-msg >/dev/null 2>&1; then
+if [ "${DT_UNATTENDED:-0}" = 1 ]; then
+  lint_cmd=$(dt_repo_conf lint_commit_cmd 'mise run lint-commit-msg')
+  [ -n "$lint_cmd" ] || dt_die "lint_commit_cmd must not be empty"
+  printf 'commit message gate: %s\n' "$lint_cmd"
+elif command -v mise >/dev/null 2>&1 && mise task info lint-commit-msg >/dev/null 2>&1; then
   printf 'mise run lint-commit-msg: present\n'
 else
   printf 'mise run lint-commit-msg: ABSENT — stop and tell the operator\n'
@@ -247,6 +255,8 @@ if [ -n "$session" ] && grant=$(dt_preapproval commit); then
   *) how="no biometric prompt stood behind it" ;;
   esac
   printf 'commit: GRANTED, %s — step 8 skips the confirmation once every gate and the review pass\n' "$how"
+elif [ "${DT_UNATTENDED:-0}" = 1 ]; then
+  printf 'commit: not granted; delegation must authorize the write, otherwise report the hold\n'
 else
   printf 'commit: not granted — step 8 confirms with the operator as written\n'
 fi

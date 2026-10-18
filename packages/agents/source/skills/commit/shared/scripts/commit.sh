@@ -78,11 +78,20 @@ Received: ${arg}"
   esac
 done
 
+if [ "${DT_UNATTENDED:-0}" = 1 ] && [ "$confirmed" = true ]; then
+  fail "Unattended workflows refuse --confirmed; use pre-approval or delegation."
+fi
+
 root=$(dt_root)
 cd "$root"
 draft=$root/COMMIT_AGENTMSG
 state=$(dt_state_dir)
 here=$DT_LIB_DIR
+if [ "${DT_UNATTENDED:-0}" = 1 ]; then
+  dt_agent_context
+  dt_agent_signing
+  commit_ref=$(gitr symbolic-ref --quiet HEAD)
+fi
 
 [ -s "$draft" ] || fail "COMMIT_AGENTMSG is empty or missing. Draft the message first."
 start=$(dt_head)
@@ -119,15 +128,15 @@ the same. Run the review again against the current draft and index:
   bash $here/review.sh$review_suffix"
 }
 require_reviewed
-dt_gate lint-commit-msg "$draft" "$rerun_gates" mise run lint-commit-msg
+dt_commit_lint "$draft" "$rerun_gates"
 mise run devtools:lint-leaks
 mise run devtools:gitleaks
 dt_gate lint "" "$rerun_gates" mise run lint
 dt_gate test "" "$rerun_gates" mise run test
 if [ "$mode" = amend ]; then
-  bash "$here/review.sh" --amend
+  DT_UNATTENDED=${DT_UNATTENDED:-0} bash "$here/review.sh" --amend
 else
-  bash "$here/review.sh"
+  DT_UNATTENDED=${DT_UNATTENDED:-0} bash "$here/review.sh"
 fi
 require_reviewed
 [ "$dry_run" = false ] || exit 0
@@ -172,9 +181,24 @@ snapshot() {
     gitr status --porcelain --untracked-files=all
   } | gitr hash-object --stdin
 }
+if [ "${DT_UNATTENDED:-0}" = 1 ]; then
+  dt_agent_context
+  dt_agent_signing
+  dt_agent_before_commit "$message" "$commit_ref"
+  set -- "$@" -S
+fi
 before=$(snapshot)
 status=0
-command git "$@" || status=$?
+if [ "${DT_UNATTENDED:-0}" = 1 ]; then
+  command git "$@" >"$state/commit.log" 2>&1 || status=$?
+  cat "$state/commit.log"
+  if [ "$status" != 0 ] && grep -Eq "^(error: gpg failed to sign the data|fatal: failed to write commit object)" "$state/commit.log"; then
+    printf 'HELD: signing failed. Keep the draft and index; restore signing before retrying. Recheck the stamp if hooks changed files.\n' >&2
+    exit "$DT_HELD"
+  fi
+else
+  command git "$@" || status=$?
+fi
 
 if [ "$status" != 0 ]; then
   dropped=""
@@ -201,6 +225,10 @@ if [ "$status" != 0 ]; then
     printf 'staged tree changed, so the stamp no longer covers it.\n' >&2
   fi
   exit "$status"
+fi
+
+if [ "${DT_UNATTENDED:-0}" = 1 ]; then
+  dt_agent_verify_commit "$start" "$tree" "$mode" "$state"
 fi
 
 # What the commit actually holds, against what the manifest named. An
