@@ -21,6 +21,10 @@ setup() {
   mkdir -p .devtools/tasks vendor
   cp "$ROOT/.devtools/tasks/go.toml" .devtools/tasks/
   cat > mise.toml <<'TOML'
+# Keep the stub ahead of tool paths rebuilt by nested mise invocations.
+[env]
+_.path = ["{{config_root}}/bin"]
+
 [task_config]
 includes = [".devtools/tasks/go.toml"]
 TOML
@@ -45,7 +49,6 @@ case "$SCAN_RESULT" in
 esac
 SH
   chmod +x bin/go
-  export PATH="$PWD/bin:$PATH"
   export MISE_TRUSTED_CONFIG_PATHS="$PWD"
   export SCAN_LOG="$BATS_TEST_TMPDIR/scans" SCAN_RESULT=pass
   prek install
