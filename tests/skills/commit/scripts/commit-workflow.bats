@@ -5,7 +5,14 @@
 # reviewer is a stub set through DEVTOOLS_REVIEW_CMD, and the harness
 # session variables are cleared so the confirmation chain starts empty.
 
+setup_file() {
+  local source_root
+  source_root=$(git -C "$BATS_TEST_DIRNAME" rev-parse --show-toplevel)
+  (cd "$source_root" && go build -o "$BATS_FILE_TMPDIR/commit-lint" ./cmd/commit-lint)
+}
+
 setup() {
+  export PATH="$BATS_FILE_TMPDIR:$PATH"
   source "${BATS_TEST_DIRNAME}/../../../test_helper.bash"
   isolate_git
   stub_gates
@@ -17,6 +24,7 @@ setup() {
   export XDG_CONFIG_HOME="${BATS_TEST_TMPDIR}/config"
   export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
   export COMMIT_PREFLIGHT_FETCH=0
+  export DEVTOOLS_SIGNOFF_IDENTITY="Configured Person <person@example.com>"
   export DEVTOOLS_REVIEW_CMD='cat >/dev/null; echo "VERDICT: PASS"'
   git init --quiet --initial-branch=main "$REPO"
   git -C "$REPO" config user.name Tester
@@ -412,4 +420,25 @@ STUB
   run bash "$SCRIPTS/commit.sh" --amend --confirmed
   [ "$status" -eq 0 ]
   [ "$(cat "$GATE_LOG")" = $'lint-commit-msg\ndevtools:lint-leaks\ndevtools:gitleaks\nlint\ntest\nreview\ndevtools:lint-leaks\ndevtools:gitleaks\nreview' ]
+}
+
+@test "preflight uses configured sign-off instead of Git identity" {
+  run bash "$SCRIPTS/preflight.sh"
+  [ "$status" -eq 0 ]
+  [[ $output == *"Signed-off-by: Configured Person <person@example.com>"* ]]
+  [[ $output != *"Signed-off-by: Tester <tester@example.com>"* ]]
+}
+
+@test "preflight refuses denied configured sign-off" {
+  printf '[identities]\nagents = [{email = "person@example.com"}]\n' >.commit-lint.toml
+  run bash "$SCRIPTS/preflight.sh"
+  [ "$status" -eq 1 ]
+  [[ $output == *"denied agent sign-off"* ]]
+}
+
+@test "preflight requires sign-off configuration" {
+  unset DEVTOOLS_SIGNOFF_IDENTITY
+  run bash "$SCRIPTS/preflight.sh"
+  [ "$status" -eq 1 ]
+  [[ $output == *"signoff_identity is missing"* ]]
 }

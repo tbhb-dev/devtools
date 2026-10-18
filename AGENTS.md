@@ -14,7 +14,7 @@ Draft every commit message in the repo-root file `COMMIT_AGENTMSG` before you co
 4. Run `mise run lint-commit-msg` and resolve whatever it reports.
 5. Confirm the message with the operator, then commit the validated draft through the skill's `commit.sh`.
 
-`mise run lint-commit-msg` previews the commit-msg hook against a temporary copy of the draft. When no sign-off exists it appends the identity from `git var GIT_COMMITTER_IDENT`, as `git commit -s` would. It preserves an existing sign-off and leaves the draft unchanged. The real hook still requires the trailer. See [the sign-off preview](docs/commit-signoff-preview.md) for identity and existing-trailer behavior. Agent drafts still include the complete trailers before review.
+`mise run lint-commit-msg` previews the commit-msg hook against a temporary copy of the draft. When no sign-off exists it appends the identity from `git var GIT_COMMITTER_IDENT`, as `git commit -s` would, only if the configured identity rules permit it. It preserves an existing sign-off and leaves the draft unchanged. The real hook still requires the trailer. See [the sign-off preview](docs/commit-signoff-preview.md) for identity and existing-trailer behavior. Agent drafts still include the complete trailers before review.
 
 The preview runs:
 

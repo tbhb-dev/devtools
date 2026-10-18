@@ -56,7 +56,8 @@
   description: >-
     Enforce the AI-assistant commit-trailer rules tbhb repositories
     share: a kernel-style Assisted-by value, Assisted-by before
-    Signed-off-by, a required Signed-off-by sign-off, and no LLM
+    Signed-off-by, a required Signed-off-by sign-off with configured
+    agent denials and optional allowed identities, and no LLM
     attribution in Co-authored-by.
   entry: commit-lint --rules trailers
   language: golang
