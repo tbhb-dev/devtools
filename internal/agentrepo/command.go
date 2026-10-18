@@ -72,7 +72,7 @@ func NewCommand() (*cobra.Command, *int) {
 	evaluate.Flags().StringVar(&head, "expected-head", "", "Expected headRefOid")
 	evaluate.Flags().StringArrayVar(&required, "required", nil, "Required check name (repeatable)")
 	group.AddCommand(evaluate)
-	root.AddCommand(group)
+	root.AddCommand(group, reviewCommand(code))
 	return root, code
 }
 
