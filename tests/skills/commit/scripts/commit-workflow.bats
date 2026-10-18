@@ -425,20 +425,21 @@ STUB
 @test "preflight uses configured sign-off instead of Git identity" {
   run bash "$SCRIPTS/preflight.sh"
   [ "$status" -eq 0 ]
-  [[ $output == *"Signed-off-by: Configured Person <person@example.com>"* ]]
-  [[ $output != *"Signed-off-by: Tester <tester@example.com>"* ]]
+  grep -Fq 'Signed-off-by: Configured Person <person@example.com>' <<<"$output"
+  run grep -Fq 'Signed-off-by: Tester <tester@example.com>' <<<"$output"
+  [ "$status" -eq 1 ]
 }
 
 @test "preflight refuses denied configured sign-off" {
   printf '[identities]\nagents = [{email = "person@example.com"}]\n' >.commit-lint.toml
   run bash "$SCRIPTS/preflight.sh"
   [ "$status" -eq 1 ]
-  [[ $output == *"denied agent sign-off"* ]]
+  grep -Fq "denied agent sign-off" <<<"$output"
 }
 
 @test "preflight requires sign-off configuration" {
   unset DEVTOOLS_SIGNOFF_IDENTITY
   run bash "$SCRIPTS/preflight.sh"
   [ "$status" -eq 1 ]
-  [[ $output == *"signoff_identity is missing"* ]]
+  grep -Fq "signoff_identity is missing" <<<"$output"
 }

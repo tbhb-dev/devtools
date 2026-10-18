@@ -43,18 +43,19 @@ func (c Config) CheckSignoff(value string) error {
 	if len(c.Identities.Agents) == 0 && len(c.Identities.SignOff) == 0 {
 		return nil
 	}
-	match := identityPattern.FindStringSubmatch(value)
+	match := identityPattern.FindStringSubmatch(strings.TrimSpace(value))
 	if match == nil {
 		return fmt.Errorf("%w: %q", errInvalidSignoff, value)
 	}
+	name := strings.TrimSpace(match[1])
 	for _, agent := range c.Identities.Agents {
-		if agent.matches(match[1], match[2]) {
+		if agent.matches(name, match[2]) {
 			return fmt.Errorf("%w: %q", errAgentSignoff, value)
 		}
 	}
 	if len(c.Identities.SignOff) > 0 {
 		for _, allowed := range c.Identities.SignOff {
-			if allowed.matches(match[1], match[2]) {
+			if allowed.matches(name, match[2]) {
 				return nil
 			}
 		}

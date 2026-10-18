@@ -106,7 +106,7 @@ exec commit-lint "$5"
 STUB
 	run bash "$helper"
 	[ "$status" -eq 1 ]
-	[[ $output == *'missing required Signed-off-by'* ]]
+	grep -Fq 'missing required Signed-off-by' <<<"$output"
 	cmp COMMIT_AGENTMSG captured
 }
 

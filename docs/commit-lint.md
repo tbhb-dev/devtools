@@ -55,7 +55,7 @@ agents = [{ email = "agent@example.com" }]
 sign_off = [{ name = "Maintainer", email = "maintainer@example.com" }]
 ```
 
-Entries require a nonempty `email` pattern. Matching email ignores case and supports `*` (zero or more characters) and `?` (one character). All other characters, including brackets in GitHub bot addresses, are literal. An optional `name` must also match exactly. Omit the name to deny an email regardless of the display name. With restrictions configured, sign-offs must have the form `Name <email>`. The command checks every raw sign-off line. Findings include its line number and identify the responsible person as the required signer.
+Entries require a nonempty `email` pattern. Matching email ignores case and supports `*` (zero or more characters) and `?` (one character). All other characters, including brackets in GitHub bot addresses, are literal. The parser trims whitespace around identities and names. An optional `name` must also match exactly. Omit the name to deny an email regardless of the display name. With restrictions configured, sign-offs must have the form `Name <email>`. The command checks every raw sign-off line and ignores case and trailing whitespace in trailer names. Findings include its line number and identify the responsible person as the required signer.
 
 These settings only tighten the default rules. Removing or changing a committed restriction can still loosen a repository's policy and requires review. They don't establish a trusted-default-branch boundary.
 

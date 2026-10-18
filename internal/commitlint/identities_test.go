@@ -25,8 +25,12 @@ func TestIdentityRestrictions(t *testing.T) {
 		{"glob literal brackets", "Bot <release[bot]@users.noreply.github.com>", commitlint.Identities{Agents: []commitlint.Identity{{Email: "*[bot]@users.noreply.github.com"}}}, true},
 		{"glob does not treat brackets as class", "Bot <robot@users.noreply.github.com>", commitlint.Identities{Agents: []commitlint.Identity{{Email: "*[bot]@users.noreply.github.com"}}}, false},
 		{"optional name matches", "Agent <agent@example.com>", commitlint.Identities{Agents: []commitlint.Identity{{Email: "agent@*", Name: "Agent"}}}, true},
+		{"padded identity", "  Agent <agent@example.com>", commitlint.Identities{Agents: []commitlint.Identity{{Email: "agent@*", Name: "Agent"}}}, true},
+		{"padded name", "Agent  <agent@example.com>", commitlint.Identities{Agents: []commitlint.Identity{{Email: "agent@*", Name: "Agent"}}}, true},
 		{"different name", "Person <agent@example.com>", commitlint.Identities{Agents: []commitlint.Identity{{Email: "agent@*", Name: "Agent"}}}, false},
 		{"allowed person", "Person <p@example.com>", commitlint.Identities{SignOff: []commitlint.Identity{{Email: "?@example.com", Name: "Person"}}}, false},
+		{"padded allowed person", "  Person  <person@example.com>  ", commitlint.Identities{SignOff: []commitlint.Identity{{Email: "person@example.com", Name: "Person"}}}, false},
+		{"empty name", "   <person@example.com>", commitlint.Identities{SignOff: []commitlint.Identity{{Email: "person@example.com"}}}, true},
 		{"unlisted person", "Other <other@example.com>", commitlint.Identities{SignOff: []commitlint.Identity{{Email: "person@example.com"}}}, true},
 		{"deny wins", "Agent <agent@example.com>", commitlint.Identities{Agents: []commitlint.Identity{{Email: "agent@*"}}, SignOff: []commitlint.Identity{{Email: "*"}}}, true},
 		{"malformed restricted signoff", "Agent", commitlint.Identities{Agents: []commitlint.Identity{{Email: "agent@*"}}}, true},
@@ -62,6 +66,8 @@ sign_off = [{email = "person@example.com", name = "Person"}]
 		{[]string{"--check-signoff", "Person <person@example.com>", "file"}, "", 2, "takes no message file"},
 		{[]string{"--rules", "trailers"}, "fix: a thing\n\nSigned-off-by: Person <person@example.com>\nSigned-off-by: Agent <agent@example.com>", 1, "line 4: Signed-off-by: Agent"},
 		{[]string{"--rules", "trailers"}, "fix: a thing\n\nSigned-off-by: Person <person@example.com>", 0, ""},
+		{[]string{"--rules", "trailers"}, "fix: a thing\n\nSigned-off-by: Person <person@example.com>\nsIgNeD-oFf-By: Agent <agent@example.com>", 1, "line 4: sIgNeD-oFf-By: Agent"},
+		{[]string{"--rules", "trailers"}, "fix: a thing\n\nSigned-off-by: Person <person@example.com>\nSigned-off-by \t: Agent <agent@example.com>", 1, "line 4: Signed-off-by"},
 	} {
 		var out bytes.Buffer
 		status := commitlint.Run(tt.args, strings.NewReader(tt.message), &out, dir, func(string) string { return "" })

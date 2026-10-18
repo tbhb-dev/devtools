@@ -828,8 +828,9 @@ assert_cleaned() {
   pr '.commits[0].messageBody = "Reason.\n\nSigned-off-by: Agent <agent@example.com>\nSigned-off-by: Tester <tester@example.com>\nSigned-off-by: Renovate <renovate[bot]@users.noreply.github.com>"'
   run bash "$SCRIPTS/squash-message.sh" 7
   [ "$status" -eq 0 ]
-  [[ $output == *"Dropped sign-off: Signed-off-by: Agent <agent@example.com>"* ]]
-  ! grep -q 'Signed-off-by: Agent' SQUASH_AGENTMSG
+  grep -Fq 'Dropped sign-off: Signed-off-by: Agent <agent@example.com>' <<<"$output"
+  run grep -q 'Signed-off-by: Agent' SQUASH_AGENTMSG
+  [ "$status" -eq 1 ]
   grep -Fx 'Signed-off-by: Tester <tester@example.com>' SQUASH_AGENTMSG
   grep -Fx 'Signed-off-by: Renovate <renovate[bot]@users.noreply.github.com>' SQUASH_AGENTMSG
 }
@@ -838,5 +839,16 @@ assert_cleaned() {
   printf '[identities]\nagents = [{name = "Agent"}]\n' >.commit-lint.toml
   run bash "$SCRIPTS/squash-message.sh" 7
   [ "$status" -eq 2 ]
-  [[ $output == *"identity email pattern must not be empty"* ]]
+  grep -Fq "identity email pattern must not be empty" <<<"$output"
+}
+
+@test "squash assembly drops mixed-case agent sign-offs recognized by Git" {
+  printf '[identities]\nagents = [{email = "agent@example.com"}]\n' >.commit-lint.toml
+  pr '.commits[0].messageBody = "Reason.\n\nsIgNeD-oFf-By: Agent <agent@example.com>\nSigned-off-by: Tester <tester@example.com>"'
+  run bash "$SCRIPTS/squash-message.sh" 7
+  [ "$status" -eq 0 ]
+  grep -Fq 'Dropped sign-off: sIgNeD-oFf-By: Agent <agent@example.com>' <<<"$output"
+  run grep -qi 'signed-off-by: Agent' SQUASH_AGENTMSG
+  [ "$status" -eq 1 ]
+  grep -Fx 'Signed-off-by: Tester <tester@example.com>' SQUASH_AGENTMSG
 }

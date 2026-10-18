@@ -130,8 +130,8 @@ trailers=$(printf '%s\n' "$commits" | awk '
 filtered=""
 while IFS= read -r trailer; do
   case $trailer in
-  Signed-off-by:*)
-    identity=${trailer#Signed-off-by:}
+  [Ss][Ii][Gg][Nn][Ee][Dd]-[Oo][Ff][Ff]-[Bb][Yy]:*)
+    identity=${trailer#*:}
     identity=${identity# }
     if commit-lint --check-signoff "$identity"; then
       :
