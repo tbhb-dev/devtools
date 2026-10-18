@@ -1,0 +1,10 @@
+[workspace]
+members = ["member"]
+
+[workspace.package]
+edition = "2024"
+# Keep the minimum supported version equal to the tool pin.
+rust-version = "1.97.1"
+
+[workspace.metadata]
+rust-version = "1.70.0"

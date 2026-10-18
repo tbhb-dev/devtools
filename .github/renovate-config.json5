@@ -15,6 +15,10 @@
   // it already ends in `.json`/`.json5`/`.jsonc`, otherwise it appends
   // `.json` and the lookup misses.
   //
+  // Rust consumers that keep MSRV equal to their mise Rust pin can also
+  // extend renovate-rust-msrv-config.json5. It is opt-in; see
+  // docs/rust-adoption.md for the pinned consumer reference.
+  //
   // `packageRules` and `customManagers` are both mergeable arrays, so a
   // consuming repo can append its own rules and managers (Go module
   // grouping, repo-specific `# renovate:` markers) without losing what

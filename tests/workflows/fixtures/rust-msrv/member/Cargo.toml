@@ -1,0 +1,8 @@
+[package]
+name = "member"
+version = "0.1.0"
+keywords = ["example"]
+rust-version = "1.97.1"
+
+[package.metadata]
+rust-version = "1.70.0"
