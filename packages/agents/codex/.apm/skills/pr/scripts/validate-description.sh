@@ -36,29 +36,10 @@ export PYTHONUTF8=1
 unset CDPATH GH_REPO GH_HOST GREP_OPTIONS
 IFS=$' \t\n'
 
-# gitr runs git for output this script parses, with every formatting
-# knob pinned. log.showSignature is the one that matters most: it
-# prepends a verification line per commit to stdout, ahead of the
-# format string, so a --oneline listing silently becomes two lines per
-# commit and any head -n cap shows half a branch as though it were all
-# of it.
-#
-# Plain `git` stays available on purpose. Config reads, fetch, and push
-# need the operator's real configuration: the sign-off identity may come
-# from an includeIf work profile, and the network calls need credential
-# helpers and any url.insteadOf rewriting.
-gitr() {
-  command git --no-pager \
-    -c log.showSignature=false \
-    -c color.ui=false -c color.diff=false -c color.status=false \
-    -c core.quotePath=false \
-    -c diff.noprefix=false -c diff.mnemonicPrefix=false \
-    -c diff.renames=true -c diff.context=3 \
-    "$@"
-}
+# shellcheck disable=SC1091 # generated beside the validator
+. "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 DRAFT=${1:-PR_AGENTDESC.md}
-TEMPLATE=${PR_TEMPLATE:-.github/pull_request_template.md}
 
 # Title bounds mirror the commit subject bounds, because a squash merge
 # turns this title into that subject.
@@ -76,6 +57,7 @@ readonly SEQUENCE_KEYS="labels reviewers assignees"
 
 root=$(git rev-parse --show-toplevel)
 cd "$root"
+TEMPLATE=$(pr_template)
 
 findings=0
 

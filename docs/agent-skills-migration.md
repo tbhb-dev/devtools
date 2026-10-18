@@ -1,72 +1,91 @@
 # Migrating unattended skills
 
-The first delivery for [issue 241](https://github.com/tbhb-dev/devtools/issues/241) includes `agent-commit` for Claude and Codex. `agent-pr` and `agent-merge-pr` remain pending. Keep those local copies and their tests until their replacements are available. The package version comes from the release workflow, and this change doesn't create a release.
+The package includes generated `agent-commit` and `agent-pr` skills for Claude and Codex. `agent-merge-pr` remains pending under [issue 241](https://github.com/tbhb-dev/devtools/issues/241). Keep the local merge skill and its tests until its replacement is available. The package version comes from the release workflow.
 
-## Commit migration
+## Consumer cleanup
 
-Keep the local commit skill if its delegation checker requires protected-path arguments or its workflow requires external reports, because this delivery doesn't support those settings.
+Before installing, preserve the remaining local merge dependency as described below.
 
-Both existing consumers follow the same sequence. Pin the devtools harness package containing `agent-commit`, remove the local `agent-commit` APM dependency and its `apm.yml`, then install the package. Delete the local scripts and Bats suite under `.agents/skills/agent-commit/` and `.claude/skills/agent-commit/` as applicable, allowing APM to replace those directories with generated output. Don't remove the old configuration while local publication or merge scripts still read it. Transfer its supported commit settings to `.agents/agent-skills.conf` first.
+For avirt and the other existing consumers, pin the harness package containing the replacement skill, then install it. Remove each replaced local skill's APM dependency and `apm.yml`. Delete its local scripts and Bats suite under `.agents/skills/agent-commit/`, `.agents/skills/agent-pr/`, and their `.claude/skills/` counterparts as applicable, allowing APM to deploy the generated copies. In avirt, remove the commit and publication suites from `test-skills` after migration. Keep the merge suite and keep `check` calling `test-skills` until merge migrates. Other consumers remove the same replaced suites from their test tasks. devtools runs the shared regression coverage through `mise run test`. Consumers keep tests for their own hooks and repository settings.
 
-In avirt, remove the local commit suite from `test-skills` once installation succeeds. Keep the publication and merge suites in that task, and keep `check` calling it until both remaining skills migrate. The other existing consumer removes the same commit suite from its test task. The shared suite now runs in devtools through `mise run test`. Consumers keep tests for their own hooks and configuration.
+Keep a local commit skill if its delegation checker requires protected-path arguments or its workflow requires external reports: the commit delivery doesn't support those settings yet. Publication now supports both owner-path delegation and reporting.
 
-Use the new entry points under the harness's skill directory:
+Keep the old configuration while any local skill still reads it. Move supported behavior to `.agents/agent-skills.conf` and authorities to machine configuration before deleting it.
 
-```text
-agent-commit/scripts/preflight.sh
-agent-commit/scripts/review.sh [--amend]
-agent-commit/scripts/commit.sh [--amend]
-```
+The local merge skill still sources the old commit library. Before replacing that directory, keep the layout `legacy-agent-skills/scripts/lib.sh` and `legacy-agent-skills/agent-skills.conf` in a repository-owned directory outside deployed skills. Update the local merge skill's `common.sh` and its tests to source that retained library. Keep the compatibility copy until merge migration removes the dependency. The generated `agent-commit` entry points don't provide the old library interface.
 
-The sibling `commit` and `review-commit-message` skills must come from the same package. The entry points call those implementations, so there is one set of gates and review code. They're the interface a later `agentrepo` port can preserve.
+Install the sibling `commit`, `pr`, and review skills from the same package. The unattended entry points delegate to them. These skills supply the shared gates and publication machinery.
 
-## Configuration
+Their interfaces remain available for the later `agentrepo` port.
 
-The repository file holds `key = value` lines, with blank lines and full-line comments allowed. Its reader never sources it as shell. Unknown keys, duplicate keys, and symlinks fail. Commands are intentional command values executed only at the gate each configures. Other values are data. Changing a setting requires another review because the stamp binds the configuration bytes.
+## Repository configuration
+
+The file accepts `key = value` lines, blank lines, and full-line comments. Its reader never sources it as shell. Unknown keys, duplicates, and symlinks fail. Commands execute only at their configured gate. Other values remain data. Review stamps bind the configuration bytes. Commit the repository configuration before reviewing a branch.
 
 ```ini
 lint_commit_cmd = mise run lint-commit-msg
 required_hooks = commit-msg pre-commit post-commit
 hook_marker = File generated by prek
 review_max_rounds = 3
+pr_template = .github/pull_request_template.md
+lint_pr_cmd = mise run lint-pr-description
+pr_log_entry = optional
+pr_related_pattern =
+pr_title_check_cmd =
+owner_paths =
+mail_cmd =
+mail_to =
+mail_from =
 ```
 
-These are the defaults. The round bound accepts integers from 1 to 9, and a successful commit resets its finding counter. Reaching the bound keeps the workflow blocked. Inspect the last review before an operator clears the worktree's `agent-skills/commit.rounds` file under its Git directory. Neither reviewer failures nor changed inputs count toward the finding bound.
+These are the defaults. The round bound accepts integers from 1 to 9. Success resets the corresponding finding counter. Reaching the bound blocks further reviews even after preflight or a new commit.
 
-| Previous setting | Destination in this delivery |
+Inspect the last review before an operator clears the worktree's `agent-skills/commit.rounds` or `agent-skills/pr.rounds` file under its Git directory. Failed reviewer execution and changed inputs don't count as findings.
+
+`pr_template` names a file inside the repository. Scaffolding, shared validation, and the committed review snapshot use it. An empty `lint_pr_cmd` fails. The existing `PR_TEMPLATE` environment variable remains the fallback when the repository doesn't specify a template.
+
+Set `pr_log_entry = required` to require the final line containing text to have the form `Log entry: * **Label**: text`. The default leaves that line optional. A nonempty `pr_related_pattern` is a grep extended regular expression applied to each comma-separated Related item after removing a bullet. Anchor it to match whole items. Use `None` or `None.` only alone. The pattern `^#[0-9]+$` permits issue references. An empty pattern leaves shared template validation in charge.
+
+The optional `pr_title_check_cmd` receives `AS_BASE`, `AS_HEAD`, and `AS_TITLE`, preserving the public consumer's command interface. The base resolves to origin's copy when available, `HEAD` is the committed branch, and the title is exact. Publication stops if the command returns a nonzero status.
+
+`owner_paths` is an extended regular expression, preserving the previous setting's syntax. It matches each changed path from the branch's merge base. The pattern `^(docs|policy)/` covers either directory. Deletions and both sides of renames count. Matching reads paths delimited by the null character (`NUL`), so a newline in a filename doesn't split it. A match adds `--owner-path` to the machine checker invocation: `<checker> check <repository> pr --owner-path`. Without a match, its existing arguments stay the same. Authority doesn't come from this signal. Session pre-approval still covers the `pr` action.
+
+Reports print locally unless both `mail_cmd` and `mail_to` are nonempty. The command must be an executable path. Shell expressions aren't accepted. Publication invokes it as `send --to <recipient> --kind fixed --body <report> --pr <number>`, adding `--from <sender>` when configured. A delivery failure prints `REPORT NOT SENT` with the report and leaves publication successful. It never repeats the GitHub write.
+
+## Settings mapping
+
+| Previous setting | Destination |
 | --- | --- |
 | `lint_commit_cmd`, `required_hooks`, `hook_marker`, `review_max_rounds` | Same keys in `.agents/agent-skills.conf` |
-| `review_cmd`, `review_model`, `review_effort`, `delegation_check`, `gh_login` | Machine configuration under `~/.config/devtools/`, or corresponding `DEVTOOLS_` variables |
-| `review_commit_criteria` | Installed `review-commit-message`. Repository review text uses the existing trusted review policy |
-| `mail_cmd`, `mail_to`, `mail_from` | Commit reports use stdout and stderr. External reporting migration remains pending |
-| `lint_pr_cmd`, `pr_log_entry`, `pr_related_pattern`, `pr_title_check_cmd`, template selection | Keep local publication configuration until `agent-pr` is available |
-| `lint_squash_cmd`, `review_squash_criteria`, `owner_review_label`, `required_reviewer`, `ruleset_dir` | Keep local merge configuration until `agent-merge-pr` is available |
-| `golden_paths`, `loosening_markers`, `gate_config_paths`, `owner_paths` | Protected-path policy remains pending with publication and merge |
-| `disposable_ignored`, `merge_verify_tries`, `merge_ready_cmd` | Cleanup and readiness migration remains pending with merge |
-| `review_pr_criteria` | Keep the local setting until publication migrates |
+| Template selection | `pr_template` in repository config |
+| `lint_pr_cmd`, `pr_log_entry`, `pr_related_pattern`, `pr_title_check_cmd` | Same keys in repository config |
+| `owner_paths` | Same key for publication delegation. Commit and merge migration remain pending |
+| `mail_cmd`, `mail_to`, `mail_from` | Same keys for publication reports. Commit and merge reporting remain pending |
+| `review_cmd`, `review_model`, `review_effort`, `delegation_check`, `gh_login` | Machine configuration under `~/.config/devtools/` or corresponding `DEVTOOLS_` variables |
+| `review_commit_criteria`, `review_pr_criteria` | Installed review skills plus the existing trusted repository review policy |
+| `lint_squash_cmd`, `review_squash_criteria`, `owner_review_label`, `required_reviewer`, `ruleset_dir` | Keep local merge configuration until its replacement arrives |
+| `golden_paths`, `loosening_markers`, `gate_config_paths` | Protected-path merge policy remains pending |
+| `disposable_ignored`, `merge_verify_tries`, `merge_ready_cmd` | Cleanup and readiness migration remain pending with merge |
 
-Repository configuration can't select a reviewer or delegation checker. A repository can't grant itself permission by adding a setting. Either the session's pre-approval or the machine's delegation check must grant `commit`. The unattended entry point rejects the operator flag, and the skill neither grants pre-approval nor prompts for it.
+Repository configuration can't select a reviewer, GitHub account, or delegation checker. Unattended publication requires a nonempty machine `gh_login` with no built-in account default. It rejects `--confirmed`. Either session pre-approval or machine delegation must grant the action, and neither skill prompts or grants itself authority.
 
 ## Behavior comparison
 
-The public source is the [avirt local skill family](https://github.com/tbhb-dev/avirt-poc/tree/main/.agents/skills). For commits, the comparison also checked the original consumer for fixes absent from that public copy. The package excludes consumer identities, mailbox settings, and protected-path patterns.
+The public source is the [avirt local skill family](https://github.com/tbhb-dev/avirt-poc/tree/main/.agents/skills). Comparison with the original consumer found a missing publication delegation check in that public copy. The shared confirmation chain supplies it. No consumer identities, mailbox values, or protected-path patterns belong in the package.
 
-| Behavior | Shared code and migration |
+| Behavior | Shared behavior |
 | --- | --- |
-| Snapshot review, strict verdict parsing, amend review, input drift detection | Existing devtools commit machinery, reused unchanged |
-| Machine delegation | Existing devtools confirmation chain, covering the fix absent from the public copy |
-| Session pre-approval | Existing devtools grant reader accepts it without prompting |
-| SSH signing, hook markers, signature verification | Shared signing helpers used by `agent-commit` |
-| Verification of message, parents, branch, and tree | Shared helpers keep failed commits for recovery, replacing the public copy's automatic rollback |
-| Signing failure | Exit 75 without a fallback signer or unsigned retry |
-| Review finding bound | Persistent counter blocks at the configured round, instead of allowing an extra finding round |
-| Initial commit | Use `commit` first, as the public unattended copy requires existing history |
-| Leak scans, lint, and tests | Existing devtools gates all run before the write |
-| Guard and review scripts | The consumer commit guards and review scripts matched. Generated entry points use devtools' existing guard and review |
-| Configured reporting | Print locally without a mailbox dependency or automatic send |
+| Snapshot review, strict verdict parsing, input drift detection | Existing review and stamp machinery |
+| Machine delegation and session pre-approval | Existing confirmation chain without prompting |
+| SSH commit signing and hook markers | Shared commit signing helpers |
+| Failed commit verification | Preserve the commit and evidence for recovery instead of automatic rollback |
+| Description template, lint, log, Related grammar, and title checks | Shared validator and configured checks before publication |
+| Labels, reviewers, assignees, milestone, and draft state | Existing publisher converges on the reviewed properties |
+| Identity | Require the machine account before push and again after push |
+| Push leases and post-push verification | Existing publisher, with unattended branch, draft, configuration, and clean-tree checks |
+| Review finding bound | Persistent shared counter that remains for unpublished drafts and resets on success |
+| Reporting | Local output and a structured result, with optional configured transport |
 
-Before migration, the publication comparison still needs its complete regression coverage: description checks and title policy, Related grammar, reporting, identity, push leases, and update convergence. Existing devtools already provides review stamps, identity checks, push leases, and property updates.
+A successful publication records `pr.result.json` under the worktree's Git `agent-skills` directory, containing the PR number, URL, full head, base, draft state, and push kind. Final output reports the URL, head, and draft state. Inspect a failed or uncertain GitHub write before retrying. After publication, the skill stops.
 
-Merge migration still needs the configured exact-head reviewer, owner labels and protected paths, required-check policy, readiness checks, remote message verification, changing the base of dependent pull requests, and cautious branch and worktree cleanup. Check judgement should call the available `agentrepo checks evaluate` command instead of adding more shell code for it. For merging, devtools already provides pinned-head merging, review gates, and base-bound stamps.
-
-When those skills are available, both consumers delete their remaining local skill directories, APM manifests, and Bats suites, then remove `agent-skills.conf` from the old skill directory. Move repository behavior to declarative configuration and authorities to machine configuration before removing the old file. Remove `test-skills` only when it no longer holds consumer tests.
+Merge migration still needs its configured reviewer policy, owner labels and protected paths, required-check judgement, readiness, remote message verification, dependent-branch updates, and branch and worktree cleanup. Prefer the available `agentrepo checks evaluate` command for check judgement. Existing devtools already supplies pinned-head merging, review gates, and base-bound stamps. Both consumers can delete their remaining merge directories, manifests, suites, and old configuration once that replacement supports their settings.

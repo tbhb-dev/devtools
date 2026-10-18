@@ -97,3 +97,13 @@ pr_base_ref() {
     printf '%s\n' "$1"
   fi
 }
+
+# One template selection for scaffolding, validation, and review snapshots.
+pr_template() {
+  local template
+  template=$(dt_repo_conf pr_template "${PR_TEMPLATE:-.github/pull_request_template.md}") || return $?
+  case $template in
+  '' | /* | .. | ../* | */../* | */..) dt_die "pr_template must name a file inside the repository" ;;
+  esac
+  printf '%s\n' "$template"
+}

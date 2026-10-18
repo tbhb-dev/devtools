@@ -73,7 +73,11 @@ fi
 
 step "confirming"
 status=0
-dt_confirm pr "$confirmed" || status=$?
+pr_agent_context
+set --
+pr_agent_owner_paths
+if [ "$pr_owner" = true ]; then set -- --owner-path; fi
+dt_confirm pr "$confirmed" "$@" || status=$?
 case $status in
 0) ;;
 1) exit 1 ;;
@@ -83,6 +87,7 @@ esac
 # The confirmation may have run another program. Check the stamp again,
 # then the copy against it, and only then write anything.
 require_reviewed
+pr_agent_current "$branch"
 copy_digest=$(dt_digest "$copy") || exit $?
 reviewed_digest=$(dt_stamp_value pr draft) || exit $?
 [ "$copy_digest" = "$reviewed_digest" ] ||
@@ -117,6 +122,12 @@ remote=$(printf '%s\n' "$remote_refs" | cut -f1) || exit $?
   die "origin has ${remote:-no ${branch}} after the push, not the reviewed ${head}. No pull request was touched."
 
 # --- publish ---------------------------------------------------------
+
+pr_agent_current "$branch"
+if [ "${DT_UNATTENDED:-0}" = 1 ]; then
+  require_reviewed
+  check_identity
+fi
 
 open_number=$(dt_gh pr list --head "$branch" --state open --json number --jq '.[0].number // empty') || exit $?
 
@@ -169,6 +180,7 @@ EOF
   rm -f "$copy" "$body_file"
   step "done"
   printf 'description updated at %s. PR_AGENTDESC.md stays for the next edit.\n' "$head"
+  pr_agent_report
   exit 0
 fi
 
@@ -204,3 +216,5 @@ rm -f "$copy" "$body_file"
 
 step "done"
 printf 'pull request open at %s. PR_AGENTDESC.md stays until merge-pr lands the branch.\n' "$head"
+
+pr_agent_report

@@ -38,6 +38,8 @@ IFS=$' \t\n'
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 # shellcheck disable=SC1091 # description.sh is deployed beside this script
 . "$DT_LIB_DIR/description.sh"
+# shellcheck disable=SC1091 # unattended entry point shares this review
+. "$DT_LIB_DIR/pr-agent.sh"
 
 usage="usage: review.sh [--note <file>]"
 note=""
@@ -58,6 +60,8 @@ done
 
 root=$(dt_root)
 cd "$root"
+pr_agent_context
+branch=$(gitr symbolic-ref --short HEAD)
 draft=$root/PR_AGENTDESC.md
 [ -s "$draft" ] || dt_die "PR_AGENTDESC.md is missing or empty. Draft the description first."
 gitr symbolic-ref -q HEAD >/dev/null || dt_die "HEAD is detached. Check out the branch to review."
@@ -72,6 +76,7 @@ cp "$draft" "$snapshot"
 base=$(pr_field "$snapshot" base)
 [ -n "$base" ] || dt_die "The draft's frontmatter carries no base."
 base_ref=$(pr_base_ref "$base")
+pr_agent_range "$base_ref"
 [ -n "$base_ref" ] || dt_die "The draft's base, $base, names no local or origin branch."
 head=$(dt_head)
 base_oid=$(gitr rev-parse --verify "$base_ref^{commit}")
@@ -94,17 +99,19 @@ gitr diff --no-ext-diff --text --no-textconv --no-renames "$mergebase" "$head" >
 if [ -s "$inputs/changed-paths.txt" ] && [ ! -s "$inputs/branch.diff" ]; then
   dt_die "The branch names changed paths, but its diff is empty; something is hiding the content."
 fi
-if gitr cat-file -e "$head:.github/pull_request_template.md" 2>/dev/null; then
-  gitr cat-file -p "$head:.github/pull_request_template.md" >"$inputs/pull_request_template.md"
+template=$(pr_template)
+if gitr cat-file -e "$head:$template" 2>/dev/null; then
+  gitr cat-file -p "$head:$template" >"$inputs/pull_request_template.md"
 fi
 
 # shellcheck disable=SC2329 # dt_review calls it by name
 still_as_gathered() {
-  local live_head live_ref live_oid
+  local live_head live_ref live_oid live_branch
   live_head=$(dt_head) || return $?
+  live_branch=$(gitr symbolic-ref --short HEAD) || return $?
   live_ref=$(pr_base_ref "$base") || return $?
   live_oid=$(gitr rev-parse --verify --quiet "$base_ref^{commit}") || return $?
-  [ "$live_head" = "$head" ] && [ "$live_ref" = "$base_ref" ] && [ "$live_oid" = "$base_oid" ] &&
+  [ "$live_branch" = "$branch" ] && [ "$live_head" = "$head" ] && [ "$live_ref" = "$base_ref" ] && [ "$live_oid" = "$base_oid" ] &&
     { [ "$note_digest" = none ] || {
       local live_note_digest
       live_note_digest=$(dt_digest "$inputs/operator-note.txt") || return $?
@@ -117,7 +124,7 @@ dt_review_policy "$inputs" "$head" "$head"
 criteria=$DT_LIB_DIR/../../review-pr-description/SKILL.md
 status=0
 dt_review pr "$draft" "$snapshot" "$criteria" "$root" "$inputs" still_as_gathered \
-  head "$head" base "$base_ref" base_oid "$base_oid" mergebase "$mergebase" note "$note_digest" || status=$?
+  head "$head" base "$base_ref" base_oid "$base_oid" mergebase "$mergebase" note "$note_digest" branch "$branch" || status=$?
 case $status in
 0) ;;
 2) printf '\nResolve every finding in the draft, then run review.sh again.\n' ;;

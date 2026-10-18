@@ -37,7 +37,10 @@ unset CDPATH GH_REPO GH_HOST GREP_OPTIONS
 IFS=$' \t\n'
 
 readonly DRAFT=PR_AGENTDESC.md
-readonly TEMPLATE=${PR_TEMPLATE:-.github/pull_request_template.md}
+# shellcheck disable=SC1091 # generated beside the scaffold
+. "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+# shellcheck disable=SC1091 # generated beside the scaffold
+. "$DT_LIB_DIR/description.sh"
 readonly TITLE_PLACEHOLDER='# <type>(<scope>)?: <description>'
 
 force=0
@@ -48,6 +51,7 @@ fi
 
 root=$(git rev-parse --show-toplevel)
 cd "$root"
+TEMPLATE=$(pr_template)
 
 if [ ! -f "$TEMPLATE" ]; then
   printf 'scaffold-description: no template at %s\n' "$TEMPLATE" >&2
