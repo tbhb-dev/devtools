@@ -172,11 +172,10 @@ github.com/owenrumney/go-sarif/v3/pkg/report
 github.com/owenrumney/go-sarif/v3/pkg/report/utils
 github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif
 github.com/owenrumney/go-sarif/v3/pkg/report/v22/sarif
-# github.com/pelletier/go-toml/v2 v2.2.4
+# github.com/pelletier/go-toml/v2 v2.4.3
 ## explicit; go 1.21.0
 github.com/pelletier/go-toml/v2
-github.com/pelletier/go-toml/v2/internal/characters
-github.com/pelletier/go-toml/v2/internal/danger
+github.com/pelletier/go-toml/v2/internal/parserbridge
 github.com/pelletier/go-toml/v2/internal/tracker
 github.com/pelletier/go-toml/v2/unstable
 # github.com/proofhouse/gomodscan v0.1.0
