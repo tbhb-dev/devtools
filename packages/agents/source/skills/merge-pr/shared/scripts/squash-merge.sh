@@ -32,7 +32,7 @@
 # Usage: squash-merge.sh [--confirmed] [number]
 #   --confirmed  the operator answered yes to this merge in this session
 # Exit:  0 merged, 1 refused or failed, 75 held: nobody has confirmed the
-#        merge; ask, then pass --confirmed
+#        merge; ask, then pass --confirmed; or merge queued/pending
 set -euo pipefail
 
 # --- environment hardening -------------------------------------------
@@ -249,8 +249,40 @@ awk 'NR > 1' "$message" | awk 'NF { seen = 1 } seen' >"$body"
 # --- merge -----------------------------------------------------------
 
 step "squashing #${number} into ${base_ref}"
+merge_status=0
 dt_gh pr merge "$number" --squash --match-head-commit "$reviewed_head" \
-  --subject "$subject" --body-file "$body"
+  --subject "$subject" --body-file "$body" || merge_status=$?
+
+# A successful command may only enqueue the merge, and an error may
+# follow a completed server-side merge. Read once; never repeat the write.
+result=$state/merge.result.json
+check_again="Check with: gh pr view $number --json state,headRefOid,mergeCommit"
+if ! mp_view "$number" "$result" state,headRefOid,mergeCommit,url; then
+  die "UNKNOWN: could not confirm #${number} after gh exited ${merge_status}. Drafts and stamps kept. $check_again"
+fi
+result_state=$(mp_field "$result" state) || die "UNKNOWN: invalid merge result. $check_again"
+result_head=$(mp_field "$result" headRefOid) || die "UNKNOWN: invalid merge result. $check_again"
+merge_commit=$(jq -r '.mergeCommit.oid // empty' "$result") || die "UNKNOWN: invalid merge result. $check_again"
+case $result_state in
+MERGED)
+  [ "$result_head" = "$reviewed_head" ] && [ -n "$merge_commit" ] ||
+    die "UNKNOWN: #${number} reports MERGED without the reviewed head and a merge commit. Drafts and stamps kept. $check_again"
+  printf 'MERGED: #%s at %s (gh exit %s); recorded in %s\n' "$number" "$merge_commit" "$merge_status" "$result"
+  ;;
+OPEN)
+  if [ "$merge_status" -eq 0 ]; then
+    printf 'PENDING: #%s is queued or pending. Drafts and stamps kept. %s\n' "$number" "$check_again"
+    exit "$DT_HELD"
+  fi
+  die "FAILED: gh exited ${merge_status} and #${number} remains OPEN. Drafts and stamps kept. $check_again"
+  ;;
+CLOSED)
+  die "FAILED: #${number} is CLOSED without merging. Drafts and stamps kept."
+  ;;
+*)
+  die "UNKNOWN: unexpected state ${result_state:-missing} for #${number}. Drafts and stamps kept. $check_again"
+  ;;
+esac
 
 # --- clean up --------------------------------------------------------
 
@@ -293,4 +325,4 @@ elif gitr rev-parse --verify --quiet "refs/heads/$head_ref" >/dev/null; then
 fi
 
 step "done"
-dt_gh pr view "$number" --json url,state --jq '"merged: \(.url) (\(.state))"'
+jq -r '"merged: \(.url) (\(.state)), commit \(.mergeCommit.oid)"' "$result"
