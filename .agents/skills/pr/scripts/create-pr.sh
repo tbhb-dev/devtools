@@ -63,6 +63,8 @@ IFS=$' \t\n'
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 # shellcheck disable=SC1091 # description.sh is deployed beside this script
 . "$DT_LIB_DIR/description.sh"
+# shellcheck disable=SC1091 # unattended behavior shares these entry points
+. "$DT_LIB_DIR/pr-agent.sh"
 
 die() {
   printf 'create-pr: %s\n' "$1" >&2
@@ -88,12 +90,16 @@ for arg in "$@"; do
   esac
 done
 
+if [ "${DT_UNATTENDED:-0}" = 1 ] && [ "$confirmed" = true ]; then
+  die "Unattended workflows refuse --confirmed; use pre-approval or delegation."
+fi
 root=$(dt_root)
 cd "$root"
 git_dir=$(dt_git_dir)
 state=$(dt_state_dir)
 here=$DT_LIB_DIR
 draft=$root/PR_AGENTDESC.md
+pr_agent_context
 
 [ -s "$draft" ] || die "no draft at PR_AGENTDESC.md. Draft the description first."
 if [ -d "$git_dir/rebase-merge" ] || [ -d "$git_dir/rebase-apply" ] ||
@@ -106,11 +112,13 @@ base=$(pr_field "$draft" base)
 [ -n "$base" ] || die "the draft's frontmatter carries no base."
 [ "$branch" != "$base" ] || die "${branch} is the base branch. Publish a topic branch."
 base_ref=$(pr_base_ref "$base")
+pr_agent_range "$base_ref"
 [ -n "$base_ref" ] || die "the draft's base, ${base}, names no local or origin branch."
 
 check_identity() {
   local want login
   want=$(dt_conf gh_login)
+  [ "${DT_UNATTENDED:-0}" != 1 ] || [ -n "$want" ] || die "gh_login must be configured on the machine"
   if [ -z "$want" ]; then
     printf 'gh identity: gh_login is not configured, so the account check is skipped\n'
     return 0
@@ -125,9 +133,7 @@ check_identity
 
 # Cheap description checks precede scans, review, and tests.
 step "validating PR_AGENTDESC.md"
-bash "$here/validate-description.sh" "PR_AGENTDESC.md" ||
-  die "the description does not satisfy the template. Fix the findings above and retry."
-dt_gate lint-pr-description "$draft" "$rerun_gates" mise run lint-pr-description
+pr_checks "$draft" "$rerun_gates"
 
 # --- gate 2: the independent review ----------------------------------
 #
@@ -140,14 +146,15 @@ require_reviewed() {
   [ -f "$state/pr.stamp" ] || die "no independent review has cleared this draft. Run it:
 
   bash $here/review.sh"
-  local now_ref now_oid now_base now_head now_mergebase
+  local now_ref now_oid now_base now_head now_mergebase now_branch
   now_base=$(pr_field "$draft" base) || return $?
   now_ref=$(pr_base_ref "$now_base") || return $?
   now_head=$(dt_head) || return $?
+  now_branch=$(gitr symbolic-ref --short HEAD) || return $?
   now_oid=$(gitr rev-parse --verify --quiet "${now_ref:-none}^{commit}" || printf 'none\n')
   now_mergebase=$(gitr merge-base "$now_oid" HEAD 2>/dev/null || printf 'none\n') || return $?
   (dt_require_stamp pr "$draft" head "$now_head" base "$now_ref" base_oid "$now_oid" \
-    mergebase "$now_mergebase") ||
+    mergebase "$now_mergebase" branch "$now_branch") ||
     die "the reviewed description and branch are no longer what would publish.
 Review it again against the current draft, branch, and base:
 
@@ -165,7 +172,7 @@ require_reviewed
 mise run devtools:lint-leaks
 mise run devtools:gitleaks
 dt_gate lint "" "$rerun_gates" mise run lint
-bash "$here/review.sh"
+DT_UNATTENDED=${DT_UNATTENDED:-0} bash "$here/review.sh"
 step "checking the review stamp"
 require_reviewed
 head=$(dt_head)

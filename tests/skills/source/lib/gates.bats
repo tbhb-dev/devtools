@@ -60,10 +60,10 @@ gate() {
 }
 
 @test "ignored gate definitions and hooks invalidate passes (#161)" {
-  printf 'mise.toml\n.config/\n.devtools/\n' >>.gitignore
+  printf 'mise.toml\n.config/\n.devtools/\n.agents/\n' >>.gitignore
   git add -- .gitignore
   git commit --quiet -m ignores
-  for path in mise.toml .config/mise/conf.d/tools.toml .devtools/tasks/test .git/hooks/pre-commit; do
+  for path in mise.toml .config/mise/conf.d/tools.toml .devtools/tasks/test .git/hooks/pre-commit .agents/agent-skills.conf; do
     gate
     parent=$(dirname "$path")
     mkdir -p "$parent"

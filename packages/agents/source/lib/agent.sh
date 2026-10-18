@@ -15,7 +15,7 @@ dt_repo_conf() {
         sub(/=.*/, "", key)
         gsub(/^[ \t]+|[ \t]+$/, "", key)
         if (!index($0, "=") || seen[key]++ ||
-            key !~ /^(lint_commit_cmd|required_hooks|hook_marker|review_max_rounds)$/) {
+            key !~ /^(lint_commit_cmd|required_hooks|hook_marker|review_max_rounds|pr_template|lint_pr_cmd|pr_log_entry|pr_related_pattern|pr_title_check_cmd|owner_paths|mail_cmd|mail_to|mail_from)$/) {
           print "Invalid or duplicate repository setting: " key > "/dev/stderr"
           bad = 1
         }

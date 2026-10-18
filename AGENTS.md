@@ -41,7 +41,15 @@ The skill requires SSH signing and the repository's executable hooks. Verificati
 
 Repository behavior comes from `.agents/agent-skills.conf`, outside the deployed skills. The reader accepts declarative `key = value` lines and never sources the file. It rejects unknown and duplicate keys. Supported settings are `lint_commit_cmd`, `required_hooks`, `hook_marker`, and `review_max_rounds`. Reviewer selection and delegation still come only from machine configuration. The review stamp binds repository configuration as well as the draft and Git state.
 
-The [consumer migration note](docs/agent-skills-migration.md) covers settings, local files to remove, and the remaining publication and merge work. This first delivery includes `agent-commit`. Keep local `agent-pr` and `agent-merge-pr` until their replacements are available.
+The [consumer migration note](docs/agent-skills-migration.md) covers settings, local files to remove, and the remaining publication and merge work. The package includes `agent-commit` and `agent-pr`. Keep local `agent-merge-pr` until its replacement is available.
+
+## Unattended pull requests
+
+Run `agent-pr` to publish a committed agent branch without a confirmation prompt. Its generated entry points call the same PR validator, gates, review, stamp, and publisher as `pr`. Only session pre-approval or machine delegation grants `pr`, and machine `gh_login` must match the active account before the push and again before the GitHub write. It refuses dirty trees, interrupted operations, detached `HEAD`, and `--confirmed`. Review findings use the persistent bound shared with `agent-commit`. Preflight preserves unpublished drafts and their bounds.
+
+Repository config also accepts `pr_template`, `lint_pr_cmd`, `pr_log_entry`, `pr_related_pattern`, `pr_title_check_cmd`, and `owner_paths`. Scaffolding, validation, and the review snapshot use the same template. Owner paths supply a restrictive `--owner-path` signal to the machine delegation checker for any matching changed path across the branch. This includes deletions and renames. The checker still supplies the authority.
+
+Publication records the PR number, URL, full head, base, draft state, and push kind under the worktree's Git directory. Reports print locally unless `mail_cmd` and `mail_to` configure a transport, with optional `mail_from`. A reporting failure prints the unsent report without repeating publication. The migration note defines the command interfaces and what consumers can remove.
 
 ## Pull requests
 

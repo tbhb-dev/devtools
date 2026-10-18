@@ -41,6 +41,7 @@ def fingerprint(name: str, draft: str, command: list[str]) -> tuple[str, str] | 
         Path(p)
         for p in (
             "mise.toml",
+            ".agents/agent-skills.conf",
             ".config/mise/conf.d",
             ".devtools/tasks",
             ".pre-commit-config.yaml",

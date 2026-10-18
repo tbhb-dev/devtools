@@ -648,7 +648,7 @@ dt_delegation() {
   fi
   status=0
   repo=$(dt_repo_name) || return "$DT_HELD"
-  "$checker" check "$repo" "$1" || status=$?
+  "$checker" check "$repo" "$@" || status=$?
   case $status in
   0 | 1) return "$status" ;;
   *) return "$DT_HELD" ;;
@@ -660,6 +660,7 @@ dt_delegation() {
 #   0 granted, 1 refused by the delegation, 75 held
 dt_confirm() {
   local action=$1 operator=$2 grant status
+  shift 2
   if [ "${DT_UNATTENDED:-0}" = 1 ] && [ "$operator" = true ]; then
     dt_die "Unattended workflows refuse --confirmed; use pre-approval or delegation."
   fi
@@ -673,7 +674,7 @@ dt_confirm() {
     return 0
   fi
   status=0
-  dt_delegation "$action" || status=$?
+  dt_delegation "$action" "$@" || status=$?
   case $status in
   0)
     # shellcheck disable=SC2312 # Diagnostic text cannot change the confirmation or review verdict.

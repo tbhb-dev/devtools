@@ -43,6 +43,10 @@ IFS=$' \t\n'
 # configuration.
 # shellcheck disable=SC1091 # lib.sh is generated beside this script
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+# shellcheck disable=SC1091 # generated beside preflight
+. "$DT_LIB_DIR/description.sh"
+# shellcheck disable=SC1091 # unattended entry point shares preflight
+. "$DT_LIB_DIR/pr-agent.sh"
 
 # Budgets. A branch carrying a hundred commits is worth summarizing
 # rather than transcribing, and an oversized paste crowds out the rest
@@ -84,6 +88,7 @@ ahead_behind() {
 
 root=$(git rev-parse --show-toplevel)
 cd "$root"
+pr_agent_context
 branch=$(git rev-parse --abbrev-ref HEAD)
 
 default_branch=main
@@ -137,6 +142,7 @@ base_ref="refs/remotes/origin/$default_branch"
 if ! git rev-parse --verify --quiet "$base_ref" >/dev/null; then
   base_ref="refs/heads/$default_branch"
 fi
+pr_agent_range "$base_ref"
 printf 'comparing against: %s\n' "$base_ref"
 # shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
 printf '%s vs base:  %s\n' "$branch" "$(ahead_behind HEAD "$base_ref")"
@@ -253,7 +259,7 @@ else
 fi
 
 section "template sections"
-template=.github/pull_request_template.md
+template=$(pr_template)
 if [ -f "$template" ]; then
   printf 'from %s, in this order:\n' "$template"
   grep '^## ' "$template" || printf '(the template declares no level 2 headings)\n'
@@ -284,7 +290,11 @@ if grant=$(dt_preapproval pr); then
   # shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
   printf 'pr:    GRANTED, %s — the confirmation step is skipped once every gate and the review pass\n' "$(how "$grant")"
 else
-  printf 'pr:    not granted — the confirmation step asks the operator as written\n'
+  if [ "${DT_UNATTENDED:-0}" = 1 ]; then
+    printf 'pr: not granted — delegation must authorize publication; otherwise report the hold without prompting\n'
+  else
+    printf 'pr:    not granted — the confirmation step asks the operator as written\n'
+  fi
 fi
 if grant=$(dt_preapproval merge); then
   # shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
@@ -323,7 +333,11 @@ if git check-ignore --quiet "$DRAFT" 2>/dev/null; then
 else
   printf '%s gitignored: NO — add it to .gitignore before drafting\n' "$DRAFT"
 fi
-if command -v mise >/dev/null 2>&1 && mise task info lint-pr-description >/dev/null 2>&1; then
+if [ "${DT_UNATTENDED:-0}" = 1 ]; then
+  lint_cmd=$(dt_repo_conf lint_pr_cmd 'mise run lint-pr-description')
+  [ -n "$lint_cmd" ] || dt_die "lint_pr_cmd must not be empty"
+  printf 'description lint: %s\n' "$lint_cmd"
+elif command -v mise >/dev/null 2>&1 && mise task info lint-pr-description >/dev/null 2>&1; then
   printf 'mise run lint-pr-description: present\n'
 else
   printf 'mise run lint-pr-description: ABSENT — stop and tell the operator\n'
@@ -342,6 +356,8 @@ elif [ "$gh_state" != ok ]; then
   printf '%s: present, %s line(s). Cannot tell whether it is stale because\n' \
     "$DRAFT" "$(wc -l <"$DRAFT" | tr -d ' ')"
   printf 'the pull request lookup did not run. Read it before overwriting.\n'
+elif [ -z "$open_number" ] && [ "${DT_UNATTENDED:-0}" = 1 ]; then
+  printf '%s: present, unpublished draft preserved with its review bound\n' "$DRAFT"
 elif [ -z "$open_number" ]; then
   rm -f "$DRAFT"
   dt_clear pr
