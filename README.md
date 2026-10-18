@@ -167,6 +167,7 @@ Select other task files in the same `task_config.includes` array as the adoption
 | Task file under `.devtools/tasks/` | Consumer use |
 | --- | --- |
 | `go.toml` | Go lint, test, build, coverage, vulnerability, and vendor tasks |
+| `rust.toml` | Rust tasks. See [Rust adoption](docs/rust-adoption.md) |
 | `python.toml` | Python lint, test, coverage, mutation, and fuzz tasks |
 | `lint.toml` | Shared shell, Markdown, spelling, config, and workflow gates |
 | `security.toml` | Gitleaks scanning |

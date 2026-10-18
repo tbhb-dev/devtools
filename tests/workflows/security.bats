@@ -62,3 +62,32 @@ assert ci["jobs"]["test"]["name"].startswith("test (")
 PY
 	[ "$status" -eq 0 ]
 }
+
+@test "Rust advisory workflow uses consumer pins and propagates scan failures" {
+	run uv run python - "${BATS_TEST_DIRNAME}/../../.github/workflows/scan-cargo-deny.yml" <<'PY'
+import re
+import sys
+
+import yaml
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    workflow = yaml.safe_load(stream)
+assert "workflow_call" in workflow[True]
+assert workflow["permissions"] == {"contents": "read"}
+assert workflow["env"]["MISE_LOCKED"] == "1"
+steps = workflow["jobs"]["cargo-deny"]["steps"]
+assert steps[0]["uses"].startswith("step-security/harden-runner@")
+checkout = next(s for s in steps if s.get("uses", "").startswith("actions/checkout@"))
+assert checkout["with"]["persist-credentials"] is False
+setup = next(s for s in steps if s.get("uses", "").startswith("jdx/mise-action@"))
+assert setup["with"]["install_args"] == "rust github:EmbarkStudios/cargo-deny"
+assert steps[-1]["run"] == "mise run devtools:vuln-rust"
+assert steps[-1]["env"]["MISE_TASK_RUN_AUTO_INSTALL"] == "0"
+for step in steps:
+    assert not step.get("continue-on-error", False)
+    if "uses" in step:
+        assert re.search(r"@[0-9a-f]{40}$", step["uses"])
+PY
+	echo "$output"
+	[ "$status" -eq 0 ]
+}

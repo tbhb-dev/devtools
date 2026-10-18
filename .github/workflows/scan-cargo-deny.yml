@@ -1,0 +1,40 @@
+---
+name: scan-cargo-deny
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+env:
+  MISE_LOCKED: "1"
+
+jobs:
+  cargo-deny:
+    name: cargo-deny
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Harden the runner
+        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up mise
+        uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
+        with:
+          # renovate: datasource=github-releases depName=jdx/mise
+          version: 2026.10.8
+          install_args: rust github:EmbarkStudios/cargo-deny
+
+      - name: Check RustSec advisories
+        env:
+          MISE_TASK_RUN_AUTO_INSTALL: "0"
+        run: mise run devtools:vuln-rust

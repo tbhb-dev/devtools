@@ -1,0 +1,18 @@
+# Thresholds for the workspace lint table in Cargo.toml.
+msrv = "1.97.1"
+avoid-breaking-exported-api = false
+check-private-items = true
+
+cognitive-complexity-threshold = 10
+too-many-lines-threshold = 60
+too-many-arguments-threshold = 4
+type-complexity-threshold = 100
+excessive-nesting-threshold = 4
+max-struct-bools = 1
+max-fn-params-bools = 1
+large-error-threshold = 64
+enum-variant-size-threshold = 64
+trivial-copy-size-limit = 8
+pass-by-value-size-limit = 64
+single-char-binding-names-threshold = 2
+max-trait-bounds = 2
