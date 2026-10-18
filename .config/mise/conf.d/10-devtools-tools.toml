@@ -79,4 +79,4 @@ tombi = "1.8.4"
 vale = "3.24.0"
 
 # The shared curl lint gate runs its Python checker through uv.
-uv = "0.12.23"
+uv = "0.13.0"
