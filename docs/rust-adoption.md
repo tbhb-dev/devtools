@@ -24,6 +24,15 @@ The tasks resolve executables from PATH and report any missing tool. Rustfmt and
 
 Copy the templates from `.devtools/config/rust/` into local policy, removing `.template`. Put `clippy.toml`, `deny.toml`, and `rustfmt.toml` at the repository root and `nextest.toml` under `.config/`. Append `workspace-lints.toml.template` to your workspace Cargo.toml, and add `[lints]` with `workspace = true` to each member manifest. Set clippy's `msrv` to match your Rust pin. Review the strict lint catalog when updating Rust: lint names and applicability change between toolchains.
 
+The starter denies clippy's `allow_attributes` and `allow_attributes_without_reason` lints. Use `#[expect(lint, reason = "...")]` for a suppression, with a reason explaining why the code needs the exception. A bare `#[allow(...)]` fails. An item-level allow still fails when it has a reason. Crate-level allows are exempt from `allow_attributes`, but still need a reason. Prefer expectations so exceptions expire. The starter denies `unfulfilled_lint_expectations`. This makes the gate fail once you remove the triggering code. Remove the expectation when fixing that code.
+
+```rust
+#[expect(clippy::missing_const_for_fn, reason = "Keep this API non-const until its implementation settles")]
+fn identity(value: u8) -> u8 {
+    value
+}
+```
+
 The deny template checks all unmaintained dependencies and denies duplicate versions. A consumer can choose `unmaintained = "workspace"` to restrict that check to direct workspace dependencies, or `multiple-versions = "warn"` when it accepts duplicates. The starter doesn't include avirt dependency exceptions. Review clippy thresholds and selected restriction lints against your API policy.
 
 The nextest starter has zero retries. It fails flaky results and leaked processes and writes JUnit output for the `ci` profile. Adjust its slow-test timeout to your suite.

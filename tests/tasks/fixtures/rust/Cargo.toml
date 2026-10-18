@@ -2,5 +2,11 @@
 name = "rust-fixture"
 version = "0.1.0"
 edition = "2024"
+description = "Dependency-free Rust gate fixture"
+license = "MIT"
+repository = "https://github.com/tbhb-dev/devtools"
+readme = "README.md"
+keywords = ["fixture"]
+categories = ["development-tools::testing"]
 
 [workspace]

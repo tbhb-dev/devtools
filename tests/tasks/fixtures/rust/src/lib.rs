@@ -4,6 +4,7 @@
 /// ```
 /// assert_eq!(rust_fixture::identity(7), 7);
 /// ```
+#[must_use]
 pub const fn identity(value: u8) -> u8 {
     value
 }

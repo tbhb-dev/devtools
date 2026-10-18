@@ -116,9 +116,89 @@ assert profiles['ci']['junit']['path'] == 'junit.xml'
 lints = configs['workspace-lints.toml.template']['workspace']['lints']
 assert lints['rust']['unsafe_code'] == 'forbid'
 assert lints['clippy']['all']['level'] == 'deny'
+assert lints['clippy']['allow_attributes'] == 'deny'
+assert lints['clippy']['allow_attributes_without_reason'] == 'deny'
+assert lints['rust']['unfulfilled_lint_expectations'] == 'deny'
 assert lints['rustdoc']['broken_intra_doc_links'] == 'deny'
 assert all('avirt' not in p.read_text() for p in source.glob('*.template'))
 PY
 	echo "$output"
 	[ "$status" -eq 0 ]
+}
+
+# Rust remains opt-in: run compiler fixtures only when the starter toolchain is installed.
+prepare_rust_lint_fixture() {
+	mise where rust@1.97.1 >/dev/null 2>&1 || skip "Rust 1.97.1 is not installed"
+	export MISE_RUST_VERSION=1.97.1
+	rm bin/cargo bin/cargo-clippy
+	cat "$ROOT/.devtools/config/rust/workspace-lints.toml.template" >>Cargo.toml
+	cat >>Cargo.toml <<'TOML'
+
+[lints]
+workspace = true
+TOML
+	cp "$ROOT/.devtools/config/rust/clippy.toml.template" clippy.toml
+}
+
+# Insert the attribute and optionally remove const without platform-specific sed flags.
+set_rust_fixture_attribute() {
+	uv run --project "$ROOT" --no-sync python - "$1" "${2:-}" <<'PYTHON'
+import pathlib
+import sys
+
+source = pathlib.Path('src/lib.rs')
+text = source.read_text()
+if sys.argv[1].startswith('#!'):
+    text = text.replace('//! A dependency-free fixture.', '//! A dependency-free fixture.\n' + sys.argv[1])
+else:
+    text = text.replace('pub const fn', sys.argv[1] + '\npub const fn')
+if sys.argv[2] == 'remove-const':
+    text = text.replace('pub const fn', 'pub fn')
+source.write_text(text)
+PYTHON
+}
+
+@test "Rust starter accepts a justified lint expectation" {
+	prepare_rust_lint_fixture
+	set_rust_fixture_attribute '#[expect(clippy::missing_const_for_fn, reason = "Exercise a justified suppression")]' remove-const
+	run cargo clippy --lib --locked
+	echo "$output"
+	[ "$status" -eq 0 ]
+}
+
+@test "Rust starter rejects a bare allow attribute" {
+	prepare_rust_lint_fixture
+	set_rust_fixture_attribute '#[allow(clippy::missing_const_for_fn)]' remove-const
+	run cargo clippy --lib --locked
+	echo "$output"
+	[ "$status" -ne 0 ]
+	[[ "$output" == *'-D clippy::allow-attributes`'* ]]
+}
+
+@test "Rust starter rejects allow even with a reason" {
+	prepare_rust_lint_fixture
+	set_rust_fixture_attribute '#[allow(clippy::missing_const_for_fn, reason = "Exercise an obsolete suppression")]' remove-const
+	run cargo clippy --lib --locked
+	echo "$output"
+	[ "$status" -ne 0 ]
+	[[ "$output" == *'-D clippy::allow-attributes`'* ]]
+}
+
+@test "Rust starter rejects a crate allow without a reason" {
+	prepare_rust_lint_fixture
+	# Crate-level allows are exempt from allow_attributes, so this checks the reason gate.
+	set_rust_fixture_attribute '#![allow(dead_code)]'
+	run cargo clippy --lib --locked
+	echo "$output"
+	[ "$status" -ne 0 ]
+	[[ "$output" == *'-D clippy::allow-attributes-without-reason`'* ]]
+}
+
+@test "Rust starter rejects an expectation after its triggering code is removed" {
+	prepare_rust_lint_fixture
+	set_rust_fixture_attribute '#[expect(clippy::missing_const_for_fn, reason = "Exercise an expired suppression")]'
+	run cargo clippy --lib --locked
+	echo "$output"
+	[ "$status" -ne 0 ]
+	[[ "$output" == *'-D unfulfilled-lint-expectations`'* ]]
 }
