@@ -94,3 +94,7 @@ packages/agents/claude/.apm/skills/fix-pr/** rebase-resolve=regenerate
 packages/agents/codex/.apm/skills/fix-pr/** rebase-resolve=regenerate
 .claude/skills/fix-pr/** rebase-resolve=regenerate
 .agents/skills/fix-pr/** rebase-resolve=regenerate
+packages/agents/claude/.apm/skills/agent-commit/** rebase-resolve=regenerate
+packages/agents/codex/.apm/skills/agent-commit/** rebase-resolve=regenerate
+.claude/skills/agent-commit/** rebase-resolve=regenerate
+.agents/skills/agent-commit/** rebase-resolve=regenerate

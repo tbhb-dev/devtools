@@ -198,6 +198,7 @@ function_from() {
   mkdir -p skill/scripts skill/templates
   cp "$ROOT/packages/agents/claude/.apm/skills/analyze-session/scripts/new-retro.sh" skill/scripts/
   cp "$LIB" skill/scripts/lib.sh
+  cp "${LIB%/*}/agent.sh" "${LIB%/*}/signing.sh" skill/scripts/
   echo template >skill/templates/RETRO.md
   cat >skill/scripts/session.py <<'STUB'
 #!/usr/bin/env bash

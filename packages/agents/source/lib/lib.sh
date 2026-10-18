@@ -30,6 +30,9 @@ export PYTHONUTF8=1
 unset CDPATH GH_REPO GH_HOST GREP_OPTIONS
 IFS=$' \t\n'
 
+# Workflow context belongs to this shell, not repository gates or reviewers.
+export -n DT_UNATTENDED
+
 DT_LIB_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 # Exit status for an action nobody has decided on yet: no confirmation,
@@ -445,7 +448,7 @@ dt_new_inputs() {
 dt_review() {
   local kind=$1 draft=$2 snapshot=$3 criteria=$4 arguments=$5 inputs=$6 still_current=$7
   shift 7
-  local state reply before verdict root prompt draft_digest snapshot_digest
+  local state reply before verdict root prompt draft_digest snapshot_digest repo_digest
   state=$(dt_state_dir) || return 4
   reply=$state/$kind.review
   root=$(dt_root) || return 4
@@ -457,6 +460,12 @@ dt_review() {
 
   # A review that does not pass leaves nothing behind it to commit on.
   rm -f "$state/$kind.stamp"
+  if [ "${DT_UNATTENDED:-0}" = 1 ]; then
+    dt_agent_context || return $?
+    dt_agent_rounds "$kind" || return $?
+    repo_digest=$(dt_repo_digest) || return $?
+    set -- "$@" repo_config "$repo_digest"
+  fi
   before=$(dt_digest "$snapshot") || return 4
   if [ -f "$inputs/review-policy-report.txt" ]; then
     cat "$inputs/review-policy-report.txt"
@@ -481,6 +490,11 @@ dt_review() {
     return 5
   fi
 
+  if [ "${DT_UNATTENDED:-0}" = 1 ]; then
+    local live_config
+    live_config=$(dt_repo_digest) || return 5
+    [ "$live_config" = "$repo_digest" ] || return 5
+  fi
   verdict=$(dt_verdict "$reply") || return 4
   case $verdict in
   pass)
@@ -490,6 +504,9 @@ dt_review() {
     ;;
   changes)
     cat "$reply"
+    if [ "${DT_UNATTENDED:-0}" = 1 ]; then
+      dt_agent_rounds "$kind" finding || return $?
+    fi
     return 2
     ;;
   *)
@@ -547,6 +564,11 @@ dt_require_stamp() {
       dt_die "The $1 changed after the review (reviewed ${recorded:-nothing}, now $2). Run the review script again."
     shift 2
   done
+  if [ "${DT_UNATTENDED:-0}" = 1 ]; then
+    recorded=$(dt_stamp_value "$kind" repo_config) || return $?
+    digest=$(dt_repo_digest) || return $?
+    [ "$recorded" = "$digest" ] || dt_die "Repository configuration changed after review. Run the review again."
+  fi
   local policy_ref policy_oid
   policy_ref=$(dt_stamp_value "$kind" policy_ref) || return $?
   policy_oid=$(dt_stamp_value "$kind" policy_oid) || return $?
@@ -565,7 +587,7 @@ dt_require_stamp() {
 dt_clear() {
   local state dir
   state=$(dt_state_dir)
-  rm -f "$state/$1.stamp" "$state/$1.review"
+  rm -f "$state/$1.stamp" "$state/$1.review" "$state/$1.rounds"
   for dir in "$state/$1".inputs.*; do
     [ -d "$dir" ] && [ ! -L "$dir" ] || continue
     rm -rf "$dir"
@@ -623,6 +645,9 @@ dt_delegation() {
 #   0 granted, 1 refused by the delegation, 75 held
 dt_confirm() {
   local action=$1 operator=$2 grant status
+  if [ "${DT_UNATTENDED:-0}" = 1 ] && [ "$operator" = true ]; then
+    dt_die "Unattended workflows refuse --confirmed; use pre-approval or delegation."
+  fi
   if [ "$operator" = true ]; then
     printf 'confirmation: operator, answered in this session\n'
     return 0
@@ -646,6 +671,10 @@ dt_confirm() {
     return 1
     ;;
   esac
+  if [ "${DT_UNATTENDED:-0}" = 1 ]; then
+    printf 'HELD: no pre-approval or delegation grants %s. Report the hold without prompting.\n' "$action" >&2
+    return "$DT_HELD"
+  fi
   printf 'HELD: nobody has confirmed this %s. No operator flag, no pre-approval for this\nsession, and no delegation that grants it. Ask the operator, then run this again\nwith --confirmed.\n' "$action" >&2
   return "$DT_HELD"
 }
@@ -704,3 +733,9 @@ dt_gh_repo() {
 dt_gate() {
   python3 "$DT_LIB_DIR/gates.py" "$@"
 }
+
+# Shared workflow behavior, generated beside this library.
+# shellcheck disable=SC1091 # generator deploys these files together
+. "$DT_LIB_DIR/agent.sh"
+# shellcheck disable=SC1091 # generator deploys these files together
+. "$DT_LIB_DIR/signing.sh"
