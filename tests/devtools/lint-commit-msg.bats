@@ -50,7 +50,7 @@ STUB
 	run bash "$helper"
 	[ "$status" -eq 7 ]
 	cmp original COMMIT_AGENTMSG
-	[ ! -e "$(cat preview-path)" ]
+	[ ! -e "$(dirname "$(cat preview-path)")" ]
 }
 
 @test "real commit-msg hook rejects unsigned draft and accepts git commit -s" {
@@ -69,4 +69,23 @@ HOOK
 	git log -1 --format=%B >actual
 	grep -Fx 'Signed-off-by: Actual Committer <actual@example.invalid>' actual
 	cmp original COMMIT_AGENTMSG
+}
+
+@test "preview uses the real commit buffer basename and removes its directory" {
+	run bash "$helper"
+	[ "$status" -eq 0 ]
+	[ "$(basename "$(cat preview-path)")" = COMMIT_EDITMSG ]
+	[ ! -e "$(dirname "$(cat preview-path)")" ]
+}
+
+@test "preview rejects a draft with a commit-scope Vale finding" {
+	sed "s|^StylesPath = .*|StylesPath = $root/.vale|" "$root/.vale.ini" >.vale.ini
+	printf 'fix: preview the draft\n\nFurthermore, use the preview.\n' >COMMIT_AGENTMSG
+	cat >bin/prek <<STUB
+#!/usr/bin/env bash
+exec bash "$root/scripts/vale-commit-msg.sh" "\$5"
+STUB
+	run bash "$helper"
+	[ "$status" -eq 1 ]
+	[[ $output == *ai-tells.FormalTransitions* ]]
 }

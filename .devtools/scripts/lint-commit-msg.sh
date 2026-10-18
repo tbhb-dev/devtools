@@ -4,8 +4,9 @@ set -euo pipefail
 
 main() {
   local identity trailers
-  preview=$(mktemp "${TMPDIR:-/tmp}/commit-preview.XXXXXX")
-  trap 'rm -f -- "$preview"' EXIT
+  preview_dir=$(mktemp -d "${TMPDIR:-/tmp}/commit-preview.XXXXXX")
+  trap 'rm -rf -- "$preview_dir"' EXIT
+  preview="$preview_dir/COMMIT_EDITMSG"
   cp -- COMMIT_AGENTMSG "$preview"
   trailers=$(git interpret-trailers --parse "$preview")
   if ! grep -qi '^Signed-off-by:' <<<"$trailers"; then
