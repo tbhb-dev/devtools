@@ -53,6 +53,7 @@ Pass `--fix` to collapse paragraphs someone already wrapped.
 
 Each tool under [`cmd/`](cmd/) builds as a standalone binary:
 
+- [`agentrepo`](docs/checks-evaluator.md) evaluates saved GitHub checks. This binary owns repository transactions, signing, and delegation as they move into Go.
 - `agenthooks` manages shared agent hooks.
 - `agentstore` stores shared agent state.
 - `agentcontext` assembles shared agent context.

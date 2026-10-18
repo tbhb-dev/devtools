@@ -23,6 +23,7 @@ Worktrees
 addopts
 agentcontext
 agenthooks
+agentrepo
 agentstore
 allstar
 argjson

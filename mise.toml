@@ -186,7 +186,7 @@ run = "mise run devtools:install"
 # rejects the trailing ones: without it every invocation argument
 # arrives as a shell positional in a shebang body.
 [tasks.run]
-description = "Run one binary by name, e.g. `mise run run agentstore version`"
+description = "Run one binary by name, e.g. `mise run run agentrepo version`"
 run = '''
 #!/usr/bin/env bash
 set -euo pipefail
