@@ -4,7 +4,7 @@ Consumers can include `.devtools/tasks/lint.toml` in mise's `task_config.include
 
 The consumer owns tool installation, including guard-markdown.
 
-These tasks select tracked and untracked files through Git and skip an empty selection. They apply the repository's ignore rules to untracked files. Their default exclusions are `vendor/`, `apm_modules/`, `.claude/`, `.agents/`, and `.codex/`. Paths containing spaces remain individual arguments. Markdown accepts guard-markdown arguments, including `mise run devtools:lint-markdown-wrap -- --fix`.
+These tasks select tracked and untracked files through Git and skip an empty selection. They apply the repository's ignore rules to untracked files. By default, they skip `vendor/`, `apm_modules/`, and exact dependency `deployed_files` paths from `apm.lock.yaml`, without excluding descendants of its directory entries. This lets the gates check first-party skills and rules under `.claude/`, `.agents/`, and `.codex/`. Without a lockfile, only the vendor and generated-path exclusions apply. Paths containing spaces remain individual arguments. Markdown accepts guard-markdown arguments, including `mise run devtools:lint-markdown-wrap -- --fix`.
 
 Set `DEVTOOLS_GENERATED_PATHS` to a newline-separated list of repository-relative generated directories or files to extend those defaults. Directory entries may end with a slash. Entries use Git `pathspec` patterns. A directory excludes its descendants as well. Put this example in the consumer's mise configuration:
 

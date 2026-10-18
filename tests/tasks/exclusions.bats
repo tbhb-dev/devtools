@@ -13,8 +13,10 @@ setup() {
 	ROOT=$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)
 	export PATH="$BATS_FILE_TMPDIR/bin:$PATH"
 	WORK="${BATS_TEST_TMPDIR}/consumer"
-	mkdir -p "$WORK/.devtools/tasks" "$WORK/.config/mise/conf.d"
+	mkdir -p "$WORK/.devtools/scripts" "$WORK/.devtools/tasks" "$WORK/.config/mise/conf.d"
 	cp "$ROOT/.config/mise/conf.d/10-devtools-tools.toml" "$WORK/.config/mise/conf.d/"
+	cp "$ROOT/.devtools/scripts/filter-apm-deployed.py" "$WORK/.devtools/scripts/"
+	export DEVTOOLS_DIR="$WORK/.devtools"
 	cp "$ROOT/.devtools/tasks/lint.toml" "$WORK/.devtools/tasks/"
 	cp "$ROOT/.config/mise/mise.lock" "$WORK/.config/mise/"
 	cp "$ROOT/mise.lock" "$WORK/"
@@ -61,10 +63,10 @@ check_gates() {
 
 @test "shared gates skip empty repositories and default excluded trees" {
 	check_gates 0
-	for directory in vendor apm_modules .claude .agents .codex; do
+	for directory in vendor apm_modules; do
 		bad_sources "$directory"
 	done
-	git add -f -- vendor apm_modules .claude .agents .codex
+	git add -f -- vendor apm_modules
 	check_gates 0
 }
 
@@ -216,4 +218,69 @@ check_tree_gates() {
 	printf '#!/bin/bash\ncurl --fail url | cat\n' >'src/check curl.sh'
 	run mise run devtools:lint-curl
 	[ "$status" -eq 0 ]
+}
+
+@test "APM deployment files stay excluded without hiding first-party siblings" {
+	for directory in .agents/skills/deployed .claude/skills/deployed .codex/skills/deployed; do
+		bad_sources "$directory"
+	done
+	cat >apm.lock.yaml <<'YAML'
+lockfile_version: '1'
+dependencies:
+- name: empty
+- name: deployed
+  deployed_files:
+  - .agents/skills/deployed
+  - .agents/skills/deployed/bad script.sh
+  - .agents/skills/deployed/bad.md
+  - .claude/skills/deployed
+  - .claude/skills/deployed/bad script.sh
+  - .claude/skills/deployed/bad.md
+  - .codex/skills/deployed
+  - .codex/skills/deployed/bad script.sh
+  - .codex/skills/deployed/bad.md
+YAML
+	git add -- .agents .claude .codex apm.lock.yaml
+	check_gates 0
+	bad_sources .agents/skills/deployed/owned
+	check_gates 1
+}
+
+@test "first-party agent skills and rules are linted with or without APM" {
+	for directory in .agents/skills/local .claude/rules; do
+		bad_sources "$directory"
+		check_gates 1
+		printf 'dependencies: []\n' >apm.lock.yaml
+		git add -- "$directory" apm.lock.yaml
+		check_gates 1
+		rm -rf "$directory"
+		git rm -qr --cached -- "$directory" apm.lock.yaml
+		rm apm.lock.yaml
+	done
+}
+
+@test "prose and curl distinguish deployed files from owned agent files" {
+	setup_tree_gates
+	cp "$ROOT/.devtools/scripts/check_curl_fail.py" .devtools/scripts/
+	mkdir -p .agents/skills/deployed .claude/rules
+	printf 'forbidden\n' >.agents/skills/deployed/SKILL.md
+	printf '#!/bin/bash\ncurl url | cat\n' >.agents/skills/deployed/check.sh
+	cat >apm.lock.yaml <<'YAML'
+dependencies:
+- deployed_files:
+  - .agents/skills/deployed
+  - .agents/skills/deployed/SKILL.md
+  - .agents/skills/deployed/check.sh
+YAML
+	for gate in lint-prose devtools:lint-curl; do
+		run mise run "$gate"
+		[ "$status" -eq 0 ]
+	done
+	cp .agents/skills/deployed/SKILL.md .claude/rules/owned.md
+	cp .agents/skills/deployed/check.sh .agents/skills/deployed/owned.sh
+	for gate in lint-prose devtools:lint-curl; do
+		run mise run "$gate"
+		[ "$status" -ne 0 ]
+		[[ "$output" == *owned* ]]
+	done
 }
