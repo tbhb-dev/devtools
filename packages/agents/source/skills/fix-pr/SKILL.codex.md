@@ -32,7 +32,7 @@ Rebuild the local draft:
 bash .agents/skills/fix-pr/scripts/populate-description.sh <number>
 ```
 
-If the fix changes what readers need to know, delegate revision to `write-pr-description`, then review it with `bash .agents/skills/pr/scripts/review.sh`, which stamps the draft on a pass. Bound findings at three rounds. Update the pull request only through:
+If the fix changes what readers need to know, revise `PR_AGENTDESC.md` in this session or use the optional `write-pr-description` helper, then review it with `bash .agents/skills/pr/scripts/review.sh`, which stamps the draft on a pass. Bound findings at three rounds. Update the pull request only through:
 
 ```bash
 bash .agents/skills/pr/scripts/create-pr.sh [--confirmed] [--rewrite]

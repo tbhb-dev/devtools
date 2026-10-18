@@ -1,7 +1,7 @@
 ---
 name: pr
 description: >-
-  Open or update a pull request for the current branch. A delegated writer drafts PR_AGENTDESC.md, an independent headless reviewer reads it against the branch, and a mechanical validator checks it against the template. The operator confirms before anything publishes. Use whenever the user asks to open or draft a pull request in a tbhb repository, or when a completed task should end in one. Routes later CI work to watch-pr, fix-pr, and merge-pr.
+  Open or update a pull request for the current branch. The session drafts PR_AGENTDESC.md, an independent headless reviewer reads it against the branch, and a mechanical validator checks it against the template. The operator confirms before anything publishes. Use whenever the user asks to open or draft a pull request in a tbhb repository, or when a completed task should end in one. Routes later CI work to watch-pr, fix-pr, and merge-pr.
 ---
 
 # Open a pull request
@@ -35,13 +35,9 @@ Stop before any of it where preflight reports a rebase, merge, or cherry-pick in
 
 ## Step 2: draft the description
 
-Spawn one subagent with this bounded task:
+Read the branch diff against the resolved base from preflight, the commits that would land, and the repository's pull request template. Write or revise `PR_AGENTDESC.md` in this session. Fill the scaffold's frontmatter properties, a Conventional Commits title describing the whole branch, and every template section. Use the labels and properties preflight reported, and describe only verification you actually ran.
 
-```text
-Use the write-pr-description skill in <repo root>. Write or revise PR_AGENTDESC.md, run its validator, and return only its DRAFT result.
-```
-
-Don't draft the file in this context, because that means reading the diff here. Where the writer reports `DRAFT: BLOCKED`, report the blocker, and stop.
+The `write-pr-description` skill remains an optional helper when delegating the drafting is useful. Publication requires the stamp from step 4's scripted review for either drafting path.
 
 ## Step 3: pass the prose gates
 

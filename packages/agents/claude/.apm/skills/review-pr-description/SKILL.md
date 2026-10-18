@@ -125,4 +125,4 @@ Tag each finding `truthfulness`, `substance`, `fit`, or `coherence`.
 
 Return `PASS` when the draft holds up. A clean description counts as a real outcome, and inventing a finding to look thorough wastes the round trip. Report only what you can point at in the draft or the diff.
 
-Your findings go straight back to `write-pr-description` as its next instructions, so write each one so that agent can act on it without seeing this conversation. Identify the section and quote the offending text, then give the replacement.
+Your findings go back to the drafting session or its optional writer, so write each one so the recipient can act on it without seeing this conversation. Identify the section and quote the offending text, then give the replacement.

@@ -22,7 +22,11 @@ Reword one file until its linters pass. Someone has already decided what the doc
 
 ## Context
 
-!`bash ${CLAUDE_SKILL_DIR}/scripts/context.sh $ARGUMENTS`
+Run this script once before reading the material or making edits:
+
+```text
+bash ${CLAUDE_SKILL_DIR}/scripts/context.sh $ARGUMENTS
+```
 
 ## Your inputs
 

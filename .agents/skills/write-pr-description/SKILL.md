@@ -1,7 +1,7 @@
 ---
 name: write-pr-description
 description: >-
-  Write or revise the pull request description in PR_AGENTDESC.md, as a delegated agent that reads the branch itself. Fills the frontmatter properties, a Conventional Commits title, and every section the repository's template declares, then runs the mechanical validator until it passes before returning. Use as the delegated writer from pr, fix-pr, or merge-pr, with review findings or branch-drift notes in the task. Every call pairs with the pr review script afterwards.
+  Write or revise the pull request description in PR_AGENTDESC.md, as a delegated agent that reads the branch itself. Fills the frontmatter properties, a Conventional Commits title, and every section the repository's template declares, then runs the mechanical validator until it passes before returning. Use as an optional delegated writer from pr, fix-pr, or merge-pr, with review findings or branch-drift notes in the task. Every call pairs with the pr review script afterwards.
 ---
 
 # Write a pull request description

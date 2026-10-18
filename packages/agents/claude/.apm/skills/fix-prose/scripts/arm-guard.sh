@@ -15,8 +15,7 @@
 #
 # That probe also settled why fix-prose is not a `context: fork` skill.
 # A forked skill's frontmatter hooks register nowhere: the caller's
-# session never sees them, which is why the pull request guard is
-# declared by `pr` rather than by write-pr-description. A plain skill's
+# session never sees them. A plain skill's
 # hooks do register, they fire for the caller's own tool calls, and they
 # stay silent for an Agent-tool subagent's. That is exactly the scoping
 # a guard here needs, so the skill body spawns the fixer through the

@@ -58,7 +58,7 @@ Merging is the last moment the description can change, and you write the squash 
 
 Read what preflight printed under `== description as published ==` against the commits it collapses. Most merges skip the rest of this step. A description that still fits doesn't need a pass, and a pull request nobody here authored has none of this machinery behind it, so take its description as it stands.
 
-Where it no longer describes the branch, run `write-pr-description` and then `review-pr-description`, following the `pr` review loop, then republish with `bash .agents/skills/pr/scripts/create-pr.sh`.
+Where it no longer describes the branch, revise `PR_AGENTDESC.md` in this session or use the optional `write-pr-description` helper, then run the `pr` review script, following its review loop, then republish with `bash .agents/skills/pr/scripts/create-pr.sh`.
 
 ## Step 3: write the squash message
 

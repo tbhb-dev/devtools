@@ -43,7 +43,7 @@ Draft every pull request description in the repo-root file `PR_AGENTDESC.md`, wh
 
 The file supplies three things the template can't. YAML frontmatter holds the pull request properties, a level 1 heading holds the title, and the rest fills in the sections from `.github/pull_request_template.md`.
 
-1. Draft the description, with a title in the Conventional Commits shape. A squash merge turns that title into the commit subject on the default branch.
+1. Draft the description in the session running `pr`, with a title in the Conventional Commits shape. A squash merge turns that title into the commit subject on the default branch.
 2. Review the draft through `.claude/skills/pr/scripts/review.sh`, which runs a fresh read-only reviewer with `review-pr-description` as its criteria.
 3. Run `mise run lint-pr-description` and resolve whatever it reports.
 4. Confirm with the operator, then publish through `.claude/skills/pr/scripts/create-pr.sh`.
@@ -140,7 +140,7 @@ Each source directory has a `SKILL.claude.md` and a `SKILL.codex.md`, one manife
 
 `packages/agents/source/lib/lib.sh` is the shared shell library. The generator copies it to `scripts/lib.sh` in every output whose scripts mention it, and a deployed skill then doesn't depend on anything outside its own directory. It contains the harness detection, the machine-level configuration lookup, the script-owned review and its stamp, and the confirmation chain. Its Bats suite and the commit skill’s run in `mise run test-hooks` against the generated output, with stubs replacing the reviewer CLI and the delegation check.
 
-The Claude manifests for `write-pr-description` and `write-prose-fix` declare scoped tools for context gathering, edits, and draft validation, so delegated writers can finish without permission prompts. Reviews still run through the script-owned headless reviewer, and confirmation still belongs to the write script’s confirmation chain. Optional live probes use `RUN_HEADLESS_WRITERS=1` or `RUN_HEADLESS_REVIEWS=1`, while ordinary regression runs don't need model access.
+The optional `write-pr-description` helper and the `write-prose-fix` writer run their context scripts as a step rather than during skill loading. Their Claude manifests declare scoped tools for context gathering, edits, and draft validation, so delegated writers can finish without permission prompts. Reviews still run through the script-owned headless reviewer, and confirmation still belongs to the write script’s confirmation chain. Optional live probes use `RUN_HEADLESS_WRITERS=1` or `RUN_HEADLESS_REVIEWS=1`, while ordinary regression runs don't need model access.
 
 The Skill Scanner policy at `.github/skill-scanner-policy.yaml` inherits balanced defaults and suppresses only `ALLOWED_TOOLS_BASH_VIOLATION` for `SKILL.md` in those two writer skills. Scanner 2.3.0 fails to recognize their scoped Bash permissions. The high severity gate still covers other rules, skills, and files, and SARIF keeps suppressed findings with their reasons. Changing that exception requires review.
 

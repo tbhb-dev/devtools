@@ -120,6 +120,6 @@ dt_review pr "$draft" "$snapshot" "$criteria" "$root" "$inputs" still_as_gathere
   head "$head" base "$base_ref" base_oid "$base_oid" mergebase "$mergebase" note "$note_digest" || status=$?
 case $status in
 0) ;;
-2) printf '\nSend every finding to write-pr-description, then run review.sh again.\n' ;;
+2) printf '\nResolve every finding in the draft, then run review.sh again.\n' ;;
 esac
 exit "$status"

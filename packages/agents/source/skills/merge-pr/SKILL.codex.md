@@ -36,7 +36,7 @@ bash .agents/skills/merge-pr/scripts/populate-description.sh <number>
 
 @include parts/description.md
 
-Where it no longer describes the branch, run `write-pr-description` and then `review-pr-description`, following the `pr` review loop, then republish with `bash .agents/skills/pr/scripts/create-pr.sh`.
+Where it no longer describes the branch, revise `PR_AGENTDESC.md` in this session or use the optional `write-pr-description` helper, then run the `pr` review script, following its review loop, then republish with `bash .agents/skills/pr/scripts/create-pr.sh`.
 
 ## Step 3: write the squash message
 

@@ -612,3 +612,10 @@ STUB
   [[ "$output" != *"(reused)"* ]]
   [ "$(grep -c '^test$' "$GATE_LOG")" -eq 2 ]
 }
+
+@test "preflight does not require the optional description writer (#225)" {
+  run bash "$SCRIPTS/preflight.sh"
+  [ "$status" -eq 0 ]
+  if [[ "$output" == *"write-pr-description skill deployed:"* ]]; then return 1; fi
+  [[ "$output" == *"review-pr-description skill deployed:"* ]]
+}
