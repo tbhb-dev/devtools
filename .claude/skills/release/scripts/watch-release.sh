@@ -87,8 +87,9 @@ run_id=""
 run_url=""
 waited=0
 while :; do
-  IFS="$(printf '\t')" read -r id url <<EOF
-$(newest)
+  newest_run=$(newest)
+  IFS=$'\t' read -r id url <<EOF
+$newest_run
 EOF
   if [ -n "${id:-}" ] && [ "$id" != "$baseline" ]; then
     run_id=$id
@@ -135,7 +136,8 @@ status=""
 conclusion=""
 
 while :; do
-  while IFS="$(printf '\t')" read -r step_conclusion step_name; do
+  steps=$(settled_steps)
+  while IFS=$'\t' read -r step_conclusion step_name; do
     [ -n "$step_name" ] || continue
     case "$seen" in
     *"|${step_name}|"*) continue ;;
@@ -147,11 +149,12 @@ while :; do
     *) printf 'FAIL  %s (%s)\n' "$step_name" "$step_conclusion" ;;
     esac
   done <<EOF
-$(settled_steps)
+$steps
 EOF
 
-  IFS="$(printf '\t')" read -r status conclusion <<EOF
-$(run_state)
+  state=$(run_state)
+  IFS=$'\t' read -r status conclusion <<EOF
+$state
 EOF
 
   [ "${status:-}" = "completed" ] && break
@@ -182,7 +185,8 @@ fi
 # branch, because it never read the branch. Saying "nothing was
 # released" would be true of the tag and wrong about main, and the
 # reader would stop at the reassuring half.
-printf 'RELEASE RUN %s %s\n' "$(printf '%s' "${conclusion:-unknown}" | tr '[:lower:]' '[:upper:]')" "$run_url"
+outcome=$(printf '%s' "${conclusion:-unknown}" | tr '[:lower:]' '[:upper:]')
+printf 'RELEASE RUN %s %s\n' "$outcome" "$run_url"
 printf 'No tag was cut. The branch may still have moved, because the release commit is pushed before the tag.\n'
 printf 'Read the run and the branch before dispatching again. A second release costs more than a stalled one.\n'
 exit 1

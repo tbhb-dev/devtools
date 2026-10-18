@@ -221,3 +221,32 @@ SH
   [ "$status" -eq 23 ]
   [ ! -e "$MISE_INSTALL_PATH" ]
 }
+
+@test "release clone stops when Git directory discovery fails" {
+	stub git 'case $* in *--show-toplevel*) pwd ;; *--git-common-dir*) echo .git; exit 23 ;; esac'
+	run bash "$ROOT/.claude/skills/release/scripts/release-clone.sh" path
+	[ "$status" -eq 1 ]
+	[[ "$output" == *'could not resolve the common Git directory'* ]]
+	stub git 'case $* in *--show-toplevel*) pwd ;; *--git-common-dir*) echo .git ;; *--git-dir*) echo .git; exit 23 ;; esac'
+	run bash "$ROOT/.claude/skills/release/scripts/release-clone.sh" path
+	[ "$status" -eq 1 ]
+	[[ "$output" == *'could not resolve the worktree Git directory'* ]]
+}
+
+@test "release version context propagates failed Git readers" {
+	mkdir -p clone/.git
+	stub cog 'echo 1.0.1'
+	for failing in count reverse short subject; do
+		export FAIL_READER=$failing
+		stub git 'case $* in
+  "describe "*) echo v1.0.0 ;;
+  "rev-parse "*) echo abc ;;
+  "rev-list --count "*) echo 1; [[ $FAIL_READER != count ]] || exit 23 ;;
+  "rev-list --reverse "*) echo abc; [[ $FAIL_READER != reverse ]] || exit 23 ;;
+  "log -1 --format=%h "*) echo abc; [[ $FAIL_READER != short ]] || exit 23 ;;
+  "log -1 --format=%s "*) echo subject; [[ $FAIL_READER != subject ]] || exit 23 ;;
+esac'
+		run bash "$ROOT/.claude/skills/review-release-version/scripts/context.sh" "$PWD/clone"
+		[ "$status" -eq 23 ]
+	done
+}

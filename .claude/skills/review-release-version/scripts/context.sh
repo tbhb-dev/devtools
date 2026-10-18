@@ -53,7 +53,7 @@ die() {
   exit 1
 }
 
-here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+here=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 clone=${1:-}
 if [ -z "$clone" ]; then
   clone=$(bash "$here/../../release/scripts/release-clone.sh" path) ||
@@ -70,7 +70,8 @@ head=$(command git rev-parse --short HEAD)
 printf '== the range ==\n'
 printf 'release branch at: %s\n' "$head"
 printf 'last tag:          %s\n' "$tag"
-printf 'commits since:     %s\n' "$(command git rev-list --count "$tag..HEAD")"
+commit_count=$(command git rev-list --count "$tag..HEAD")
+printf 'commits since:     %s\n' "$commit_count"
 printf '\n'
 
 # --- What cog would derive --------------------------------------------
@@ -82,7 +83,8 @@ printf '== what cog derives ==\n'
 if derived=$(cog bump --auto --dry-run 2>&1) && [ -n "$derived" ]; then
   printf '%s\n' "$derived"
 else
-  printf 'cog derived nothing: %s\n' "$(printf '%s' "$derived" | tr '\n' ' ')"
+  derived=$(printf '%s' "$derived" | tr '\n' ' ')
+  printf 'cog derived nothing: %s\n' "$derived"
 fi
 printf '\n'
 
@@ -103,10 +105,14 @@ printf '\n'
 # the limit is set to.
 printf '== the commits ==\n'
 printf '(bodies cut to %s lines; declared breaking footers always shown)\n\n' "$BODY_LIMIT"
+commits=$(command git rev-list --reverse "$tag..HEAD")
 while IFS= read -r sha; do
+  [ -n "$sha" ] || continue
+  short_sha=$(command git log -1 --format=%h "$sha")
+  subject=$(command git log -1 --format=%s "$sha")
   printf -- '--- %s %s\n' \
-    "$(command git log -1 --format=%h "$sha")" \
-    "$(command git log -1 --format=%s "$sha")"
+    "$short_sha" \
+    "$subject"
 
   body=$(command git log -1 --format=%b "$sha")
   [ -z "$body" ] || head -n "$BODY_LIMIT" <<<"$body"
@@ -119,7 +125,7 @@ while IFS= read -r sha; do
   [ -z "$breaking" ] || printf '    DECLARED: %s\n' "$breaking"
 
   printf '\n'
-done < <(command git rev-list --reverse "$tag..HEAD")
+done <<<"$commits"
 
 # --- The published surface --------------------------------------------
 #

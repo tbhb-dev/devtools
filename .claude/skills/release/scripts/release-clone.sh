@@ -87,8 +87,12 @@ absolute() {
 # overwriting each other's clone path, and a `done` in one would delete
 # a clone the other was mid-release against. Scoping it per worktree
 # means a release running beside this one is invisible to it.
-common_dir=$(absolute "$(cd "$invoking_root" && command git rev-parse --git-common-dir)")
-git_dir=$(absolute "$(cd "$invoking_root" && command git rev-parse --git-dir)")
+common_dir=$(cd "$invoking_root" && command git rev-parse --git-common-dir) ||
+  die "could not resolve the common Git directory"
+common_dir=$(absolute "$common_dir")
+git_dir=$(cd "$invoking_root" && command git rev-parse --git-dir) ||
+  die "could not resolve the worktree Git directory"
+git_dir=$(absolute "$git_dir")
 readonly POINTER=$git_dir/release-clone-path
 
 read_pointer() {
@@ -142,7 +146,7 @@ cmd_prepare() {
     MISE_TRUSTED_CONFIG_PATHS=$clone mise -C "$clone" run install-toolchain >/dev/null 2>&1 ||
       die "could not install the pinned toolchain in $clone"
 
-    printf '%s\n' "$clone" > "$POINTER"
+    printf '%s\n' "$clone" >"$POINTER"
     printf 'prepared a release clone of %s at %s\n' "$RELEASE_BRANCH" "$clone"
   fi
 
