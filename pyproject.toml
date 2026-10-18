@@ -80,7 +80,7 @@ package = false
 # uv it finds, and a resolver from another minor line rewrites uv.lock in
 # ways `uv lock --check` then reports as drift. This floor is uv refusing
 # to run rather than the lockfile churning. Move it with the mise pin.
-required-version = ">=0.12.1,<0.13"
+required-version = ">=0.13.0,<0.14"
 # cosmic-ray drags GitPython in transitively and constrains nothing, so
 # the resolver is free to settle on a release carrying the 2026 argument
 # and option injection advisories (GHSA-94p4-4cq8-9g67 and the seven
