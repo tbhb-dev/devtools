@@ -1,0 +1,18 @@
+# cargo-deny policy for `mise run devtools:deny-rust`; `mise run devtools:vuln-rust` runs the advisories check alone.
+[graph]
+all-features = true
+
+[advisories]
+version = 2
+yanked = "deny"
+unmaintained = "all"
+unsound = "all"
+
+[bans]
+multiple-versions = "deny"
+wildcards = "deny"
+highlight = "all"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"

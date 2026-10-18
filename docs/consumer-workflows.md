@@ -5,6 +5,7 @@ Call the reusable workflows from jobs in your repository. Pin each external `use
 | Workflow | Caller job ID | Required token permissions |
 | --- | --- | --- |
 | `consumer-lint.yml` | `lint` | `contents: read` |
+| `scan-cargo-deny.yml` | `cargo-deny` | `contents: read` |
 | `scan-gitleaks.yml` | `gitleaks` | `contents: read` |
 | `scan-govulncheck.yml` | `govulncheck` | `contents: read`, `security-events: write` |
 | `scan-gomodscan.yml` | `gomodscan` | `contents: read`, `security-events: write` |
@@ -18,6 +19,8 @@ permissions:
 jobs:
   lint:
     uses: tbhb-dev/devtools/.github/workflows/consumer-lint.yml@DEVTOOLS_RELEASE_COMMIT_SHA
+  cargo-deny:
+    uses: tbhb-dev/devtools/.github/workflows/scan-cargo-deny.yml@DEVTOOLS_RELEASE_COMMIT_SHA
   gitleaks:
     uses: tbhb-dev/devtools/.github/workflows/scan-gitleaks.yml@DEVTOOLS_RELEASE_COMMIT_SHA
   govulncheck:
@@ -45,3 +48,5 @@ Update the vendored `.devtools/scripts/filter-govulncheck-sarif.sh` with the wor
 Under its own category, the gomodscan report remains unfiltered.
 
 Run `mise run devtools:lint-workflows` and `mise exec -- bats tests/workflows/security.bats tests/workflows/sarif.bats` in devtools to verify the workflow contracts and SARIF fixtures.
+
+The Rust advisory workflow runs `devtools:vuln-rust` and fails on findings or scanner errors. The caller includes the shared Rust tasks and pins Rust and `cargo-deny` in its own mise configuration. See [Rust adoption](rust-adoption.md) for the tool block and starter policy.

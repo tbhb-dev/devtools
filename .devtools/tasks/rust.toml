@@ -1,0 +1,131 @@
+# Opt-in Rust tasks. Consumers pin Rust and cargo tools in their own mise.toml.
+
+["devtools:build-rust"]
+description = "Build the Rust workspace"
+run = '''
+#!/usr/bin/env bash
+set -eu
+bash "$DEVTOOLS_DIR/scripts/rust.sh" build "$@"
+'''
+
+["devtools:test-rust"]
+description = "Run nextest and doc tests"
+run = '''
+#!/usr/bin/env bash
+set -eu
+bash "$DEVTOOLS_DIR/scripts/rust.sh" test "$@"
+'''
+
+["devtools:lint-rust"]
+description = "Run clippy with warnings denied"
+run = '''
+#!/usr/bin/env bash
+set -eu
+bash "$DEVTOOLS_DIR/scripts/rust.sh" clippy "$@"
+'''
+
+["devtools:lint-rustdoc"]
+description = "Build Rust documentation with warnings denied"
+run = '''
+#!/usr/bin/env bash
+set -eu
+bash "$DEVTOOLS_DIR/scripts/rust.sh" rustdoc "$@"
+'''
+
+["devtools:lint-shear"]
+description = "Find unused Rust dependencies"
+run = '''
+#!/usr/bin/env bash
+set -eu
+bash "$DEVTOOLS_DIR/scripts/rust.sh" shear "$@"
+'''
+
+["devtools:deny-rust"]
+description = "Check Rust advisories, bans and sources"
+run = '''
+#!/usr/bin/env bash
+set -eu
+bash "$DEVTOOLS_DIR/scripts/rust.sh" deny "$@"
+'''
+
+["devtools:vuln-rust"]
+description = "Check RustSec advisories"
+run = '''
+#!/usr/bin/env bash
+set -eu
+bash "$DEVTOOLS_DIR/scripts/rust.sh" vuln "$@"
+'''
+
+["devtools:format-rust"]
+description = "Format the Rust workspace"
+run = '''
+#!/usr/bin/env bash
+set -eu
+bash "$DEVTOOLS_DIR/scripts/rust.sh" fmt "$@"
+'''
+
+["devtools:lint-rust-fmt"]
+description = "Check Rust formatting"
+run = '''
+#!/usr/bin/env bash
+set -eu
+bash "$DEVTOOLS_DIR/scripts/rust.sh" fmt-check "$@"
+'''
+
+["devtools:cover-rust"]
+description = "Measure Rust coverage and enforce consumer floors"
+run = '''
+#!/usr/bin/env bash
+set -eu
+bash "$DEVTOOLS_DIR/scripts/rust.sh" coverage "$@"
+'''
+
+["devtools:cover-rust-report"]
+description = "Write an HTML Rust coverage report"
+run = '''
+#!/usr/bin/env bash
+set -eu
+bash "$DEVTOOLS_DIR/scripts/rust.sh" coverage-report "$@"
+'''
+
+["devtools:mutate-rust"]
+description = "Report Rust mutation outcomes"
+run = '''
+#!/usr/bin/env bash
+set -eu
+bash "$DEVTOOLS_DIR/scripts/rust.sh" mutants "$@"
+'''
+
+["devtools:install-fuzz-toolchain-rust"]
+description = "Install the consumer pinned nightly for fuzzing"
+run = '''
+#!/usr/bin/env bash
+set -eu
+bash "$DEVTOOLS_DIR/scripts/rust.sh" install-fuzz-toolchain "$@"
+'''
+
+["devtools:fuzz-rust"]
+description = "Run a Rust fuzz target with optional libFuzzer flags"
+run = '''
+#!/usr/bin/env bash
+set -eu
+bash "$DEVTOOLS_DIR/scripts/rust.sh" fuzz "$@"
+'''
+
+["devtools:fuzz-rust-smoke"]
+description = "Run every Rust fuzz target briefly"
+run = '''
+#!/usr/bin/env bash
+set -eu
+bash "$DEVTOOLS_DIR/scripts/rust.sh" fuzz-smoke "$@"
+'''
+
+["devtools:lint-rust-all"]
+description = "Run the Rust lint gates in order"
+run = [
+  "mise run devtools:lint-rust-fmt",
+  "mise run devtools:lint-rust",
+  "mise run devtools:lint-rustdoc",
+  "mise run devtools:lint-shear",
+  "mise run devtools:deny-rust",
+]

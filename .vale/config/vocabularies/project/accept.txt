@@ -34,6 +34,7 @@ InferWidth
 IsMarkdown
 JSON1
 JTBD
+JUnit
 Justfile
 MCP
 MITM
@@ -134,6 +135,7 @@ XDG
 [Rr]estaging
 [Rr]ollup
 [Rr]uleset
+[Rr]ustfmt
 [Ss]caffold(s|ed|ing)?
 [Ss]emver
 [Ss]hellcheck
@@ -176,11 +178,13 @@ always_on
 argv
 assistedAt
 autobuild
+avirt
 basename
 bbolt
 cgo
 charset
 checkOrder
+clippy
 closesRun
 codeIndent
 collectFindings
@@ -252,6 +256,7 @@ msgFile
 mtime[s]?
 multiSelect
 mustWrite
+nextest
 nilerr
 niquests
 nolint
@@ -282,6 +287,8 @@ ruleId
 rumdl
 runCheck
 runHook
+rustdoc
+rustup
 ryl
 sed
 sentenceEnd
