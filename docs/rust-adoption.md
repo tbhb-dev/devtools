@@ -64,3 +64,20 @@ Mutation testing accepts surviving mutants and timeouts only when an outcomes fi
 Fuzzing requires an explicit nightly pin and installs it with rustup without changing the stable toolchain. Run `mise run devtools:fuzz-rust target -- -max_total_time=60` from the repository root. Targets live under `fuzz/`. The smoke task prints the targets and runs each for `DEVTOOLS_RUST_FUZZ_SECONDS` seconds (default 20). Archive `fuzz/artifacts/` on failures.
 
 The reusable [cargo-deny scan](../.github/workflows/scan-cargo-deny.yml) runs `devtools:vuln-rust` with the consumer's Rust and cargo-deny pins. Call it on a schedule or pull request with a full devtools commit SHA, like the workflows in the [consumer workflow guide](consumer-workflows.md). It needs only contents read permission. Keep the OS matrix and its single combined check local for now. Platform choices and coverage baselines differ between consumers.
+
+## Renovate updates to the oldest supported Rust version
+
+If your oldest supported Rust version always equals the mise Rust pin, extend the opt-in [Rust preset for the oldest supported version](../.github/renovate-rust-msrv-config.json5) alongside the general preset in `.github/renovate.json5`:
+
+```json5
+{
+  extends: [
+    "github>tbhb-dev/devtools//.github/renovate-config.json5#<devtools-sha>", // <devtools-tag>
+    "github>tbhb-dev/devtools//.github/renovate-rust-msrv-config.json5#<devtools-sha>", // <devtools-tag>
+  ],
+}
+```
+
+Use the same devtools release SHA and tag as your other pins, from a release containing this preset. The shared pin tasks update both references together. Start with equal numeric versions in mise's `rust` tool pin, Cargo's `[workspace.package]` or `[package]` `rust-version`, and clippy's `msrv`. The preset groups their updates under `rust-toolchain`, using the mise manager's `rust` dependency and `rust-version` datasource. It matches Cargo manifests and `clippy.toml` or `.clippy.toml` at the root or in subdirectories, leaving inherited `rust-version.workspace = true` entries alone. Renovate's mise manager continues to maintain the mise lockfile.
+
+The general preset doesn't enable this preset, which you should leave out when your oldest supported Rust version is older than the development toolchain. This preset updates existing numeric fields. It doesn't add missing fields or repair versions that already differ. Keep any enabled-manager restriction inclusive of `mise` and `custom.regex`.

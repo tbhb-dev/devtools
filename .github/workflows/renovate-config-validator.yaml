@@ -31,11 +31,10 @@ on:
       # Catch nested renovate configs too if/when subprojects appear.
       - "**renovate.json5"
       # Shared preset files consumed by tbhb repositories through extends.
-      # Neither ends in `renovate.json5`, so each needs its own pattern —
-      # and `**renovate-config.json5` does not match the Go preset either,
-      # since `renovate-go-config.json5` differs before the `-config` part.
+      # Language presets need their own patterns too.
       - "**renovate-config.json5"
       - "**renovate-go-config.json5"
+      - "**renovate-rust-msrv-config.json5"
       # Self-test: a change to this workflow re-runs it, so no step lands
       # here without having run against a real config first.
       - ".github/workflows/renovate-config-validator.yaml"
@@ -78,7 +77,8 @@ jobs:
           # loop adds nothing there and the original single-file behavior is
           # kept.
           configs=("${CONFIG_PATH}")
-          for preset in .github/renovate-config.json5 .github/renovate-go-config.json5; do
+          for preset in .github/renovate-config.json5 .github/renovate-go-config.json5 \
+            .github/renovate-rust-msrv-config.json5; do
             [ -f "${preset}" ] && configs+=("${preset}")
           done
           docker run --rm --entrypoint renovate-config-validator \
@@ -189,7 +189,8 @@ jobs:
           }
           MJS
           configs=("${CONFIG_PATH}")
-          for preset in .github/renovate-config.json5 .github/renovate-go-config.json5; do
+          for preset in .github/renovate-config.json5 .github/renovate-go-config.json5 \
+            .github/renovate-rust-msrv-config.json5; do
             [ -f "${preset}" ] && configs+=("${preset}")
           done
           docker run --rm --entrypoint node \

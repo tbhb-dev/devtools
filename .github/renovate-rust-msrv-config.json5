@@ -1,0 +1,40 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "packageRules": [
+    {
+      "matchDatasources": [
+        "rust-version"
+      ],
+      "matchPackageNames": [
+        "rust"
+      ],
+      "groupName": "rust-toolchain"
+    }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/(^|/)Cargo\\.toml$/"
+      ],
+      "matchStrings": [
+        "(?:^|\\r?\\n)[ \\t]*\\[(?:workspace\\.package|package)\\][ \\t]*(?:#[^\\r\\n]*)?\\r?\\n(?:[ \\t]*(?:[^\\s\\[][^\\r\\n]*)?\\r?\\n)*?[ \\t]*rust-version[ \\t]*=[ \\t]*[\"'](?<currentValue>\\d+\\.\\d+(?:\\.\\d+)?)[\"']"
+      ],
+      "depNameTemplate": "rust",
+      "datasourceTemplate": "rust-version",
+      "versioningTemplate": "semver"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/(^|/)\\.?clippy\\.toml$/"
+      ],
+      "matchStrings": [
+        "(?:^|\\r?\\n)[ \\t]*msrv[ \\t]*=[ \\t]*[\"'](?<currentValue>\\d+\\.\\d+(?:\\.\\d+)?)[\"']"
+      ],
+      "depNameTemplate": "rust",
+      "datasourceTemplate": "rust-version",
+      "versioningTemplate": "semver"
+    }
+  ]
+}
