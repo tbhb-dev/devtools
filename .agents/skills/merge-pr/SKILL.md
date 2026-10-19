@@ -116,7 +116,7 @@ Fix the prose findings with the `fix-prose` skill first, on `SQUASH_AGENTMSG mis
 mise run lint-squash-msg
 ```
 
-The same four hooks a commit must pass:
+The same four hooks a commit must pass, plus the source-range identity context that requires `Assisted-by` when the squash collapses an agent commit:
 
 - vale under the commit scope, which catches AI tells through `ai-tells-commits`
 - cspell with the commit dictionary

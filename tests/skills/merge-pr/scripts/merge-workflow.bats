@@ -852,3 +852,15 @@ assert_cleaned() {
   [ "$status" -eq 1 ]
   grep -Fx 'Signed-off-by: Tester <tester@example.com>' SQUASH_AGENTMSG
 }
+
+@test "merge refuses a squash message without attribution for agent commits" {
+  printf '[identities]\nagents = [{email = "tester@example.com"}]\n' >.commit-lint.toml
+  bash "$SCRIPTS/review.sh" 7
+
+  run bash "$SCRIPTS/squash-merge.sh" --confirmed 7
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"configured agent author or committer requires a well-formed Assisted-by trailer"* ]]
+  [[ "$output" == *"squash message lacks attribution required by the commits it collapses"* ]]
+  [ ! -e "$GH_FIXTURES/merged" ]
+}

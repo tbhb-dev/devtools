@@ -27,6 +27,7 @@ var (
 	errInvalidSignoff  = errors.New("invalid sign-off identity; use the responsible person's Name <email>")
 	errAgentSignoff    = errors.New("denied agent sign-off; the responsible person must sign off")
 	errUnlistedSignoff = errors.New("sign-off is not allowed; a configured responsible person must sign off")
+	errInvalidIdentity = errors.New("invalid Git identity")
 )
 
 var identityPattern = regexp.MustCompile(`^([^<>]+) <([^<>[:space:]]+)>$`)
@@ -62,4 +63,22 @@ func (c Config) CheckSignoff(value string) error {
 		return fmt.Errorf("%w: %q", errUnlistedSignoff, value)
 	}
 	return nil
+}
+
+// IsAgent reports whether a Git identity matches a configured agent.
+func (c Config) IsAgent(value string) (bool, error) {
+	if len(c.Identities.Agents) == 0 {
+		return false, nil
+	}
+	match := identityPattern.FindStringSubmatch(strings.TrimSpace(value))
+	if match == nil {
+		return false, fmt.Errorf("%w: %q", errInvalidIdentity, value)
+	}
+	name := strings.TrimSpace(match[1])
+	for _, agent := range c.Identities.Agents {
+		if agent.matches(name, match[2]) {
+			return true, nil
+		}
+	}
+	return false, nil
 }

@@ -94,7 +94,10 @@ func TestAdditionalRules(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			got := strings.Join(commitlint.Check(commitlint.Parse(tt.message), tt.config, tt.rules), "\n")
+			got := strings.Join(
+				commitlint.CheckWithIdentities(commitlint.Parse(tt.message), tt.config, tt.rules, nil),
+				"\n",
+			)
 			if got != tt.want {
 				t.Fatalf("got %q, want %q", got, tt.want)
 			}
@@ -102,11 +105,47 @@ func TestAdditionalRules(t *testing.T) {
 	}
 	c := commitlint.DefaultConfig()
 	c.RequireSignedOffBy = false
-	if got := commitlint.Check(commitlint.Parse("feat: a change"), c, "all"); len(got) != 0 {
+	if got := commitlint.CheckWithIdentities(commitlint.Parse("feat: a change"), c, "all", nil); len(got) != 0 {
 		t.Fatal(got)
 	}
-	if got := commitlint.Check(commitlint.Parse("invalid"), commitlint.DefaultConfig(), "all"); len(got) != 4 {
+	if got := commitlint.CheckWithIdentities(
+		commitlint.Parse("invalid"),
+		commitlint.DefaultConfig(),
+		"all",
+		nil,
+	); len(got) != 4 {
 		t.Fatal(got)
+	}
+}
+
+func TestAgentCommitRequiresWellFormedAssistedBy(t *testing.T) {
+	t.Parallel()
+	config := commitlint.DefaultConfig()
+	config.Identities.Agents = []commitlint.Identity{{Email: "agent@example.com"}}
+	identity := []string{"Agent <agent@example.com>"}
+
+	without := strings.Join(commitlint.CheckWithIdentities(
+		commitlint.Parse("fix: attribute the change\n\nSigned-off-by: Person <person@example.com>"),
+		config,
+		"trailers",
+		identity,
+	), "\n")
+	if !strings.Contains(without, "configured agent author or committer requires a well-formed Assisted-by trailer") {
+		t.Fatalf("missing agent-attribution finding: %q", without)
+	}
+
+	with := commitlint.CheckWithIdentities(
+		commitlint.Parse(
+			"fix: attribute the change\n\n"+
+				"Assisted-by: codex:gpt-6\n"+
+				"Signed-off-by: Person <person@example.com>",
+		),
+		config,
+		"trailers",
+		identity,
+	)
+	if len(with) != 0 {
+		t.Fatalf("well-formed attribution failed: %q", with)
 	}
 }
 
@@ -124,7 +163,7 @@ func FuzzParse(f *testing.F) {
 				t.Fatalf("unclean lines: %#v", m.Lines)
 			}
 		}
-		commitlint.Check(m, commitlint.DefaultConfig(), "all")
+		commitlint.CheckWithIdentities(m, commitlint.DefaultConfig(), "all", nil)
 	})
 }
 

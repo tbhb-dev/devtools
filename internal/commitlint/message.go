@@ -81,16 +81,39 @@ func footerStart(lines []string) int {
 	return -1
 }
 
-// Check runs shape, trailers, or all rules, retaining the legacy diagnostic prefixes.
-func Check(m Message, c Config, rules string) []string {
+// CheckWithIdentities applies the message rules with the commit identities
+// that decide whether agent attribution is required.
+func CheckWithIdentities(m Message, c Config, rules string, identities []string) []string {
 	var errors []string
 	if rules == "shape" || rules == rulesAll {
 		errors = append(errors, checkShape(m, c)...)
 	}
 	if rules == "trailers" || rules == rulesAll {
 		errors = append(errors, checkTrailers(m, c)...)
+		errors = append(errors, checkAgentAttribution(m, c, identities)...)
 	}
 	return errors
+}
+
+func checkAgentAttribution(m Message, c Config, identities []string) []string {
+	required := false
+	for _, identity := range identities {
+		match, err := c.IsAgent(identity)
+		if err != nil {
+			return []string{"commit-trailers: " + err.Error()}
+		}
+		required = required || match
+	}
+	if !required {
+		return nil
+	}
+	for _, line := range m.Raw {
+		if strings.HasPrefix(line, "Assisted-by:") &&
+			assistedPattern.MatchString(strings.TrimSpace(strings.TrimPrefix(line, "Assisted-by:"))) {
+			return nil
+		}
+	}
+	return []string{"commit-trailers: configured agent author or committer requires a well-formed Assisted-by trailer"}
 }
 
 func checkShape(m Message, c Config) []string {

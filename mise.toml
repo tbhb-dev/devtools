@@ -149,7 +149,7 @@ run = [
   "mise run install-toolchain",
   "mise run install-tools",
   "mise run devtools:prek-install",
-  "mise run devtools:install-leak-hook",
+  "mise run devtools:install-pre-push-hook",
 ]
 
 [tasks.install-toolchain]

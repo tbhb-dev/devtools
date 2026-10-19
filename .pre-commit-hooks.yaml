@@ -9,6 +9,7 @@
 #         - id: guard-markdown
 #         - id: commit-trailers
 #         - id: commitlint
+#         - id: commit-msg-pre-push
 #         - id: vale-commit-msg
 #         - id: cspell-commit-msg
 #         - id: clear-commit-agentmsg
@@ -59,10 +60,21 @@
     Signed-off-by, a required Signed-off-by sign-off with configured
     agent denials and optional allowed identities, and no LLM
     attribution in Co-authored-by.
-  entry: commit-lint --rules trailers
+  entry: commit-lint --rules trailers --current-identities
   language: golang
   stages: [commit-msg]
   always_run: true
+
+- id: commit-msg-pre-push
+  name: commit-msg-pre-push
+  description: >-
+    Verify that the installed pre-push wrapper checks every outgoing
+    commit with commit-lint before prek consumes Git's ref lines.
+  entry: mise run --quiet devtools:check-pre-push-hook
+  language: system
+  stages: [pre-push]
+  always_run: true
+  pass_filenames: false
 
 - id: commitlint
   name: commitlint
@@ -129,7 +141,7 @@
 
 - id: leaks-pre-push
   name: leaks-pre-push
-  entry: mise run --quiet devtools:check-leak-hook
+  entry: mise run --quiet devtools:check-pre-push-hook
   language: system
   stages: [pre-push]
   always_run: true
