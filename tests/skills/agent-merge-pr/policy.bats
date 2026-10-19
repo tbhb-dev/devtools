@@ -63,12 +63,20 @@ setup() {
   [ "$(printf '%s' "$output" | jq '.findings|length')" -ge 2 ]
 }
 
+@test "policy reader runs offline without third-party packages" {
+  local cache="$BATS_TEST_TMPDIR/empty-uv-cache"
+  mkdir -p "$cache"
+  run env UV_CACHE_DIR="$cache" UV_OFFLINE=1 uv run --quiet --script "$POLICY" inspect "$BASE_OID" "$HEAD_OID" <<<"$(policy_config)"
+  [ "$status" -eq 0 ]
+}
+
 @test "APM remote deployed paths are skipped while local overrides are scanned" {
   git checkout --quiet main
   cat >apm.lock.yaml <<'LOCK'
 dependencies:
 - repo_url: example/tooling
-  deployed_files: [vendor/skills]
+  deployed_files:
+  - vendor/skills
 - repo_url: _local/custom
   source: local
   deployed_files: [vendor/skills/custom]

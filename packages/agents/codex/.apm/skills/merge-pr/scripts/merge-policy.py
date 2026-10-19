@@ -3,7 +3,7 @@
 # cspell:words surrogateescape alnum cntrl xdigit
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["PyYAML==6.0.3"]
+# dependencies = []
 # ///
 """Inspect pinned Git changes and APM ownership; never execute repository settings."""
 
@@ -16,7 +16,7 @@ import sys
 from pathlib import Path, PurePosixPath
 from typing import NoReturn
 
-import yaml
+LockRecord = dict[str, str | list[str] | None]
 
 GIT = shutil.which("git")
 if GIT is None:
@@ -77,29 +77,136 @@ def deployment_path(value: object) -> str:
     return value.removeprefix("./").rstrip("/")
 
 
+def lock_scalar(value: str) -> str | None:
+    """Read the scalar forms emitted in an APM lockfile."""
+    value = value.strip()
+    if not value:
+        fail("Invalid APM lockfile scalar")
+    if value in {"null", "~"}:
+        return None
+    if value.startswith('"'):
+        parsed = json.loads(value)
+        if not isinstance(parsed, str):
+            fail("Invalid APM lockfile scalar")
+        return parsed
+    if value.startswith("'"):
+        if not value[1:].endswith("'"):
+            fail("Invalid APM lockfile scalar")
+        return value[1:-1].replace("''", "'")
+    return value
+
+
+def lock_list(value: str) -> list[str]:
+    """Read the simple flow sequences APM uses for deployed paths."""
+    if value == "[]":
+        return []
+    if not value.startswith("[") or not value.endswith("]"):
+        fail("Invalid APM lockfile list")
+    items = value[1:-1].split(",")
+    parsed = [lock_scalar(item) for item in items]
+    if any(item is None for item in parsed):
+        fail("Invalid APM lockfile list")
+    return [item for item in parsed if item is not None]
+
+
+def lock_records(text: str, name: str, *, required_section: bool) -> list[str]:
+    """Split one top-level generated APM sequence into record bodies."""
+    headers = list(re.finditer(rf"(?m)^{name}:(.*)$", text))
+    if not headers:
+        if required_section:
+            fail("Invalid APM lockfile dependencies")
+        return []
+    if len(headers) != 1:
+        fail("Duplicate APM lockfile section")
+    header = headers[0]
+    suffix = header.group(1).strip()
+    if suffix == "[]":
+        return []
+    if suffix:
+        fail("Invalid APM lockfile section")
+    start = header.end() + 1
+    following = re.search(r"(?m)^[A-Za-z_][\w-]*:", text[start:])
+    end = start + following.start() if following else len(text)
+    body = text[start:end].strip("\n")
+    if not body:
+        return []
+    if not body.startswith("- "):
+        fail("Invalid APM lockfile record")
+    return body[2:].split("\n- ")
+
+
+def lock_record(text: str, keys: tuple[str, ...]) -> LockRecord:
+    """Read selected scalar and path-list fields from one record."""
+    text = "  " + text
+    record: LockRecord = {}
+    for key in keys:
+        matches = list(re.finditer(rf"(?m)^  {key}:(?: (.*))?$", text))
+        if len(matches) > 1:
+            fail("Duplicate APM lockfile field")
+        if not matches:
+            continue
+        value = (matches[0].group(1) or "").strip()
+        if value.startswith("["):
+            record[key] = lock_list(value)
+        elif value:
+            record[key] = lock_scalar(value)
+        elif key == "deployed_files":
+            tail = text[matches[0].end() :]
+            items = re.match(r"(?m)((?:\n  - .*)*)", tail)
+            values = re.findall(r"(?m)^  - (.*)$", items.group(1) if items else "")
+            parsed = [lock_scalar(item) for item in values]
+            if any(item is None for item in parsed):
+                fail("Invalid APM lockfile list")
+            record[key] = [item for item in parsed if item is not None]
+        else:
+            fail("Invalid APM lockfile scalar")
+    return record
+
+
+def parse_lock(data: bytes) -> tuple[list[LockRecord], list[LockRecord]]:
+    """Parse only the generated lockfile records used for ownership."""
+    text = data.decode("utf-8")
+    dependencies = [
+        lock_record(
+            record,
+            ("repo_url", "source", "local_path", "virtual_path", "deployed_files"),
+        )
+        for record in lock_records(text, "dependencies", required_section=True)
+    ]
+    deployments = [
+        lock_record(record, ("kind", "value", "active_owner"))
+        for record in lock_records(text, "deployments", required_section=False)
+    ]
+    return dependencies, deployments
+
+
+def lock_text(record: LockRecord, key: str, default: str = "") -> str:
+    """Read an optional string field with a typed default."""
+    value = record.get(key, default)
+    if not isinstance(value, str):
+        fail("Invalid APM lockfile field")
+    return value
+
+
 def owned_remotely(base: str) -> dict[str, bool]:
     """Use base ownership and honor active owners where APM records them."""
     data = blob(base, "apm.lock.yaml")
     if not data:
         return {}
-    lock = yaml.safe_load(data)
-    if not isinstance(lock, dict) or not isinstance(lock.get("dependencies"), list):
-        fail("Invalid APM lockfile dependencies")
+    dependencies, records = parse_lock(data)
     owned = {}
     identities = {}
-    for dep in lock["dependencies"]:
-        if not isinstance(dep, dict):
-            fail("Invalid APM dependency")
+    for dep in dependencies:
+        repository = lock_text(dep, "repo_url")
+        local_path = lock_text(dep, "local_path")
         local = bool(
-            dep.get("source") == "local"
-            or dep.get("local_path")
-            or str(dep.get("repo_url", "")).startswith("_local/")
+            lock_text(dep, "source") == "local"
+            or local_path
+            or repository.startswith("_local/")
         )
-        repository = dep.get("repo_url", "")
-        identity = dep.get("local_path") or (
-            repository + "/" + dep["virtual_path"]
-            if dep.get("virtual_path")
-            else repository
+        virtual_path = lock_text(dep, "virtual_path")
+        identity = local_path or (
+            repository + "/" + virtual_path if virtual_path else repository
         )
         identities[identity] = not local
         paths = dep.get("deployed_files", [])
@@ -109,18 +216,13 @@ def owned_remotely(base: str) -> dict[str, bool]:
             path = deployment_path(value)
             # Without active ownership metadata, keep local overlaps in scope.
             owned[path] = owned.get(path, True) and not local
-    records = lock.get("deployments", [])
-    if not isinstance(records, list):
-        fail("Invalid APM deployments")
     for record in records:
-        if not isinstance(record, dict):
-            fail("Invalid APM deployment")
-        if record.get("kind") != "project-relative":
+        if lock_text(record, "kind") != "project-relative":
             continue
-        owner = record.get("active_owner")
+        owner = lock_text(record, "active_owner")
         if owner not in identities:
             fail("Unknown APM active owner")
-        owned[deployment_path(record.get("value"))] = identities[owner]
+        owned[deployment_path(lock_text(record, "value"))] = identities[owner]
     return owned
 
 
@@ -254,6 +356,60 @@ def ref_matches(pattern: str, branch: str, default: str) -> bool:
     return re.fullmatch(escaped, "refs/heads/" + branch) is not None
 
 
+def string_list(value: object, label: str) -> list[str]:
+    """Narrow one JSON list to strings."""
+    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+        fail(f"Invalid {label}")
+    return value
+
+
+def ruleset_rules(data: object, branch: str, default: str) -> list[object]:
+    """Return active rules where a ruleset applies to the target branch."""
+    if not isinstance(data, dict):
+        fail("Invalid ruleset")
+    if data.get("target") != "branch" or data.get("enforcement") != "active":
+        return []
+    conditions_value = data.get("conditions")
+    if not isinstance(conditions_value, dict):
+        fail("Invalid ruleset conditions")
+    conditions: dict[str, object] = conditions_value
+    refs_value = conditions.get("ref_name")
+    if not isinstance(refs_value, dict):
+        fail("Invalid ruleset ref names")
+    refs: dict[str, object] = refs_value
+    included = string_list(refs.get("include", []), "ruleset includes")
+    excluded = string_list(refs.get("exclude", []), "ruleset excludes")
+    rules = data.get("rules")
+    if not isinstance(rules, list):
+        fail("Invalid ruleset rules")
+    if any(ref_matches(p, branch, default) for p in included) and not any(
+        ref_matches(p, branch, default) for p in excluded
+    ):
+        return rules
+    return []
+
+
+def required_names(rules: list[object]) -> set[str]:
+    """Validate required-check rules and collect their contexts."""
+    names: set[str] = set()
+    for rule in rules:
+        if not isinstance(rule, dict):
+            fail("Invalid required check rule")
+        if rule.get("type") != "required_status_checks":
+            continue
+        parameters = rule.get("parameters")
+        if not isinstance(parameters, dict):
+            fail("Invalid required check parameters")
+        checks = parameters.get("required_status_checks")
+        if not isinstance(checks, list):
+            fail("Invalid required checks")
+        for check in checks:
+            if not isinstance(check, dict) or not isinstance(check.get("context"), str):
+                fail("Invalid required check")
+            names.add(check["context"])
+    return names
+
+
 def required(base: str, branch: str, default: str, directory: str, live: str) -> None:
     """Union live applied rules and active ruleset files at the pinned base."""
     if (
@@ -262,33 +418,22 @@ def required(base: str, branch: str, default: str, directory: str, live: str) ->
         or ".." in PurePosixPath(directory).parts
     ):
         fail("ruleset_dir must be inside the repository")
-    rules = json.loads(live)
-    if not isinstance(rules, list):
+    parsed_rules: object = json.loads(live)
+    if not isinstance(parsed_rules, list):
         fail("Invalid applied rules")
+    rules: list[object] = parsed_rules
     for name in git("ls-tree", "-r", "--name-only", "-z", base, "--", directory).split(
         b"\0"
     ):
         if not name.endswith(b".json"):
             continue
-        data = json.loads(blob(base, name.decode()))
-        if data.get("target") != "branch" or data.get("enforcement") != "active":
-            continue
-        refs = data["conditions"]["ref_name"]
-        if any(
-            ref_matches(p, branch, default) for p in refs.get("include", [])
-        ) and not any(ref_matches(p, branch, default) for p in refs.get("exclude", [])):
-            rules.extend(data["rules"])
-    names = sorted(
-        {
-            check["context"]
-            for rule in rules
-            if rule["type"] == "required_status_checks"
-            for check in rule["parameters"]["required_status_checks"]
-        }
-    )
-    if not names or any(not isinstance(n, str) or not n for n in names):
+        rules.extend(
+            ruleset_rules(json.loads(blob(base, name.decode())), branch, default)
+        )
+    names = required_names(rules)
+    if not names or any(not name for name in names):
         fail("No required checks are known for the base")
-    print("\n".join(names))
+    print("\n".join(sorted(names)))
 
 
 def valuable_ignored(worktree: Path, pattern: re.Pattern[str]) -> bool:
@@ -379,14 +524,15 @@ def cleanup(base: str, branch: str, expected: str, merge: str, disposable: str) 
 def main() -> None:
     """Expose file-oriented interfaces for the shared shell entry points."""
     mode, *args = sys.argv[1:]
-    if mode == "inspect":
-        print(json.dumps(inspect(args[0], args[1], json.loads(sys.stdin.read()))))
-    elif mode == "required":
-        required(*args, sys.stdin.read())
-    elif mode == "cleanup":
-        cleanup(*args)
-    else:
-        fail("Unknown policy operation")
+    match mode, args:
+        case "inspect", [base, head]:
+            print(json.dumps(inspect(base, head, json.loads(sys.stdin.read()))))
+        case "required", [base, branch, default, directory]:
+            required(base, branch, default, directory, sys.stdin.read())
+        case "cleanup", [base, branch, expected, merge, disposable]:
+            cleanup(base, branch, expected, merge, disposable)
+        case _:
+            fail("Unknown policy operation or arguments")
 
 
 if __name__ == "__main__":
@@ -397,9 +543,9 @@ if __name__ == "__main__":
         re.error,
         KeyError,
         TypeError,
+        UnicodeDecodeError,
         OSError,
         subprocess.CalledProcessError,
-        yaml.YAMLError,
     ) as error:
         print(f"merge policy unreadable: {type(error).__name__}", file=sys.stderr)
         sys.exit(1)
