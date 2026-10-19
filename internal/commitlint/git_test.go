@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright Tony Burns
 
+//nolint:paralleltest // These tests isolate process-wide Git configuration and identity.
 package commitlint_test
 
 import (
@@ -18,7 +19,6 @@ import (
 const zeroOID = "0000000000000000000000000000000000000000"
 
 func TestPrePushCleanRangePasses(t *testing.T) {
-	t.Parallel()
 	repo := newGitRepo(t)
 	base := makeCommit(t, repo, signedMessage("chore: establish base"), personIdentity(), personIdentity())
 	gitCommand(t, repo, "update-ref", "refs/remotes/origin/main", base)
@@ -31,7 +31,6 @@ func TestPrePushCleanRangePasses(t *testing.T) {
 }
 
 func TestPrePushNamesBadCommitInMiddle(t *testing.T) {
-	t.Parallel()
 	repo := newGitRepo(t)
 	base := makeCommit(t, repo, signedMessage("chore: establish base"), personIdentity(), personIdentity())
 	gitCommand(t, repo, "update-ref", "refs/remotes/origin/main", base)
@@ -52,7 +51,6 @@ func TestPrePushNamesBadCommitInMiddle(t *testing.T) {
 }
 
 func TestPrePushNewBranchExcludesEveryRemoteRef(t *testing.T) {
-	t.Parallel()
 	repo := newGitRepo(t)
 	oldBad := makeCommit(t, repo, "old history without a signoff", personIdentity(), personIdentity())
 	gitCommand(t, repo, "update-ref", "refs/remotes/upstream/main", oldBad)
@@ -72,7 +70,6 @@ func TestPrePushNewBranchExcludesEveryRemoteRef(t *testing.T) {
 }
 
 func TestPrePushSkipsDeletion(t *testing.T) {
-	t.Parallel()
 	repo := newGitRepo(t)
 	remote := makeCommit(t, repo, "bad deletion history", personIdentity(), personIdentity())
 
@@ -83,7 +80,6 @@ func TestPrePushSkipsDeletion(t *testing.T) {
 }
 
 func TestPrePushRejectsAgentAuthorWithoutAssistedBy(t *testing.T) {
-	t.Parallel()
 	repo := newGitRepo(t)
 	writeFile(t, filepath.Join(repo, ".commit-lint.toml"), "[identities]\nagents = [{email = \"agent@example.com\"}]\n")
 	base := makeCommit(t, repo, signedMessage("chore: establish base"), personIdentity(), personIdentity())
@@ -101,7 +97,6 @@ func TestPrePushRejectsAgentAuthorWithoutAssistedBy(t *testing.T) {
 }
 
 func TestRangeIdentityRequiresAssistedByOnSquashMessage(t *testing.T) {
-	t.Parallel()
 	repo := newGitRepo(t)
 	writeFile(t, filepath.Join(repo, ".commit-lint.toml"), "[identities]\nagents = [{email = \"agent@example.com\"}]\n")
 	base := makeCommit(t, repo, signedMessage("chore: establish base"), personIdentity(), personIdentity())
@@ -129,13 +124,8 @@ func TestRangeIdentityRequiresAssistedByOnSquashMessage(t *testing.T) {
 }
 
 func TestCurrentIdentityRequiresAssistedByOnPendingCommit(t *testing.T) {
-	t.Parallel()
 	repo := newGitRepo(t)
-	identity := gitCommand(t, repo, "var", "GIT_AUTHOR_IDENT")
-	identity = strings.Join(strings.Fields(identity)[:len(strings.Fields(identity))-2], " ")
-	parts := strings.Split(identity, "<")
-	email := strings.TrimSuffix(parts[len(parts)-1], ">")
-	config := fmt.Sprintf("[identities]\nagents = [{email = %q}]\n", email)
+	const config = "[identities]\nagents = [{email = \"person@example.com\"}]\n"
 	writeFile(t, filepath.Join(repo, ".commit-lint.toml"), config)
 
 	var output bytes.Buffer
@@ -166,6 +156,15 @@ func signedMessage(subject string) string {
 
 func newGitRepo(t *testing.T) string {
 	t.Helper()
+	t.Setenv("HOME", t.TempDir())
+	globalConfig := filepath.Join(t.TempDir(), "gitconfig")
+	writeFile(t, globalConfig, "")
+	t.Setenv("GIT_CONFIG_GLOBAL", globalConfig)
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	t.Setenv("GIT_AUTHOR_NAME", "Person")
+	t.Setenv("GIT_AUTHOR_EMAIL", "person@example.com")
+	t.Setenv("GIT_COMMITTER_NAME", "Person")
+	t.Setenv("GIT_COMMITTER_EMAIL", "person@example.com")
 	repo := t.TempDir()
 	gitCommand(t, repo, "init", "--quiet", "--initial-branch=main")
 	gitCommand(t, repo, "config", "commit.gpg"+"sign", "false")
