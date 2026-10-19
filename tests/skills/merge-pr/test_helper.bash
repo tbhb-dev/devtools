@@ -33,6 +33,9 @@ merge_setup() {
   git commit --quiet -m 'feat: add the thing'
   HEAD_OID=$(git rev-parse HEAD)
   git clone --quiet --bare . "$GH_FIXTURES/upstream.git"
+  # Cloning does not copy the local identity used by the merge stub.
+  git -C "$GH_FIXTURES/upstream.git" config user.name Tester
+  git -C "$GH_FIXTURES/upstream.git" config user.email tester@example.com
   printf '%s\n' "$GH_FIXTURES/upstream.git" >"$GH_FIXTURES/repository"
   pr ".headRefOid = \"$HEAD_OID\" | .commits[0].oid = \"$HEAD_OID\""
   base_at "$BASE_OID"
