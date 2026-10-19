@@ -1,6 +1,6 @@
 # Commit-message lint
 
-`commit-lint [--rules all|shape|trailers] [FILE]` reads a message file or stdin. The default runs both rule groups. Install with `go install github.com/tbhb-dev/devtools/cmd/commit-lint@latest`, or run `go run ./cmd/commit-lint` during development.
+`commit-lint [--rules all|shape|trailers] [FILE]` reads a message file or stdin. The default runs both rule groups. `--current-identities` applies agent-attribution policy to the pending commit, `--pre-push REMOTE` reads Git's pre-push ref lines from stdin, and `--require-assisted-from RANGE` applies source-commit identity context to a squash message. Install with `go install github.com/tbhb-dev/devtools/cmd/commit-lint@latest`, or run `go run ./cmd/commit-lint` during development.
 
 The published prek IDs `commitlint` and `commit-trailers` remain available. Both use `language: golang`, which builds the command into prek's managed environment. They select `shape` and `trailers`, respectively. Consumers keep their existing IDs and update the release pin. Direct callers of the removed shell scripts must switch to the command. This repository runs Go from the checkout, so `mise run lint-commit-msg` previews the code you commit through the same local hooks.
 
@@ -34,6 +34,14 @@ The final block of lines in trailer format and folded continuations uses the foo
 ### Trailer checks
 
 The trailers group preserves the raw-line checks: kernel-style `Assisted-by` values, assistant attribution before the first sign-off, and rejection of known LLM names in `Co-authored-by`. It retains raw line numbers and recognizes a sign-off prefix even with an empty value. Shape requires a nonempty sign-off value. Raw trailer checks include lines after scissors, matching the former script.
+
+When either the author or committer matches a configured agent identity, the trailers group also requires a well-formed `Assisted-by`. Commit-msg hooks supply the pending identities, pre-push reads them from each outgoing commit, and merge-pr supplies the reviewed source range when it validates a squash message.
+
+## Pre-push ranges
+
+`commit-msg-pre-push` checks that the pre-push wrapper precedes prek. Before prek consumes Git's stdin, the wrapper preserves it and runs `commit-lint --pre-push` over each outgoing commit. `commit-lint` skips deleted refs and all-zero local object IDs. For existing refs, the range excludes the destination object and remote-tracking refs for that remote. On a new branch, it excludes every remote-tracking ref. Diagnostics specify the short object ID, subject, and rule, then direct the author to amend or reword through the commit skill.
+
+Pre-push applies only the Conventional Commits and trailer rules, leaving Vale and cspell out of historical scans because those checks are slower and a later vocabulary change must not reject an older commit.
 
 ### Diagnostics
 

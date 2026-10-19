@@ -41,7 +41,7 @@ Decision keys: G0 means Go shared internals under #174. G1 means a Go command in
 | Script | source lines of code | Callers | Bats coverage / runtime reference | Decision and reason |
 | --- | ---: | --- | --- | --- |
 | `.devtools/scripts/check-leaks.sh` | 402 | devtools:check-leaks task and pre-push hook. consumer. CI | B42 | G1: the Git object traversal and pattern policy need portable parsing. |
-| `.devtools/scripts/install-pre-push.sh` | 59 | devtools:install-leak-hook task. consumer | B42 | G1: hook installation edits Git state and preserves input. |
+| `.devtools/scripts/install-pre-push.sh` | 68 | devtools:install-pre-push-hook and compatibility leak tasks. consumer | B42 | G1: hook installation edits Git state and preserves input. |
 | `.devtools/scripts/preapproval.sh` | 44 | preapprove, revoke, and check tasks. consumer | B06 | G7: scope validation and grants need one state contract. |
 | `.devtools/scripts/lint-draft.sh` | 42 | devtools:lint-draft task. consumer | B22 | B: sequence external prose gates and keep their statuses. |
 | `.devtools/scripts/apm-sync.sh` | 21 | devtools:apm-sync task. consumer | B33 | G1: read and update hook JSON without shell pipelines. |

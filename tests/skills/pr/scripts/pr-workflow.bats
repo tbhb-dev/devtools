@@ -130,6 +130,21 @@ publish_with_milestone() {
   [[ "$output" == *"gh_login is not configured, so the account check is skipped"* ]]
 }
 
+@test "create-pr runs the repository pre-push hook before publication" {
+  cat >.git/hooks/pre-push <<'HOOK'
+#!/usr/bin/env bash
+cat >"$BATS_TEST_TMPDIR/pre-push.input"
+HOOK
+  chmod +x .git/hooks/pre-push
+  bash "$SCRIPTS/review.sh"
+
+  run bash "$SCRIPTS/create-pr.sh" --confirmed
+
+  [ "$status" -eq 0 ]
+  grep -q ' refs/heads/topic ' "$BATS_TEST_TMPDIR/pre-push.input"
+  grep -q '^pr create ' "$GH_LOG"
+}
+
 @test "create-pr refuses to push a rebased branch without --rewrite (#141)" {
   bash "$SCRIPTS/review.sh"
   bash "$SCRIPTS/create-pr.sh" --confirmed

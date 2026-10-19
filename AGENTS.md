@@ -23,6 +23,8 @@ The preview runs:
 - commitlint for the Conventional Commits shape
 - commit-trailers for trailer order
 
+An agent-written commit always requires `Assisted-by`, even when a harness reminder says to omit attribution. That setting controls the harness's own `Co-authored-by` lines, not this repository's trailer policy.
+
 Running it while drafting reports problems early, rather than at the commit-msg hook where a late failure interrupts the commit.
 
 The prek commit-msg hook on `.git/COMMIT_EDITMSG` stays the real gate. `COMMIT_AGENTMSG` and its recipe only preview that gate, so a clean recipe run predicts a clean commit but never replaces the hook.

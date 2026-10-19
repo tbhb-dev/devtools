@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# install-pre-push.sh -- put the leak check in front of prek's pre-push hook.
+# install-pre-push.sh -- put range checks in front of prek's pre-push hook.
 #
 # prek reads git's pre-push input itself and hands its hooks none of it,
 # so a check that runs as a prek hook can't see which refs and objects a
 # push sends. This keeps prek's generated hook as pre-push.prek and writes
-# a pre-push that runs the leak check with git's own arguments and ref
-# lines, then runs the prek hook with the same arguments and lines.
+# a pre-push that runs commit-message and optional leak checks with Git's
+# own arguments and ref lines, then runs the prek hook with the same input.
 #
 # Run it after `prek install`, which bootstrap does. It is safe to rerun:
 # prek install moves a foreign pre-push aside as pre-push.legacy and
@@ -16,7 +16,11 @@
 #                                  exit 0 without looking in CI
 set -euo pipefail
 
-marker='# check-leaks pre-push wrapper'
+marker='# devtools pre-push wrapper'
+commit_lint=false
+if grep -q 'id: commit-msg-pre-push' .pre-commit-config.yaml 2>/dev/null; then
+  commit_lint=true
+fi
 
 hooks=$(git rev-parse --git-path hooks)
 hooks=$(cd "$hooks" 2>/dev/null && pwd) || {
@@ -25,18 +29,22 @@ hooks=$(cd "$hooks" 2>/dev/null && pwd) || {
 }
 
 wrapper() {
+  printf '%s\n' '#!/bin/sh'
+  printf 'commit_lint=%s\n' "$commit_lint"
   cat <<'WRAPPER'
-#!/bin/sh
-# check-leaks pre-push wrapper (installed by .devtools/scripts/install-pre-push.sh).
-# Runs the leak check on the ref lines git gives this hook, then runs
-# prek's hook with the same arguments and lines.
+# devtools pre-push wrapper (installed by .devtools/scripts/install-pre-push.sh).
+# Runs the commit-message and optional leak checks on Git's ref lines,
+# then runs prek's hook with the same arguments and lines.
 hooks=$(cd "$(dirname "$0")" && pwd)
 input=$(mktemp) || exit 1
 trap 'rm -f "$input"' EXIT
 # A failed copy would leave an empty file, which reads as nothing to push.
 if ! cat >"$input"; then
-  echo "check-leaks: could not read the push from git; the push is blocked" >&2
+  echo "pre-push: could not read the push from git; the push is blocked" >&2
   exit 1
+fi
+if [ "$commit_lint" = true ]; then
+  commit-lint --pre-push "${1-}" <"$input" || exit 1
 fi
 if [ -f .devtools/scripts/check-leaks.sh ]; then
   mise run --quiet devtools:lint-leaks -- --pre-push-hook "$@" <"$input" || exit 1
@@ -61,7 +69,7 @@ if [[ ${1-} == --check ]]; then
     installed=$(cat "$hooks/pre-push") && [[ $installed == "$expected" ]]; then
     exit 0
   fi
-  echo "install-pre-push: the leak-check pre-push hook isn't installed; run mise run bootstrap" >&2
+  echo "install-pre-push: the devtools pre-push wrapper isn't installed; run mise run bootstrap" >&2
   exit 1
 fi
 
@@ -87,4 +95,4 @@ if ! is_prek "$hooks/pre-push.prek"; then
 fi
 wrapper >"$hooks/pre-push"
 chmod +x "$hooks/pre-push"
-echo "install-pre-push: leak check installed in front of prek's pre-push hook"
+echo "install-pre-push: commit and optional leak checks installed in front of prek's pre-push hook"
