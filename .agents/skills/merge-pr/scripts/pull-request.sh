@@ -142,3 +142,6 @@ mp_local_diff() {
   gitr diff --no-ext-diff --no-textconv --no-color --name-status "$1...$2" -- >"$3/files.txt" ||
     dt_die "Could not list the pinned diff files."
 }
+
+# shellcheck disable=SC1091 # generated beside this reader
+. "$DT_LIB_DIR/merge-agent.sh"
