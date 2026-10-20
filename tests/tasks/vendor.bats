@@ -63,3 +63,12 @@ extract_task() {
     [ "$status" -eq 0 ]
   done
 }
+
+@test "Go vendor check skips modules without a tracked vendor manifest" {
+  git rm -q -f -- vendor/modules.txt
+  printf '#!/usr/bin/env bash\nexit 99\n' >bin/go
+  run bash go-check.sh
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"skipping module without tracked vendor/modules.txt"* ]]
+  [ ! -d vendor ]
+}
