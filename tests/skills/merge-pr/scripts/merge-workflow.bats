@@ -641,6 +641,25 @@ assert_cleaned() {
   grep -Fx 'Signed-off-by: Renovate <renovate[bot]@users.noreply.github.com>' SQUASH_AGENTMSG
 }
 
+@test "squash assembly adds the configured identity instead of Git identity" {
+  export DEVTOOLS_SIGNOFF_IDENTITY='Responsible Person <responsible@example.com>'
+  pr '.commits[0].messageBody = "Reason."'
+  run bash "$SCRIPTS/squash-message.sh" 7
+  [ "$status" -eq 0 ]
+  grep -Fx 'Signed-off-by: Responsible Person <responsible@example.com>' SQUASH_AGENTMSG
+  run grep -q 'Signed-off-by: Tester' SQUASH_AGENTMSG
+  [ "$status" -eq 1 ]
+}
+
+@test "squash assembly guides a denied Git identity to machine configuration" {
+  git config user.name Agent
+  git config user.email agent@example.com
+  printf '[identities]\nagents = [{email = "agent@example.com"}]\n' >.commit-lint.toml
+  run bash "$SCRIPTS/squash-message.sh" 7
+  [ "$status" -eq 1 ]
+  grep -Fq 'set signoff_identity in ~/.config/devtools/<repository>.conf or ~/.config/devtools/devtools.conf' <<<"$output"
+}
+
 @test "squash assembly fails on invalid identity configuration" {
   printf '[identities]\nagents = [{name = "Agent"}]\n' >.commit-lint.toml
   run bash "$SCRIPTS/squash-message.sh" 7

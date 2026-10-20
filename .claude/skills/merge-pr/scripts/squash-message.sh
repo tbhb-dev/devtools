@@ -52,6 +52,7 @@ readonly DRAFT=SQUASH_AGENTMSG
 
 root=$(git rev-parse --show-toplevel)
 cd "$root"
+signoff_identity=$(dt_signoff_identity) || exit $?
 
 die() {
   printf 'squash-message: %s\n' "$1" >&2
@@ -146,6 +147,9 @@ while IFS= read -r trailer; do
   filtered="${filtered}${trailer}"$'\n'
 done <<<"$trailers"
 trailers=$filtered
+if ! grep -Fqx -- "Signed-off-by: $signoff_identity" <<<"$trailers"; then
+  trailers="${trailers}Signed-off-by: ${signoff_identity}"$'\n'
+fi
 
 # Order follows the shared trailer rule: attribution first, sign-off
 # last. Anything else this repository's rule permits sits between them,

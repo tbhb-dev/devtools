@@ -69,6 +69,7 @@ Reports print locally unless both `mail_cmd` and `mail_to` are nonempty. The com
 | `lint_pr_cmd`, `pr_log_entry`, `pr_related_pattern`, `pr_title_check_cmd` | Same keys in repository config |
 | `owner_paths` | Same key for publication and merge delegation and reporting. Commit migration remains pending |
 | `mail_cmd`, `mail_to`, `mail_from` | Same keys for publication and merge reports. Commit reporting remains pending |
+| `signoff_identity` | Optional machine configuration under `~/.config/devtools/`, required when the Git identity is an agent |
 | `review_cmd`, `review_model`, `review_effort`, `delegation_check`, `gh_login`, `required_reviewer`, `merge_owner` | Machine configuration under `~/.config/devtools/` or corresponding `DEVTOOLS_` variables |
 | `review_commit_criteria`, `review_pr_criteria`, `review_squash_criteria` | Installed review skills plus the existing trusted repository review policy |
 | `lint_squash_cmd`, `owner_review_label`, `ruleset_dir`, `merge_ready_cmd` | Repository configuration. Readiness can refuse but can't grant authority |

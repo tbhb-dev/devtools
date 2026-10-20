@@ -437,9 +437,18 @@ STUB
   grep -Fq "denied agent sign-off" <<<"$output"
 }
 
-@test "preflight requires sign-off configuration" {
+@test "preflight falls back to a permitted Git identity" {
   unset DEVTOOLS_SIGNOFF_IDENTITY
   run bash "$SCRIPTS/preflight.sh"
+  [ "$status" -eq 0 ]
+  grep -Fq 'Signed-off-by: Tester <tester@example.com>' <<<"$output"
+}
+
+@test "preflight refuses a denied Git identity with configuration guidance" {
+  unset DEVTOOLS_SIGNOFF_IDENTITY
+  printf '[identities]\nagents = [{email = "tester@example.com"}]\n' >.commit-lint.toml
+  run bash "$SCRIPTS/preflight.sh"
   [ "$status" -eq 1 ]
-  grep -Fq "signoff_identity is missing" <<<"$output"
+  grep -Fq "denied agent sign-off" <<<"$output"
+  grep -Fq 'set signoff_identity in ~/.config/devtools/<repository>.conf or ~/.config/devtools/devtools.conf' <<<"$output"
 }
