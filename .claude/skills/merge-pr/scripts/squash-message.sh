@@ -52,7 +52,6 @@ readonly DRAFT=SQUASH_AGENTMSG
 
 root=$(git rev-parse --show-toplevel)
 cd "$root"
-signoff_identity=$(dt_signoff_identity) || exit $?
 
 die() {
   printf 'squash-message: %s\n' "$1" >&2
@@ -63,6 +62,9 @@ section() { printf '\n== %s ==\n' "$1"; }
 none() { printf '(none)\n'; }
 
 command -v gh >/dev/null 2>&1 || die "gh is not installed"
+command -v commit-lint >/dev/null 2>&1 ||
+  die 'commit-lint is not installed; add "go:github.com/tbhb-dev/devtools/cmd/commit-lint" = "<devtools-version>" to mise.toml [tools]'
+signoff_identity=$(dt_signoff_identity) || exit $?
 dt_gh_login >/dev/null || exit $?
 
 number=${1:-}

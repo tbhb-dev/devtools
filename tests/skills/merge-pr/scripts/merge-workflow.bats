@@ -667,6 +667,12 @@ assert_cleaned() {
   grep -Fq "identity email pattern must not be empty" <<<"$output"
 }
 
+@test "squash assembly names the required mise pin when commit-lint is missing" {
+  PATH="${BATS_TEST_TMPDIR}/bin:/usr/bin:/bin" run bash "$SCRIPTS/squash-message.sh" 7
+  [ "$status" -eq 1 ]
+  [ "$output" = 'squash-message: commit-lint is not installed; add "go:github.com/tbhb-dev/devtools/cmd/commit-lint" = "<devtools-version>" to mise.toml [tools]' ]
+}
+
 @test "squash assembly drops mixed-case agent sign-offs recognized by Git" {
   printf '[identities]\nagents = [{email = "agent@example.com"}]\n' >.commit-lint.toml
   pr '.commits[0].messageBody = "Reason.\n\nsIgNeD-oFf-By: Agent <agent@example.com>\nSigned-off-by: Tester <tester@example.com>"'
@@ -688,4 +694,10 @@ assert_cleaned() {
   [[ "$output" == *"configured agent author or committer requires a well-formed Assisted-by trailer"* ]]
   [[ "$output" == *"squash message lacks attribution required by the commits it collapses"* ]]
   [ ! -e "$GH_FIXTURES/merged" ]
+}
+
+@test "merge names the required mise pin when commit-lint is missing" {
+  PATH="${BATS_TEST_TMPDIR}/bin:/usr/bin:/bin" run bash "$SCRIPTS/squash-merge.sh" --confirmed 7
+  [ "$status" -eq 1 ]
+  [ "$output" = 'squash-merge: commit-lint is not installed; add "go:github.com/tbhb-dev/devtools/cmd/commit-lint" = "<devtools-version>" to mise.toml [tools]' ]
 }

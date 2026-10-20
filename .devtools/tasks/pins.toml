@@ -7,7 +7,7 @@
 # syntaxes:
 #
 #   apm.yml                          root or packages/agents/<harness>#vX.Y.Z
-#   mise.toml                        go: guard-markdown tool, vX.Y.Z
+#   mise.toml                        go: guard-markdown and commit-lint tools, vX.Y.Z
 #   vendir.yml                       two `ref: vX.Y.Z` under the git url
 #   .pre-commit-config.yaml          rev: <sha>  # frozen: vX.Y.Z
 #   .github/workflows/*.y*ml         four `uses: ...@<sha> # vX.Y.Z`
@@ -77,6 +77,11 @@ if ! grep -Eq '^"go:github.com/tbhb-dev/devtools/cmd/guard-markdown"[[:space:]]*
   echo 'declare "go:github.com/tbhb-dev/devtools/cmd/guard-markdown" in mise.toml [tools]' >&2
   exit 1
 fi
+guard_version=$(sed -nE 's|^"go:github.com/tbhb-dev/devtools/cmd/guard-markdown"[[:space:]]*=[[:space:]]*"([^"]*)"|\1|p' mise.toml)
+if ! grep -Eq '^"go:github.com/tbhb-dev/devtools/cmd/commit-lint"[[:space:]]*=' mise.toml; then
+  printf '"go:github.com/tbhb-dev/devtools/cmd/commit-lint" = "%s"\n' "$guard_version" >&2
+  exit 1
+fi
 
 remote=https://github.com/tbhb-dev/devtools
 
@@ -112,6 +117,7 @@ if [ -f apm.yml ]; then
 fi
 
 edit mise.toml sed -E "s|^(\"go:github.com/tbhb-dev/devtools/cmd/guard-markdown\"[[:space:]]*=[[:space:]]*)\"[^\"]*\"|\\1\"$version\"|"
+edit mise.toml sed -E "s|^(\"go:github.com/tbhb-dev/devtools/cmd/commit-lint\"[[:space:]]*=[[:space:]]*)\"[^\"]*\"|\\1\"$version\"|"
 edit mise.toml sed -E "s|^(\"go:github.com/tbhb-dev/devtools/cmd/agentrepo\"[[:space:]]*=[[:space:]]*)\"[^\"]*\"|\\1\"$version\"|"
 
 for wf in .github/workflows/*.yml .github/workflows/*.yaml; do
@@ -223,7 +229,7 @@ read_sites() {
         emit(v, "-")
       }
 
-      /^"go:github.com\/tbhb-dev\/devtools\/cmd\/(guard-markdown|agentrepo)"[[:space:]]*=/ {
+      /^"go:github.com\/tbhb-dev\/devtools\/cmd\/(guard-markdown|commit-lint|agentrepo)"[[:space:]]*=/ {
         v = $0; sub(/^[^=]*=[[:space:]]*"/, "", v); sub(/".*$/, "", v)
         emit(v, "-")
       }
@@ -289,6 +295,12 @@ fi
 
 if ! grep -Eq '^"go:github.com/tbhb-dev/devtools/cmd/guard-markdown"[[:space:]]*=' mise.toml; then
   echo 'missing guard-markdown tool pin in mise.toml [tools]' >&2
+  exit 1
+fi
+guard_version=$(sed -nE 's|^"go:github.com/tbhb-dev/devtools/cmd/guard-markdown"[[:space:]]*=[[:space:]]*"([^"]*)"|\1|p' mise.toml)
+if ! grep -Eq '^"go:github.com/tbhb-dev/devtools/cmd/commit-lint"[[:space:]]*=' mise.toml; then
+  printf 'missing commit-lint tool pin in mise.toml [tools]; add exactly:\n' >&2
+  printf '"go:github.com/tbhb-dev/devtools/cmd/commit-lint" = "%s"\n' "$guard_version" >&2
   exit 1
 fi
 

@@ -88,7 +88,7 @@ extract_task() {
   [[ "$output" == *'pins disagree on the commit'* ]]
 }
 
-@test "update moves bare and quoted harness pins with the guard version" {
+@test "update moves bare and quoted harness pins with the required tool versions" {
   cat > apm.yml <<'YAML'
 # tbhb-dev/devtools adoption example
 dependencies:
@@ -104,6 +104,7 @@ YAML
   [ "$(grep -c '#v0.11.0' apm.yml)" -eq 5 ]
   grep -Fq 'codex#v0.11.0'\' apm.yml
   grep -Fq 'guard-markdown" = "v0.11.0"' mise.toml
+  grep -Fq 'commit-lint" = "v0.11.0"' mise.toml
 }
 
 @test "check rejects guard version drift" {
@@ -133,6 +134,17 @@ YAML
   run env usage_version=v0.11.0 bash "${BATS_TEST_TMPDIR}/update.sh"
   [ "$status" -eq 1 ]
   [[ "$output" == *'declare '* ]]
+}
+
+@test "check and update require a managed commit-lint pin" {
+  sed '/cmd\/commit-lint/d' mise.toml >changed
+  mv changed mise.toml
+  run bash "$CHECK_SCRIPT"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *'"go:github.com/tbhb-dev/devtools/cmd/commit-lint" = "v0.10.0"'* ]]
+  run env usage_version=v0.11.0 bash "${BATS_TEST_TMPDIR}/update.sh"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *'"go:github.com/tbhb-dev/devtools/cmd/commit-lint" = "v0.10.0"'* ]]
 }
 
 @test "update calls shared APM reconciliation and stops when it fails" {

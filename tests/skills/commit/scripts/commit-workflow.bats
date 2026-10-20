@@ -452,3 +452,9 @@ STUB
   grep -Fq "denied agent sign-off" <<<"$output"
   grep -Fq 'set signoff_identity in ~/.config/devtools/<repository>.conf or ~/.config/devtools/devtools.conf' <<<"$output"
 }
+
+@test "preflight names the required mise pin when commit-lint is missing" {
+  PATH=/usr/bin:/bin run bash "$SCRIPTS/preflight.sh"
+  [ "$status" -eq 1 ]
+  [ "$output" = 'commit preflight: commit-lint is not installed; add "go:github.com/tbhb-dev/devtools/cmd/commit-lint" = "<devtools-version>" to mise.toml [tools]' ]
+}

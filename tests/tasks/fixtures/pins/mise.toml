@@ -1,2 +1,3 @@
 [tools]
 "go:github.com/tbhb-dev/devtools/cmd/guard-markdown" = "v0.10.0"
+"go:github.com/tbhb-dev/devtools/cmd/commit-lint" = "v0.10.0"

@@ -80,6 +80,8 @@ for arg in "$@"; do
   esac
 done
 
+command -v commit-lint >/dev/null 2>&1 ||
+  die 'commit-lint is not installed; add "go:github.com/tbhb-dev/devtools/cmd/commit-lint" = "<devtools-version>" to mise.toml [tools]'
 mp_need_tools
 root=$(dt_root)
 cd "$root"
@@ -227,8 +229,6 @@ if [ "${DT_UNATTENDED:-0}" != 1 ]; then
 fi
 ma_lint ||
   die "the squash message fails the commit-msg gates. Fix it, review it again, retry."
-command -v commit-lint >/dev/null 2>&1 ||
-  die "commit-lint is not installed; the squash-message attribution gate cannot run."
 commit-lint --rules trailers --require-assisted-from "$base_oid..$reviewed_head" "$SQUASH_DRAFT" ||
   die "the squash message lacks attribution required by the commits it collapses. Fix it, review it again, retry."
 

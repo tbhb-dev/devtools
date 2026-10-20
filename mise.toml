@@ -144,10 +144,11 @@ shfmt = "3.14.1"
 # repository vendors shared config, a `vendir sync` step joins the front
 # of the list.
 [tasks.bootstrap]
-description = "Set up the dev environment, refresh Vale styles, and install git hooks"
+description = "Set up the dev environment, build commands, refresh Vale styles, and install git hooks"
 run = [
   "mise run install-toolchain",
   "mise run install-tools",
+  "mise run install",
   "mise run devtools:prek-install",
   "mise run devtools:install-pre-push-hook",
 ]

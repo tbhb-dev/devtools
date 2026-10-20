@@ -1,6 +1,6 @@
 # Commit-message lint
 
-`commit-lint [--rules all|shape|trailers] [FILE]` reads a message file or stdin. The default runs both rule groups. `--current-identities` applies agent-attribution policy to the pending commit, `--pre-push REMOTE` reads Git's pre-push ref lines from stdin, and `--require-assisted-from RANGE` applies source-commit identity context to a squash message. Install with `go install github.com/tbhb-dev/devtools/cmd/commit-lint@latest`, or run `go run ./cmd/commit-lint` during development.
+`commit-lint [--rules all|shape|trailers] [FILE]` reads a message file or stdin. The default runs both rule groups. `--current-identities` applies agent-attribution policy to the pending commit, `--pre-push REMOTE` reads Git's pre-push ref lines from stdin, and `--require-assisted-from RANGE` applies source-commit identity context to a squash message. Consumers declare `"go:github.com/tbhb-dev/devtools/cmd/commit-lint" = "v0.13.0"` in the root `mise.toml` `[tools]` table. During development, this repository's bootstrap installs the working-tree command through `mise run install`.
 
 The published prek IDs `commitlint` and `commit-trailers` remain available. Both use `language: golang`, which builds the command into prek's managed environment. They select `shape` and `trailers`, respectively. Consumers keep their existing IDs and update the release pin. Direct callers of the removed shell scripts must switch to the command. This repository runs Go from the checkout, so `mise run lint-commit-msg` previews the code you commit through the same local hooks.
 
@@ -67,7 +67,7 @@ Entries require a nonempty `email` pattern. Matching email ignores case and supp
 
 These settings only tighten the default rules. Removing or changing a committed restriction can still loosen a repository's policy and requires review. They don't establish a trusted-default-branch boundary.
 
-`commit-lint --check-signoff 'Name <email>'` checks an identity with the same configuration. It returns `0` when permitted, `1` for a policy violation, and `2` for configuration or invocation errors. Install `commit-lint` on PATH for the preview and skill scripts as well as in the hooks' managed installation. During development, run `go install ./cmd/commit-lint` after changing it.
+`commit-lint --check-signoff 'Name <email>'` checks an identity with the same configuration. It returns `0` when permitted, `1` for a policy violation, and `2` for configuration or invocation errors. Keep `commit-lint` on PATH for the preview and skill scripts as well as in the hooks' managed installation. During development, run `mise run install` after changing it.
 
 The optional `signoff_identity` machine setting overrides the Git identity used by the commit preview and the commit and merge skills. Configure it in `~/.config/devtools/<repository>.conf`, then `~/.config/devtools/devtools.conf`, or `DEVTOOLS_SIGNOFF_IDENTITY`, with a complete value such as `signoff_identity = Maintainer <maintainer@example.com>`. Without it, these workflows use `git config user.name` and `user.email`, matching their behavior before identity restrictions. Configure the setting when Git names an agent account. A denied fallback explains where to set it. Both configured and fallback identities pass through `commit-lint --check-signoff`.
 

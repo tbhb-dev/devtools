@@ -54,6 +54,11 @@ readonly TYPES=${COMMITLINT_TYPES:-"feat fix docs style refactor perf test build
 
 section() { printf '\n== %s ==\n' "$1"; }
 
+command -v commit-lint >/dev/null 2>&1 || {
+  printf 'commit preflight: commit-lint is not installed; add "go:github.com/tbhb-dev/devtools/cmd/commit-lint" = "<devtools-version>" to mise.toml [tools]\n' >&2
+  exit 1
+}
+
 # none prints a placeholder when a listing came back empty, so a section
 # never reads as truncated output.
 none() { printf '(none)\n'; }
