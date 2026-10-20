@@ -16,6 +16,8 @@ setup() {
 		unset "$name"
 	done
 	export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
+	export XDG_CONFIG_HOME="$BATS_TEST_TMPDIR/config"
+	unset DEVTOOLS_SIGNOFF_IDENTITY
 	work="$BATS_TEST_TMPDIR/repo"
 	mkdir -p "$work/bin"
 	cd "$work" || exit 1
@@ -38,11 +40,19 @@ STUB
 	cp COMMIT_AGENTMSG original
 }
 
-@test "missing sign-off uses Git's committer identity and keeps trailer order" {
+@test "missing sign-off falls back to Git's configured identity and keeps trailer order" {
 	run bash "$helper"
 	[ "$status" -eq 0 ]
-	printf 'fix: preview the draft\n\nAssisted-by: codex:gpt-6\nSigned-off-by: Actual Committer <actual@example.invalid>\n' >expected
+	printf 'fix: preview the draft\n\nAssisted-by: codex:gpt-6\nSigned-off-by: Configured Person <configured@example.invalid>\n' >expected
 	cmp expected captured
+}
+
+@test "configured sign-off identity wins over Git identity" {
+	export DEVTOOLS_SIGNOFF_IDENTITY='Responsible Person <responsible@example.invalid>'
+	run bash "$helper"
+	[ "$status" -eq 0 ]
+	grep -Fx 'Signed-off-by: Responsible Person <responsible@example.invalid>' captured
+	! grep -q 'Signed-off-by: Configured Person' captured
 }
 
 @test "author-supplied sign-off is preserved without duplication or reordering" {
@@ -97,17 +107,22 @@ STUB
 	[[ $output == *ai-tells.FormalTransitions* ]]
 }
 
-@test "denied committer is not injected and real gates report missing sign-off" {
-	printf '[identities]\nagents = [{email = "actual@example.invalid"}]\n' >.commit-lint.toml
-	cat >bin/prek <<'STUB'
-#!/usr/bin/env bash
-cp "$5" captured
-exec commit-lint "$5"
-STUB
+@test "denied Git identity refuses with configuration guidance" {
+	printf '[identities]\nagents = [{email = "configured@example.invalid"}]\n' >.commit-lint.toml
 	run bash "$helper"
 	[ "$status" -eq 1 ]
-	grep -Fq 'missing required Signed-off-by' <<<"$output"
-	cmp COMMIT_AGENTMSG captured
+	grep -Fq 'denied agent sign-off' <<<"$output"
+	grep -Fq 'set signoff_identity in ~/.config/devtools/<repository>.conf or ~/.config/devtools/devtools.conf' <<<"$output"
+	[ ! -e captured ]
+}
+
+@test "denied configured sign-off identity refuses" {
+	export DEVTOOLS_SIGNOFF_IDENTITY='Agent <agent@example.invalid>'
+	printf '[identities]\nagents = [{email = "agent@example.invalid"}]\n' >.commit-lint.toml
+	run bash "$helper"
+	[ "$status" -eq 1 ]
+	grep -Fq 'denied agent sign-off' <<<"$output"
+	[ ! -e captured ]
 }
 
 @test "preview stops on invalid identity configuration" {

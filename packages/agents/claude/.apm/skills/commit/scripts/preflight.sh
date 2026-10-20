@@ -326,10 +326,5 @@ printf 'subject: %s to %s chars, imperative mood, no trailing period\n' "$HEADER
 printf 'body:    hard wrap at %s chars\n' "$BODY_MAX"
 printf 'footer:  wrap at %s chars\n' "$FOOTER_MAX"
 printf 'trailers: Assisted-by before Signed-off-by; Signed-off-by required\n'
-signoff_identity=$(dt_conf signoff_identity)
-if [ -z "$signoff_identity" ]; then
-  printf 'signoff_identity is missing; configure the responsible person in machine configuration\n' >&2
-  exit 1
-fi
-commit-lint --check-signoff "$signoff_identity" || exit $?
+signoff_identity=$(dt_signoff_identity) || exit $?
 printf 'Signed-off-by: %s\n' "$signoff_identity"

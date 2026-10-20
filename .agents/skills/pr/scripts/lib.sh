@@ -174,6 +174,33 @@ dt_conf() {
   printf '%s\n' "$default"
 }
 
+# dt_signoff_identity prints the configured responsible person, falling
+# back to Git's identity for consumers that have not needed an override.
+# The repository's identity policy judges either source before a caller
+# can put it in a message.
+dt_signoff_identity() {
+  local configured identity name email status
+  configured=$(dt_conf signoff_identity) || return $?
+  if [ -n "$configured" ]; then
+    identity=$configured
+  else
+    name=$(git config --get user.name || printf 'UNSET\n')
+    email=$(git config --get user.email || printf 'UNSET\n')
+    identity="$name <$email>"
+  fi
+
+  if commit-lint --check-signoff "$identity"; then
+    printf '%s\n' "$identity"
+    return 0
+  else
+    status=$?
+  fi
+  if [ -z "$configured" ] && [ "$status" -eq 1 ]; then
+    printf 'set signoff_identity in ~/.config/devtools/<repository>.conf or ~/.config/devtools/devtools.conf\n' >&2
+  fi
+  return "$status"
+}
+
 # A configured path may start with ~/.
 dt_path() {
   case $1 in

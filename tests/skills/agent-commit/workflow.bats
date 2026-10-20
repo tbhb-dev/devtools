@@ -17,8 +17,6 @@ setup() {
   unset DEVTOOLS_REVIEW_MODEL DEVTOOLS_REVIEW_EFFORT DEVTOOLS_DELEGATION_CHECK DT_UNATTENDED
   export XDG_CONFIG_HOME="$BATS_TEST_TMPDIR/config"
   unset DEVTOOLS_SIGNOFF_IDENTITY
-  mkdir -p "$XDG_CONFIG_HOME/devtools"
-  printf 'signoff_identity = Tester <tester@example.com>\n' >"$XDG_CONFIG_HOME/devtools/devtools.conf"
   export DEVTOOLS_REVIEW_CMD='cat >/dev/null; echo "VERDICT: PASS"'
   export COMMIT_PREFLIGHT_FETCH=0
   git init -q --initial-branch=main "$BATS_TEST_TMPDIR/repo"
@@ -40,6 +38,19 @@ setup() {
   git add -- tracked
   printf 'test: reviewed change\n\nSigned-off-by: Tester <tester@example.com>\n' >COMMIT_AGENTMSG
   BEFORE=$(git rev-parse HEAD)
+}
+
+@test "agent commit preflight falls back to a permitted Git identity" {
+  run bash "$SCRIPTS/preflight.sh"
+  [ "$status" -eq 0 ]
+  grep -Fq 'Signed-off-by: Tester <tester@example.com>' <<<"$output"
+}
+
+@test "agent commit preflight guides a denied Git identity to machine configuration" {
+  printf '[identities]\nagents = [{email = "tester@example.com"}]\n' >.commit-lint.toml
+  run bash "$SCRIPTS/preflight.sh"
+  [ "$status" -eq 1 ]
+  grep -Fq 'set signoff_identity in ~/.config/devtools/<repository>.conf or ~/.config/devtools/devtools.conf' <<<"$output"
 }
 
 grant() {
