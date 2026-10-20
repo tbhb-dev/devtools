@@ -47,3 +47,13 @@ setup() {
     grep -Fq "An explicit caller choice can still select an amend and force-with-lease." "$skill"
   done
 }
+
+@test "description refresh distinguishes current stale and owned drafts (#296)" {
+  for harness in claude codex; do
+    skill="$ROOT/packages/agents/source/skills/fix-pr/SKILL.${harness}.md"
+    grep -Fq '`current` means the existing draft already matches' "$skill"
+    grep -Fq '`hold` exits 75 because a nonempty draft differs' "$skill"
+    grep -Fq 'Otherwise the local file is stale. Rerun with `--force`' "$skill"
+    grep -Fq 'Never silently replace an in-flight draft.' "$skill"
+  done
+}

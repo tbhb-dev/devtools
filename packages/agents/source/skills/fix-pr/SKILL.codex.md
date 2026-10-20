@@ -34,6 +34,8 @@ Rebuild the local draft:
 bash .agents/skills/fix-pr/scripts/populate-description.sh <number>
 ```
 
+Read its status before editing. `current` means the existing draft already matches the published pull request, while `refreshed` means the script created or replaced it. `hold` exits 75 because a nonempty draft differs. If an outer `pr` workflow wrote that draft, preserve it and continue there. Otherwise the local file is stale. Rerun with `--force` to reconstruct the published description. Never silently replace an in-flight draft.
+
 If the fix changes what readers need to know, revise `PR_AGENTDESC.md` in this session or use the optional `write-pr-description` helper. Bound review findings at three rounds.
 
 In an interactive session, review and update through:

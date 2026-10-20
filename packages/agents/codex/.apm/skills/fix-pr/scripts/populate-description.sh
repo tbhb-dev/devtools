@@ -15,7 +15,8 @@
 # Deliberately never runs from a preflight. A caller can be one step
 # inside a `pr` workflow that already has a draft in flight, and
 # clobbering it there would throw away work nobody asked to discard.
-# The skill calls this when it knows the draft is missing or stale.
+# The skill calls this when it needs to classify the local draft against
+# the published description.
 #
 # Never overwrites without --force, for the same reason.
 #
@@ -51,12 +52,6 @@ die() {
 command -v gh >/dev/null 2>&1 || die "gh is not installed"
 gh auth status >/dev/null 2>&1 || die "gh is not authenticated"
 
-if [ -s "$DRAFT" ] && [ "$force" = 0 ]; then
-  printf '%s already exists; left alone.\n' "$DRAFT"
-  printf 'Pass --force to replace it with what the pull request currently says.\n'
-  exit 0
-fi
-
 branch=$(git rev-parse --abbrev-ref HEAD)
 number=${1:-}
 if [ -z "$number" ]; then
@@ -69,6 +64,9 @@ fi
 fields=$(gh pr view "$number" \
   --json title,body,baseRefName,isDraft,labels,assignees,milestone 2>/dev/null) ||
   die "cannot read pull request #${number}"
+
+candidate=$(mktemp "${DRAFT}.XXXXXX") || die "cannot create a temporary draft"
+trap 'rm -f "$candidate"' EXIT HUP INT TERM
 
 printf '%s' "$fields" | python3 -c '
 import json, sys
@@ -101,8 +99,24 @@ out.append("# " + title)
 out.append("")
 out.append(body)
 sys.stdout.write("\n".join(out).rstrip("\n") + "\n")
-' >"$DRAFT" || die "could not rebuild the draft from #${number}"
+' >"$candidate" || die "could not rebuild the draft from #${number}"
 
+if [ -s "$DRAFT" ] && [ "$force" = 0 ]; then
+  if cmp -s "$DRAFT" "$candidate"; then
+    printf 'status: current\n'
+    printf '%s already matches pull request #%s.\n' "$DRAFT" "$number"
+    exit 0
+  fi
+
+  printf 'status: hold\n'
+  printf '%s differs from pull request #%s and was left alone.\n' "$DRAFT" "$number"
+  printf 'Preserve it when an outer pr workflow owns the draft. Otherwise rerun with --force.\n'
+  exit 75
+fi
+
+mv "$candidate" "$DRAFT" || die "could not install the draft rebuilt from #${number}"
+
+printf 'status: refreshed\n'
 printf 'wrote %s from pull request #%s\n' "$DRAFT" "$number"
 printf 'The title lost its (#%s) suffix if it carried one, because the\n' "$number"
 printf 'draft holds the title alone and create-pr.sh re-derives the rest.\n'
