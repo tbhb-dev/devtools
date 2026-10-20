@@ -14,19 +14,21 @@ if [ -z "$tracked" ]; then
 fi
 errors=$(mktemp)
 trap 'rm -f "$errors"' EXIT
-args=()
 if [ "$format" = sarif ]; then
   # Open separately: a redirection failure must never become a findings exit.
   if ! exec 3>"$2"; then
     echo "gomodscan: cannot write SARIF output: $2" >&2
     exit 2
   fi
-  args=(-format sarif)
 else
   exec 3>&1
 fi
 rc=0
-go tool gomodscan "${args[@]}" >&3 2>"$errors" || rc=$?
+if [ "$format" = sarif ]; then
+  go tool gomodscan -format sarif >&3 2>"$errors" || rc=$?
+else
+  go tool gomodscan >&3 2>"$errors" || rc=$?
+fi
 exec 3>&-
 cat "$errors" >&2
 if [ "$rc" -gt 1 ]; then
