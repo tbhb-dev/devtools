@@ -28,3 +28,22 @@ setup() {
     grep -Eq 'agent-pr/scripts/publish\.sh.*--rewrite' "$skill"
   done
 }
+
+@test "headless history choice defaults to a separate commit (#295)" {
+  for harness in claude codex; do
+    skill="$ROOT/packages/agents/source/skills/fix-pr/SKILL.${harness}.md"
+    grep -Fq "In a headless session with no supplied strategy, use a separate commit without prompting." "$skill"
+    grep -Fq "No headless default authorizes a force-push." "$skill"
+  done
+}
+
+@test "explicit history choices and interactive prompts remain available (#295)" {
+  grep -Fq 'ask before committing with `AskUserQuestion`' \
+    "$ROOT/packages/agents/source/skills/fix-pr/SKILL.claude.md"
+  grep -Fq 'in Default mode ask in the final response' \
+    "$ROOT/packages/agents/source/skills/fix-pr/SKILL.codex.md"
+  for harness in claude codex; do
+    skill="$ROOT/packages/agents/source/skills/fix-pr/SKILL.${harness}.md"
+    grep -Fq "An explicit caller choice can still select an amend and force-with-lease." "$skill"
+  done
+}
