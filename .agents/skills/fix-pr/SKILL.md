@@ -34,13 +34,26 @@ Rebuild the local draft:
 bash .agents/skills/fix-pr/scripts/populate-description.sh <number>
 ```
 
-If the fix changes what readers need to know, revise `PR_AGENTDESC.md` in this session or use the optional `write-pr-description` helper, then review it with `bash .agents/skills/pr/scripts/review.sh`, which stamps the draft on a pass. Bound findings at three rounds. Update the pull request only through:
+If the fix changes what readers need to know, revise `PR_AGENTDESC.md` in this session or use the optional `write-pr-description` helper. Bound review findings at three rounds.
+
+In an interactive session, review and update through:
 
 ```bash
+bash .agents/skills/pr/scripts/review.sh
 bash .agents/skills/pr/scripts/create-pr.sh [--confirmed] [--rewrite]
 ```
 
-It pushes the branch on the way. Pass `--confirmed` only where the operator chose a route including fixes, or answered now. After an amend, pass `--rewrite`, because the push replaces the commit on origin. It leases on that exact commit.
+Pass `--confirmed` only where the operator chose a route including fixes, or answered now.
+
+In an unattended session, use the agent entry points:
+
+```bash
+bash .agents/skills/agent-pr/scripts/check.sh
+bash .agents/skills/agent-pr/scripts/review.sh
+bash .agents/skills/agent-pr/scripts/publish.sh [--rewrite]
+```
+
+Use the existing session pre-approval or machine delegation, and never pass `--confirmed`. Both publishers push the branch on the way. After an amend, pass `--rewrite` to the selected publisher because the push replaces the commit on origin. Its lease checks still refuse where origin moved.
 
 Skip redrafting when the existing description remains accurate, and state that judgment.
 

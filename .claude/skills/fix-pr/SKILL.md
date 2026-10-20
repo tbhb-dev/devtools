@@ -92,7 +92,12 @@ That rebuilds `PR_AGENTDESC.md` from what the pull request currently says, reass
 
 A fix changes what the branch does, so the published description now describes a branch that has moved. Where the change alters what a reader needs to know, revise `PR_AGENTDESC.md` in this session or invoke the optional `write-pr-description` helper with the repository root and a note saying which commits arrived since the last publish.
 
-Then review it with `bash .claude/skills/pr/scripts/review.sh` and loop on the verdict the same way the `pr` skill does, bounded at three rounds. Publish the result with `bash .claude/skills/pr/scripts/create-pr.sh`, which updates the open pull request rather than opening another and pushes the branch on the way. Pass `--confirmed` only where the operator chose a route including fixes in this session, or answered now. After an amend, pass `--rewrite` as well, because the push replaces the commit stored on origin. The script leases on that exact commit and refuses where origin moved.
+Choose the republish route from the workflow that invoked `fix-pr`:
+
+- In an interactive session, review with `bash .claude/skills/pr/scripts/review.sh` and publish with `bash .claude/skills/pr/scripts/create-pr.sh [--confirmed] [--rewrite]`. Pass `--confirmed` only where the operator chose a route including fixes in this session, or answered now.
+- In an unattended session, run `bash .claude/skills/agent-pr/scripts/check.sh`, review with `bash .claude/skills/agent-pr/scripts/review.sh`, and publish with `bash .claude/skills/agent-pr/scripts/publish.sh [--rewrite]`. Use the existing session pre-approval or machine delegation, and never pass `--confirmed`.
+
+Loop on either review verdict the same way the selected skill does, bounded at three rounds. After an amend, pass `--rewrite` to the selected publisher because the push replaces the commit stored on origin. Both publishers lease on that exact commit and refuse where origin moved.
 
 Skip this where the fix left the description accurate. A typo in a lint rule rarely changes what the branch is for. Say which way you judged it.
 
