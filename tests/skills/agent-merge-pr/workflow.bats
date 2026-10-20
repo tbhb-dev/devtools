@@ -121,12 +121,26 @@ CHECK
 @test "persistent review finding bound survives preflight" {
   export DEVTOOLS_REVIEW_CMD='cat >/dev/null; echo "VERDICT: CHANGES REQUIRED"'
   for round in 1 2 3; do
+    printf 'fix: explain the squash round %s (#7)\n' "$round" >SQUASH_AGENTMSG
     run bash "$AGENT/review.sh" 7
     if [ "$round" -eq 3 ]; then [ "$status" -eq 3 ]; else [ "$status" -eq 2 ]; fi
   done
   run bash "$AGENT/preflight.sh" 7
   run bash "$AGENT/review.sh" 7
   [ "$status" -eq 3 ]
+}
+
+@test "agent merge gives a new head fresh finding rounds" {
+  export DEVTOOLS_REVIEW_CMD='cat >/dev/null; echo "VERDICT: CHANGES REQUIRED"'
+  for round in 1 2 3; do
+    printf 'fix: explain the squash round %s (#7)\n' "$round" >SQUASH_AGENTMSG
+    run bash "$AGENT/review.sh" 7
+  done
+  [ "$status" -eq 3 ]
+
+  change another.txt advanced
+  run bash "$AGENT/review.sh" 7
+  [ "$status" -eq 2 ]
 }
 
 @test "expected head mismatch and empty configured lint refuse" {

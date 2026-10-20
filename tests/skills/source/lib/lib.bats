@@ -97,7 +97,26 @@ review_once() {
     cp draft "$inputs/draft"
     printf "criteria\n" >criteria.md
     ok() { [ ! -e moved ]; }
-    dt_review t "$PWD/draft" "$inputs/draft" criteria.md "$PWD" "$inputs" ok bound value
+    dt_review t "$PWD/draft" "$inputs/draft" criteria.md "$PWD" "$inputs" ok test-subject bound value
+  '
+}
+
+review_subject() {
+  export REVIEW_SUBJECT=$1 REVIEW_DRAFT=$2
+  export DEVTOOLS_REVIEW_CMD=$3 DT_TEST_UNATTENDED=${4:-0}
+  lib '
+    printf "%s\n" "$REVIEW_DRAFT" >draft
+    inputs=$(dt_new_inputs t)
+    cp draft "$inputs/draft"
+    printf "criteria\n" >criteria.md
+    ok() { return 0; }
+    if [ "$DT_TEST_UNATTENDED" = 1 ]; then
+      DT_UNATTENDED=1
+      dt_agent_context() { return 0; }
+      dt_repo_digest() { printf "repo\n"; }
+      dt_repo_conf() { printf "3\n"; }
+    fi
+    dt_review t "$PWD/draft" "$inputs/draft" criteria.md "$PWD" "$inputs" ok "$REVIEW_SUBJECT" bound value
   '
 }
 
@@ -108,6 +127,10 @@ review_once() {
   grep -q "^draft $(shasum -a 256 draft | cut -d' ' -f1)\$" "$stamp"
   grep -q '^bound value$' "$stamp"
   grep -q '^reviewer review_cmd: ' "$stamp"
+  verdict="$(git rev-parse --absolute-git-dir)/agent-skills/t.verdict"
+  grep -q '^subject test-subject$' "$verdict"
+  grep -q "^draft $(shasum -a 256 draft | cut -d' ' -f1)\$" "$verdict"
+  grep -q '^verdict pass$' "$verdict"
 }
 
 @test "dt_review hands the reviewer the criteria, the arguments, and the inputs" {
@@ -125,6 +148,56 @@ review_once() {
   [ "$status" -eq 2 ]
   [[ "$output" == *"1. [form] x"* ]]
   [ ! -e "$(git rev-parse --absolute-git-dir)/agent-skills/t.stamp" ]
+}
+
+@test "dt_review refuses an identical draft after findings" {
+  reviewer='cat >/dev/null; echo invoked >>calls; printf "VERDICT: CHANGES REQUIRED\n\n1. [form] x\n"'
+  review_subject tree-one draft-one "$reviewer"
+  [ "$status" -eq 2 ]
+
+  review_subject tree-one draft-one "$reviewer"
+  [ "$status" -eq 3 ]
+  [[ "$output" == *"Change the draft or ask the operator"* ]]
+  [ "$(wc -l <calls | tr -d ' ')" -eq 1 ]
+  verdict="$(git rev-parse --absolute-git-dir)/agent-skills/t.verdict"
+  grep -q '^subject tree-one$' "$verdict"
+  grep -q "^draft $(shasum -a 256 draft | cut -d' ' -f1)\$" "$verdict"
+  grep -q '^verdict changes$' "$verdict"
+}
+
+@test "dt_review allows a changed draft for the same subject" {
+  reviewer='cat >/dev/null; echo invoked >>calls; printf "VERDICT: CHANGES REQUIRED\n\n1. [form] x\n"'
+  review_subject tree-one draft-one "$reviewer" 1
+  [ "$status" -eq 2 ]
+  review_subject tree-one draft-two "$reviewer" 1
+  [ "$status" -eq 2 ]
+  [ "$(wc -l <calls | tr -d ' ')" -eq 2 ]
+}
+
+@test "dt_review gives a changed review subject fresh rounds" {
+  reviewer='cat >/dev/null; echo invoked >>calls; printf "VERDICT: CHANGES REQUIRED\n\n1. [form] x\n"'
+  review_subject tree-one draft-one "$reviewer" 1
+  [ "$status" -eq 2 ]
+  review_subject tree-one draft-two "$reviewer" 1
+  [ "$status" -eq 2 ]
+  review_subject tree-one draft-three "$reviewer" 1
+  [ "$status" -eq 3 ]
+
+  review_subject tree-two draft-three "$reviewer" 1
+  [ "$status" -eq 2 ]
+  [ "$(wc -l <calls | tr -d ' ')" -eq 4 ]
+}
+
+@test "dt_review still bounds changed drafts for one subject" {
+  reviewer='cat >/dev/null; echo invoked >>calls; printf "VERDICT: CHANGES REQUIRED\n\n1. [form] x\n"'
+  for draft in one two three; do
+    review_subject tree-one "draft-$draft" "$reviewer" 1
+  done
+  [ "$status" -eq 3 ]
+
+  review_subject tree-one draft-four "$reviewer" 1
+  [ "$status" -eq 3 ]
+  [ "$(wc -l <calls | tr -d ' ')" -eq 3 ]
 }
 
 @test "dt_review stamps nothing on an unreadable reply or a failed reviewer" {
@@ -224,7 +297,7 @@ policy_review() {
     gitr diff --no-ext-diff --no-textconv --text "$head" "$tree" >"$inputs/staged.diff"
     dt_review_policy "$inputs" "$head" "$tree"
     ok() { return 0; }
-    dt_review policy "$PWD/draft" "$inputs/draft" criteria.md "$PWD" "$inputs" ok
+    dt_review policy "$PWD/draft" "$inputs/draft" criteria.md "$PWD" "$inputs" ok policy-subject
   '
 }
 

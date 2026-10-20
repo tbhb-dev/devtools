@@ -86,10 +86,26 @@ CHECKER
 
 @test "agent PR findings stay blocked at the configured bound" {
   export DEVTOOLS_REVIEW_CMD='cat >/dev/null; echo "VERDICT: CHANGES REQUIRED"'
+  round=0
   for expected in 2 2 3 3; do
+    round=$((round + 1))
+    printf '\nReview round %s.\n' "$round" >>PR_AGENTDESC.md
     run bash "$SCRIPTS/review.sh"
     [ "$status" -eq "$expected" ]
   done
+}
+
+@test "agent PR gives a new head fresh finding rounds" {
+  export DEVTOOLS_REVIEW_CMD='cat >/dev/null; echo "VERDICT: CHANGES REQUIRED"'
+  for round in 1 2 3; do
+    printf '\nReview round %s.\n' "$round" >>PR_AGENTDESC.md
+    run bash "$SCRIPTS/review.sh"
+  done
+  [ "$status" -eq 3 ]
+
+  commit_file another.txt 'fix: advance the branch'
+  run bash "$SCRIPTS/review.sh"
+  [ "$status" -eq 2 ]
 }
 
 @test "agent PR refuses detached and empty branches" {
@@ -106,13 +122,16 @@ CHECKER
 @test "agent PR preflight preserves an unpublished draft and exhausted bound" {
   printf 'draft marker\n' >>PR_AGENTDESC.md
   export DEVTOOLS_REVIEW_CMD='cat >/dev/null; echo "VERDICT: CHANGES REQUIRED"'
+  round=0
   for expected in 2 2 3; do
+    round=$((round + 1))
+    printf '\nReview round %s.\n' "$round" >>PR_AGENTDESC.md
     run bash "$SCRIPTS/review.sh"
     [ "$status" -eq "$expected" ]
   done
   bash "$SCRIPTS/preflight.sh"
   grep -q 'draft marker' PR_AGENTDESC.md
-  [ "$(cat .git/agent-skills/pr.rounds)" -eq 3 ]
+  grep -q '^rounds 3$' .git/agent-skills/pr.rounds
   run bash "$SCRIPTS/review.sh"
   [ "$status" -eq 3 ]
 }

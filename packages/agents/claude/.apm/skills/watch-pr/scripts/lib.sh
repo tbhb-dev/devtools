@@ -481,9 +481,9 @@ dt_new_inputs() {
 #   5  the draft or what the review read changed while it ran
 #   124 the reviewer timed out
 dt_review() {
-  local kind=$1 draft=$2 snapshot=$3 criteria=$4 arguments=$5 inputs=$6 still_current=$7
-  shift 7
-  local state reply before verdict root prompt draft_digest snapshot_digest repo_digest status
+  local kind=$1 draft=$2 snapshot=$3 criteria=$4 arguments=$5 inputs=$6 still_current=$7 subject=$8
+  shift 8
+  local state reply verdict_record before verdict root prompt draft_digest snapshot_digest repo_digest status
   state=$(dt_state_dir) || return 4
   reply=$state/$kind.review
   root=$(dt_root) || return 4
@@ -495,13 +495,26 @@ dt_review() {
 
   # A review that does not pass leaves nothing behind it to commit on.
   rm -f "$state/$kind.stamp"
+  before=$(dt_digest "$snapshot") || return 4
+  draft_digest=$(dt_digest "$draft") || return 5
+  if [ "$draft_digest" != "$before" ]; then
+    printf 'review: %s is not the text prepared for review; gather it again\n' "$(basename "$draft")" >&2
+    return 5
+  fi
+  verdict_record=$state/$kind.verdict
+  if [ -f "$verdict_record" ] &&
+    grep -Fqx "subject $subject" "$verdict_record" &&
+    grep -Fqx "draft $before" "$verdict_record" &&
+    grep -Fqx 'verdict changes' "$verdict_record"; then
+    printf 'BLOCKED: this byte-identical draft already has CHANGES REQUIRED for the same review subject. Change the draft or ask the operator.\n' >&2
+    return 3
+  fi
   if [ "${DT_UNATTENDED:-0}" = 1 ]; then
     dt_agent_context || return $?
-    dt_agent_rounds "$kind" || return $?
+    dt_agent_rounds "$kind" "$subject" || return $?
     repo_digest=$(dt_repo_digest) || return $?
     set -- "$@" repo_config "$repo_digest"
   fi
-  before=$(dt_digest "$snapshot") || return 4
   if [ -f "$inputs/review-policy-report.txt" ]; then
     cat "$inputs/review-policy-report.txt"
     set -- "$@" policy_ref "$DT_POLICY_REF" policy_oid "$DT_POLICY_OID" policy_hash "$DT_POLICY_HASH" policy_status "$DT_POLICY_STATUS"
@@ -540,14 +553,16 @@ dt_review() {
   verdict=$(dt_verdict "$reply") || return 4
   case $verdict in
   pass)
+    printf 'subject %s\ndraft %s\nverdict pass\n' "$subject" "$before" >"$verdict_record"
     _dt_stamp "$state/$kind.stamp" "$before" "$@" || return 4
     printf 'VERDICT: PASS (stamped)\n'
     return 0
     ;;
   changes)
+    printf 'subject %s\ndraft %s\nverdict changes\n' "$subject" "$before" >"$verdict_record"
     cat "$reply"
     if [ "${DT_UNATTENDED:-0}" = 1 ]; then
-      dt_agent_rounds "$kind" finding || return $?
+      dt_agent_rounds "$kind" "$subject" finding || return $?
     fi
     return 2
     ;;
@@ -629,7 +644,7 @@ dt_require_stamp() {
 dt_clear() {
   local state dir
   state=$(dt_state_dir)
-  rm -f "$state/$1.stamp" "$state/$1.review" "$state/$1.rounds"
+  rm -f "$state/$1.stamp" "$state/$1.review" "$state/$1.rounds" "$state/$1.verdict"
   for dir in "$state/$1".inputs.*; do
     [ -d "$dir" ] && [ ! -L "$dir" ] || continue
     rm -rf "$dir"

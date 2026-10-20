@@ -105,12 +105,29 @@ grant() {
 
 @test "review findings block on the third round and do not invoke the reviewer again" {
   export DEVTOOLS_REVIEW_CMD='cat >/dev/null; echo invoked >>calls; echo "VERDICT: CHANGES REQUIRED"'
+  round=0
   for expected in 2 2 3 3; do
+    round=$((round + 1))
+    printf 'test: reviewed change %s\n\nSigned-off-by: Tester <tester@example.com>\n' "$round" >COMMIT_AGENTMSG
     run bash "$SCRIPTS/review.sh"
     [ "$status" -eq "$expected" ]
   done
   [ "$(wc -l <calls | tr -d ' ')" = 3 ]
   [ ! -e .git/agent-skills/commit.stamp ]
+}
+
+@test "a different staged tree gets fresh finding rounds" {
+  export DEVTOOLS_REVIEW_CMD='cat >/dev/null; echo "VERDICT: CHANGES REQUIRED"'
+  for round in 1 2 3; do
+    printf 'test: reviewed change %s\n\nSigned-off-by: Tester <tester@example.com>\n' "$round" >COMMIT_AGENTMSG
+    run bash "$SCRIPTS/review.sh"
+  done
+  [ "$status" -eq 3 ]
+
+  echo split >tracked
+  git add -- tracked
+  run bash "$SCRIPTS/review.sh"
+  [ "$status" -eq 2 ]
 }
 
 @test "unreadable reviews do not spend finding rounds" {

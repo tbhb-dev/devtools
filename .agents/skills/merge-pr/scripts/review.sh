@@ -143,6 +143,7 @@ dt_review_policy "$inputs" "$head" "$head"
 criteria=$DT_LIB_DIR/../../review-squash-message/SKILL.md
 status=0
 dt_review squash "$draft" "$snapshot" "$criteria" "$root" "$inputs" still_as_gathered \
+  "pr:$number:$head" \
   pr "$number" head "$head" base "$base" base_oid "$base_oid" note "$note_digest" || status=$?
 state=$(dt_state_dir) || exit $?
 rm -f "$state/squash.live.json"
