@@ -16,7 +16,7 @@ setup() {
 	repo_root=$(git -C "$BATS_TEST_DIRNAME" rev-parse --show-toplevel)
 
 	unset GIT_DIR GIT_COMMON_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY
-	unset PRE_COMMIT_FROM_REF PRE_COMMIT_TO_REF GITHUB_ACTIONS CI
+	unset PRE_COMMIT_FROM_REF PRE_COMMIT_TO_REF GITHUB_ACTIONS CI DEVTOOLS_LEAK_HOOK_CHECK
 	for name in $(compgen -v O11Y_); do unset "$name"; done
 
 	export O11Y_PRIVATE_STRINGS="zebra-host-01, /zq/stash/dir, /zq/bin/tsc, quokka-pond, 203.0.113.77, kestrel99, mango-secret"
@@ -1167,6 +1167,44 @@ STUB
 	[ "$status" -eq 1 ]
 	CI=true run bash .devtools/scripts/install-pre-push.sh --check
 	[ "$status" -eq 0 ]
+}
+
+@test "the installer check warns for missing or mismatched hooks only when requested" {
+	hook_repo
+	hooks=$(git rev-parse --git-path hooks)
+	for state in missing mismatched; do
+		if [[ $state == missing ]]; then
+			rm "$hooks/pre-push"
+		else
+			printf '#!/bin/sh\nexit 0\n' >"$hooks/pre-push"
+		fi
+		run bash .devtools/scripts/install-pre-push.sh --check
+		[ "$status" -eq 1 ]
+		DEVTOOLS_LEAK_HOOK_CHECK=warn run bash .devtools/scripts/install-pre-push.sh --check
+		[ "$status" -eq 0 ]
+		[[ $output == *"warning:"* ]]
+		DEVTOOLS_LEAK_HOOK_CHECK=other run bash .devtools/scripts/install-pre-push.sh --check
+		[ "$status" -eq 1 ]
+		CI=true DEVTOOLS_LEAK_HOOK_CHECK=warn run bash .devtools/scripts/install-pre-push.sh --check
+		[ "$status" -eq 0 ]
+		[ "$output" = 'install-pre-push: CI has no local hooks to check' ]
+	done
+}
+
+@test "the installer check handles an absent hooks directory" {
+	hook_repo
+	git config core.hooksPath "$work/absent-hooks"
+	run bash .devtools/scripts/install-pre-push.sh --check
+	[ "$status" -eq 1 ]
+	DEVTOOLS_LEAK_HOOK_CHECK=warn run bash .devtools/scripts/install-pre-push.sh --check
+	[ "$status" -eq 0 ]
+	[[ $output == *"warning:"* ]]
+	CI=true run bash .devtools/scripts/install-pre-push.sh --check
+	[ "$status" -eq 0 ]
+	[ "$output" = 'install-pre-push: CI has no local hooks to check' ]
+	DEVTOOLS_LEAK_HOOK_CHECK=warn run bash .devtools/scripts/install-pre-push.sh
+	[ "$status" -eq 1 ]
+	[ ! -e "$work/absent-hooks" ]
 }
 
 @test "the installer check fails when reading the hook prints it and then fails" {

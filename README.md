@@ -264,6 +264,8 @@ Findings report the location and rule without printing matched text. Sensitive l
 
 Add the `leaks-staged`, `leaks-commit-msg`, `leaks-pre-push`, and `commit-msg-pre-push` hook IDs from this repository to prek. Run `mise run devtools:prek-install` followed by `mise run devtools:install-pre-push-hook` after syncing, and include both steps in your bootstrap task. The latter installs a wrapper before prek's pre-push hook so the scans receive Git's ref lines. The pre-push hook IDs verify the wrapper installation. The wrapper scans the exact outgoing objects and commit messages before prek consumes the ref lines. In CI, fetch full history and run `mise run --quiet devtools:lint-leaks -- --range "$BASE..$HEAD"` for the pull request's base and head commits.
 
+For review worktrees, run `DEVTOOLS_LEAK_HOOK_CHECK=warn mise run devtools:check-leak-hook` (or export the variable before `mise run lint`) to report a missing or mismatched pre-push wrapper as a warning with exit 0. This also applies to `devtools:check-pre-push-hook`. The default check still fails. CI continues to skip the local hook check. The variable doesn't change hook installation or leak scans.
+
 Keep private literals in `mise.local.toml`, which Git ignores:
 
 ```toml
