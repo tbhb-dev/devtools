@@ -131,8 +131,10 @@ require_reviewed
 dt_commit_lint "$draft" "$rerun_gates"
 mise run devtools:lint-leaks
 mise run devtools:gitleaks
-dt_gate lint "" "$rerun_gates" mise run lint
-dt_gate test "" "$rerun_gates" mise run test
+lint_task=$(dt_gate_task lint_task lint)
+test_task=$(dt_gate_task test_task test)
+dt_gate lint "" "$rerun_gates" mise run "$lint_task"
+dt_gate test "" "$rerun_gates" mise run "$test_task"
 if [ "$mode" = amend ]; then
   DT_UNATTENDED=${DT_UNATTENDED:-0} bash "$here/review.sh" --amend
 else

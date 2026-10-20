@@ -40,6 +40,54 @@ die() {
   exit 2
 }
 
+gitr() {
+  env git --no-pager \
+    -c log.showSignature=false \
+    -c color.ui=false -c color.diff=false -c color.status=false \
+    -c core.quotePath=false \
+    -c diff.noprefix=false -c diff.mnemonicPrefix=false \
+    "$@"
+}
+
+gate_task() {
+  local key=$1 fallback=$2 ref value
+  ref=$(gitr symbolic-ref --quiet refs/remotes/origin/HEAD 2>/dev/null || true)
+  if [ -z "$ref" ]; then
+    ref=refs/remotes/origin/main
+    if ! gitr rev-parse --verify --quiet refs/heads/main >/dev/null &&
+      gitr rev-parse --verify --quiet refs/heads/master >/dev/null; then
+      ref=refs/remotes/origin/master
+    fi
+  fi
+  if ! gitr rev-parse --verify --quiet "$ref^{commit}" >/dev/null; then
+    ref=HEAD
+  fi
+  value=$(gitr show "$ref:.agents/agent-skills.conf" 2>/dev/null |
+    awk -v wanted="$key" '
+      /^[ \t]*(#|$)/ { next }
+      {
+        name = $0
+        sub(/=.*/, "", name)
+        gsub(/^[ \t]+|[ \t]+$/, "", name)
+        if (name == wanted) {
+          sub(/^[^=]*=/, "")
+          gsub(/^[ \t]+|[ \t]+$/, "")
+          print
+          found = 1
+          exit
+        }
+      }
+      END { exit found ? 0 : 1 }
+    ') || value=$fallback
+  case $value in
+  '' | [!A-Za-z0-9]* | *[!A-Za-z0-9:._/-]*) die "$key must name one nonempty mise task" ;;
+  esac
+  printf '%s\n' "$value"
+}
+
+lint_task=$(gate_task lint_task lint)
+test_task=$(gate_task test_task test)
+
 command -v gh >/dev/null 2>&1 || die "gh is not installed"
 gh auth status >/dev/null 2>&1 || die "gh is not authenticated"
 
@@ -106,10 +154,10 @@ reproducer() {
   *editorconfig*) printf 'mise run lint-editorconfig\n' ;;
   *arch*) printf 'mise run devtools:lint-go-arch\n' ;;
   *deadcode*) printf 'mise run devtools:lint-go-deadcode\n' ;;
-  *lint*) printf 'mise run lint\n' ;;
+  *lint*) printf 'mise run %s\n' "$lint_task" ;;
   *race*) printf 'mise run devtools:test-go-race\n' ;;
   *cover*) printf 'mise run devtools:cover-go-check\n' ;;
-  *test*) printf 'mise run test\n' ;;
+  *test*) printf 'mise run %s\n' "$test_task" ;;
   *vendor*) printf 'mise run devtools:vendor-check\n' ;;
   *vuln*) printf 'mise run devtools:vuln\n' ;;
   *gitleaks* | *secret*) printf 'mise run devtools:gitleaks\n' ;;

@@ -422,6 +422,61 @@ STUB
   [ "$(cat "$GATE_LOG")" = $'lint-commit-msg\ndevtools:lint-leaks\ndevtools:gitleaks\nlint\ntest\nreview\ndevtools:lint-leaks\ndevtools:gitleaks\nreview' ]
 }
 
+@test "commit uses trusted configured aggregate tasks (#309)" {
+  initial_commit
+  mkdir -p .agents
+  printf 'lint_task = devtools:lint-go-all\ntest_task = devtools:test-go\n' >.agents/agent-skills.conf
+  git add -- .agents/agent-skills.conf
+  git commit --quiet -m 'chore: configure aggregate gates'
+  git update-ref refs/remotes/origin/main HEAD
+  git symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/main
+  git checkout --quiet -b topic
+  stage tracked.txt reviewed
+  export FAIL_GATE=test
+  bash "$SCRIPTS/review.sh"
+
+  run bash "$SCRIPTS/commit.sh" --confirmed
+
+  [ "$status" -eq 0 ]
+  grep -q '^devtools:lint-go-all$' "$GATE_LOG"
+  grep -q '^devtools:test-go$' "$GATE_LOG"
+}
+
+@test "a staged configuration cannot switch its own commit gates (#309)" {
+  initial_commit
+  git update-ref refs/remotes/origin/main HEAD
+  git symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/main
+  git checkout --quiet -b topic
+  mkdir -p .agents
+  printf 'lint_task = branch-lint\ntest_task = branch-test\n' >.agents/agent-skills.conf
+  git add -- .agents/agent-skills.conf
+  bash "$SCRIPTS/review.sh"
+
+  run bash "$SCRIPTS/commit.sh" --confirmed
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"using trusted task lint"* ]]
+  [[ "$output" == *"using trusted task test"* ]]
+  grep -q '^lint$' "$GATE_LOG"
+  grep -q '^test$' "$GATE_LOG"
+  ! grep -q '^branch-\(lint\|test\)$' "$GATE_LOG"
+}
+
+@test "commit rejects an empty aggregate task before writing (#309)" {
+  initial_commit
+  mkdir -p .agents
+  printf 'test_task =\n' >.agents/agent-skills.conf
+  git add -- .agents/agent-skills.conf
+  bash "$SCRIPTS/review.sh"
+  before=$(git rev-parse HEAD)
+
+  run bash "$SCRIPTS/commit.sh" --confirmed
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"test_task must name one nonempty mise task"* ]]
+  [ "$(git rev-parse HEAD)" = "$before" ]
+}
+
 @test "preflight uses configured sign-off instead of Git identity" {
   run bash "$SCRIPTS/preflight.sh"
   [ "$status" -eq 0 ]

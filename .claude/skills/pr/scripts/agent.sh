@@ -2,10 +2,8 @@
 # Shared unattended policy. Loaded by lib.sh, never sourced from a repository.
 
 # Only repository behavior belongs here. Authorities still use dt_conf.
-dt_repo_conf() {
-  local root file value
-  root=$(dt_root) || return $?
-  file=$root/.agents/agent-skills.conf
+_dt_repo_conf_file() {
+  local file=$1 key=$2 fallback=${3:-} value
   if [ -e "$file" ]; then
     [ -f "$file" ] && [ ! -L "$file" ] || dt_die "Repository configuration must be a regular file: $file"
     awk '
@@ -15,19 +13,65 @@ dt_repo_conf() {
         sub(/=.*/, "", key)
         gsub(/^[ \t]+|[ \t]+$/, "", key)
         if (!index($0, "=") || seen[key]++ ||
-            key !~ /^(lint_commit_cmd|required_hooks|hook_marker|review_max_rounds|pr_template|lint_pr_cmd|pr_log_entry|pr_related_pattern|pr_title_check_cmd|owner_paths|mail_cmd|mail_to|mail_from|lint_squash_cmd|owner_review_label|ruleset_dir|golden_paths|loosening_markers|gate_config_paths|disposable_ignored|merge_ready_cmd)$/) {
+            key !~ /^(lint_commit_cmd|lint_task|test_task|required_hooks|hook_marker|review_max_rounds|pr_template|lint_pr_cmd|pr_log_entry|pr_related_pattern|pr_title_check_cmd|owner_paths|mail_cmd|mail_to|mail_from|lint_squash_cmd|owner_review_label|ruleset_dir|golden_paths|loosening_markers|gate_config_paths|disposable_ignored|merge_ready_cmd)$/) {
           print "Invalid or duplicate repository setting: " key > "/dev/stderr"
           bad = 1
         }
       }
       END { exit bad ? 1 : 0 }
     ' "$file" || return 1
-    if value=$(_dt_conf_file "$file" "$1"); then
+    if value=$(_dt_conf_file "$file" "$key"); then
       printf '%s\n' "$value"
       return 0
     fi
   fi
-  printf '%s\n' "${2:-}"
+  printf '%s\n' "$fallback"
+}
+
+dt_repo_conf() {
+  local root
+  root=$(dt_root) || return $?
+  _dt_repo_conf_file "$root/.agents/agent-skills.conf" "$1" "${2:-}"
+}
+
+# Gate task names come from the trusted remote default. The worktree copy is
+# still parsed and validated so a branch cannot publish broken configuration,
+# but it cannot choose the checks that approve that same branch.
+dt_gate_task() {
+  local key=$1 fallback=$2 proposed ref oid blob mode file task
+  proposed=$(dt_repo_conf "$key" "$fallback") || return $?
+  case $proposed in
+  '' | [!A-Za-z0-9]* | *[!A-Za-z0-9:._/-]*) dt_die "$key must name one nonempty mise task" ;;
+  esac
+
+  ref=$(dt_policy_ref) || return $?
+  oid=$(gitr rev-parse --verify --quiet "$ref^{commit}" || printf 'none\n') || return $?
+  if [ "$oid" = none ]; then
+    oid=$(gitr rev-parse --verify --quiet 'HEAD^{commit}' || printf 'none\n') || return $?
+  fi
+  if [ "$oid" != none ] && blob=$(gitr rev-parse --verify --quiet "$oid:.agents/agent-skills.conf"); then
+    mode=$(gitr ls-tree "$oid" -- .agents/agent-skills.conf) || return $?
+    [ "${mode%% *}" = 100644 ] || dt_die "Trusted repository configuration must be a regular non-executable file: .agents/agent-skills.conf"
+    file=$(mktemp) || return $?
+    gitr cat-file blob "$blob" >"$file" || {
+      rm -f "$file"
+      return 1
+    }
+    task=$(_dt_repo_conf_file "$file" "$key" "$fallback") || {
+      rm -f "$file"
+      return 1
+    }
+    rm -f "$file"
+  else
+    task=$fallback
+  fi
+  case $task in
+  '' | [!A-Za-z0-9]* | *[!A-Za-z0-9:._/-]*) dt_die "$key must name one nonempty mise task" ;;
+  esac
+  if [ "$proposed" != "$task" ]; then
+    printf '%s is changed on this branch; using trusted task %s until the configuration lands\n' "$key" "$task" >&2
+  fi
+  printf '%s\n' "$task"
 }
 
 dt_agent_context() {

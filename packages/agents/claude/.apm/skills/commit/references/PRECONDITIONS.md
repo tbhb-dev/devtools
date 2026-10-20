@@ -3,6 +3,7 @@
 The commit skill assumes the shared tbhb toolchain:
 
 - a `mise run lint-commit-msg` task
+- combined lint and test tasks named by `lint_task` and `test_task` in `.agents/agent-skills.conf`, defaulting to `lint` and `test`
 - a gitignore entry for `COMMIT_AGENTMSG`
 - the prek hooks installed, including the post-commit stage
 - the `review-commit-message` and `fix-prose` skills deployed alongside this one

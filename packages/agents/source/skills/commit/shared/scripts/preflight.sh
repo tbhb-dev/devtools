@@ -212,6 +212,9 @@ else
 fi
 
 section "preconditions"
+lint_task=$(dt_gate_task lint_task lint)
+test_task=$(dt_gate_task test_task test)
+printf 'aggregate gates: mise run %s; mise run %s\n' "$lint_task" "$test_task"
 if git check-ignore --quiet COMMIT_AGENTMSG 2>/dev/null; then
   printf 'COMMIT_AGENTMSG gitignored: yes\n'
 else

@@ -171,7 +171,9 @@ require_reviewed
 
 mise run devtools:lint-leaks
 mise run devtools:gitleaks
-dt_gate lint "" "$rerun_gates" mise run lint
+lint_task=$(dt_gate_task lint_task lint)
+test_task=$(dt_gate_task test_task test)
+dt_gate lint "" "$rerun_gates" mise run "$lint_task"
 DT_UNATTENDED=${DT_UNATTENDED:-0} bash "$here/review.sh"
 step "checking the review stamp"
 require_reviewed
@@ -182,7 +184,7 @@ reviewed_digest=$(dt_stamp_value pr draft) || exit $?
   die "PR_AGENTDESC.md changed while it was being copied. Review it again."
 printf 'stamped for %s on %s\n' "$head" "$base_ref"
 
-dt_gate test "" "$rerun_gates" mise run test
+dt_gate test "" "$rerun_gates" mise run "$test_task"
 
 # shellcheck disable=SC1091 # publication shares the checked state above
 . "$here/publish.sh"

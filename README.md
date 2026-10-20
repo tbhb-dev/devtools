@@ -147,7 +147,13 @@ Declare agent dependencies in `apm.yml`. The pin tasks accept the bare `tbhb-dev
 
 Run `mise run devtools:apm-sync` for the first deployment and after changing agent dependencies. It clears `.hooks` in Claude and Codex settings, `.apm` in the shared agent hook file and the generated hook manifests, then runs `apm install` and audits the result. Settings outside those keys remain unchanged. Those hook keys belong to APM. Keep custom hooks in package declarations so reconciliation can restore them. A failed install or audit fails the task.
 
-Set `DEVTOOLS_LOCK_PLATFORMS` in the root mise environment to the project's supported platform list. Run `mise lock --platform <list>` and commit both mise lockfiles along with the payload and APM deployment. Updates warn and leave lockfiles alone without that variable.
+The commit and pull request skills run the consumer's combined `lint` and `test` mise tasks by default. When a repository uses different combined names, set `lint_task` and `test_task` in `.agents/agent-skills.conf` before adopting the write workflows. The trusted default-branch values drive commit, pull request, and diagnosis commands, so a branch changing this configuration still runs the landed gates.
+
+See the [agent skills migration guide](docs/agent-skills-migration.md#repository-configuration) for the complete configuration.
+
+Set `DEVTOOLS_LOCK_PLATFORMS` in the root mise environment to the project's supported platform list.
+
+Run `mise lock --platform <list>` and commit both mise lockfiles along with the payload and APM deployment. Updates warn and leave lockfiles alone without that variable.
 
 ### Pin forms
 

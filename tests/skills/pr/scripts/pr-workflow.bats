@@ -498,6 +498,58 @@ STUB
   [ "$(grep -c '^test$' "$GATE_LOG")" -eq 2 ]
 }
 
+@test "publication uses trusted configured aggregate tasks (#309)" {
+  git checkout --quiet main
+  mkdir -p .agents
+  printf 'lint_task = devtools:lint-go-all\ntest_task = devtools:test-go\n' >.agents/agent-skills.conf
+  git add -- .agents/agent-skills.conf
+  git commit --quiet -m 'chore: configure aggregate gates'
+  git push --quiet origin main
+  git checkout --quiet topic
+  git rebase --quiet main
+  write_draft
+  export FAIL_GATE=test
+  bash "$SCRIPTS/review.sh"
+
+  run bash "$SCRIPTS/create-pr.sh" --dry-run
+
+  [ "$status" -eq 0 ]
+  grep -q '^devtools:lint-go-all$' "$GATE_LOG"
+  grep -q '^devtools:test-go$' "$GATE_LOG"
+}
+
+@test "a branch configuration cannot switch its own publication gates (#309)" {
+  mkdir -p .agents
+  printf 'lint_task = branch-lint\ntest_task = branch-test\n' >.agents/agent-skills.conf
+  git add -- .agents/agent-skills.conf
+  git commit --quiet -m 'chore: change aggregate gates'
+  bash "$SCRIPTS/review.sh"
+
+  run bash "$SCRIPTS/create-pr.sh" --dry-run
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"using trusted task lint"* ]]
+  [[ "$output" == *"using trusted task test"* ]]
+  grep -q '^lint$' "$GATE_LOG"
+  grep -q '^test$' "$GATE_LOG"
+  refute_grep '^branch-\(lint\|test\)$' "$GATE_LOG"
+}
+
+@test "publication rejects an invalid aggregate task before a push (#309)" {
+  mkdir -p .agents
+  printf 'test_task = mise run test\n' >.agents/agent-skills.conf
+  git add -- .agents/agent-skills.conf
+  git commit --quiet -m 'chore: misconfigure aggregate gates'
+  bash "$SCRIPTS/review.sh"
+
+  run bash "$SCRIPTS/create-pr.sh" --confirmed
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"test_task must name one nonempty mise task"* ]]
+  [ -z "$(remote_topic)" ]
+  refute_grep '^pr create' "$GH_LOG"
+}
+
 @test "preflight does not require the optional description writer (#225)" {
   run bash "$SCRIPTS/preflight.sh"
   [ "$status" -eq 0 ]

@@ -27,7 +27,9 @@ def test_every_mapping_names_defined_tasks_and_prefers_shared_names() -> None:
                 [
                     "bash",
                     "-c",
-                    "reproducer() {\n" + REPRODUCER + '\n}\nreproducer "$1"',
+                    "lint_task=lint; test_task=test\nreproducer() {\n"
+                    + REPRODUCER
+                    + '\n}\nreproducer "$1"',
                     "bash",
                     job,
                 ],
@@ -39,3 +41,20 @@ def test_every_mapping_names_defined_tasks_and_prefers_shared_names() -> None:
                 task: str = match.group(1)
                 assert task in SHARED_TASKS or task in REPO_TASKS, (job, task)
                 assert "devtools:" + task not in SHARED_TASKS, (job, task)
+
+
+def test_aggregate_mappings_use_configured_tasks() -> None:
+    """Keep diagnosis aligned with the commands run by commit and PR."""
+    command = (
+        "lint_task=consumer-lint; test_task=consumer-test\n"
+        "reproducer() {\n"
+        + REPRODUCER
+        + '\n}\nprintf "%s\\n" "$(reproducer lint)" "$(reproducer test)"'
+    )
+    result = subprocess.run(
+        ["bash", "-c", command], capture_output=True, text=True, check=True
+    )
+    assert result.stdout.splitlines() == [
+        "mise run consumer-lint",
+        "mise run consumer-test",
+    ]
