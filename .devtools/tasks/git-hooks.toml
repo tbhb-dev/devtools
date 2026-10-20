@@ -28,7 +28,7 @@ description = "Install the project's git hooks (commit-msg, pre-commit, pre-push
 run = "prek install -t commit-msg -t pre-commit -t pre-push -t post-commit"
 
 ["devtools:check-pre-push-hook"]
-description = "Check that commit and leak scans run before prek at pre-push"
+description = "Check that commit and leak scans run before prek at pre-push (DEVTOOLS_LEAK_HOOK_CHECK=warn warns only)"
 quiet = true
 run = "bash $DEVTOOLS_DIR/scripts/install-pre-push.sh --check"
 
