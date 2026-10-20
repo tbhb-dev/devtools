@@ -60,7 +60,69 @@ setup() {
   change lint.yaml $'ignore: [rule]\nvalue: 1 # noqa\n'
   run inspect_policy
   [ "$status" -eq 0 ]
-  [ "$(printf '%s' "$output" | jq '.findings|length')" -ge 2 ]
+  [ "$(printf '%s' "$output" | jq '[.findings[].count] | add')" -ge 2 ]
+}
+
+@test "documented markers include coverage ignores without losing existing markers" {
+  change main.go $'func uncovered() {} // coverage-ignore\nfunc linted() {} //nolint\nvalue=1 # shellcheck disable=SC2034\nvalue=2 # vale off'
+  run bash -c 'jq -n '\''{golden_paths:"^$",loosening_markers:"coverage-ignore|nolint|shellcheck disable|vale (off|disable)",gate_config_paths:"^$",gate_scan_exempt_paths:"^$",owner_paths:"^$",disposable_ignored:"^cache/"}'\'' | uv run --quiet --script "$1" inspect "$2" "$3"' _ "$POLICY" "$BASE_OID" "$HEAD_OID"
+  [ "$status" -eq 0 ]
+  [ "$(printf '%s' "$output" | jq '[.findings[].count] | add')" -eq 4 ]
+}
+
+@test "configured vendor and fixture trees are exempt but first-party markers remain" {
+  change vendor/library.go 'func skipped() {} //nolint'
+  change tests/fixtures/marker.go 'func fixture() {} //nolint'
+  change internal/library.go 'func firstParty() {} //nolint'
+  run inspect_policy
+  [ "$status" -eq 0 ]
+  [ "$(printf '%s' "$output" | jq '.findings|length')" -eq 1 ]
+  [ "$(printf '%s' "$output" | jq -r '.findings[0].path')" = internal/library.go ]
+}
+
+@test "policy changes cannot exempt themselves from owner review" {
+  change .agents/agent-skills.conf 'gate_scan_exempt_paths = ^.*$'
+  run inspect_policy
+  [ "$status" -eq 0 ]
+  [ "$(printf '%s' "$output" | jq '.findings|length')" -eq 1 ]
+  [ "$(printf '%s' "$output" | jq -r '.findings[0].reason')" = 'changes merge policy' ]
+}
+
+@test "new gate config is not a loosening but an edited config still is" {
+  change lint.yaml $'rules: []\nignore: [existing-rule]'
+  change nested/lint.yaml 'ignore: [new-rule]'
+  run inspect_policy
+  [ "$status" -eq 0 ]
+  [ "$(printf '%s' "$output" | jq '.findings|length')" -eq 1 ]
+  [ "$(printf '%s' "$output" | jq -r '.findings[0].path')" = lint.yaml ]
+}
+
+@test "replacement gates pair off while a net removal remains flagged" {
+  git checkout --quiet main
+  printf '%s\n' '- id: old-lint' '- id: old-test' >hooks.yaml
+  mkdir -p nested
+  printf '%s\n' '- id: old-lint' '- id: old-check' >nested/hooks.yaml
+  git add -- hooks.yaml nested/hooks.yaml
+  git commit --quiet -m 'test: existing hooks'
+  BASE_OID=$(git rev-parse HEAD)
+  git checkout --quiet topic
+  git rebase --quiet main
+  change hooks.yaml $'- id: new-lint\n- id: new-test'
+  change nested/hooks.yaml '- id: new-lint'
+  run inspect_policy
+  [ "$status" -eq 0 ]
+  [ "$(printf '%s' "$output" | jq '.findings|length')" -eq 1 ]
+  [ "$(printf '%s' "$output" | jq -r '.findings[0].path')" = nested/hooks.yaml ]
+  [ "$(printf '%s' "$output" | jq -r '.findings[0].reason')" = 'removes a hook or gate' ]
+}
+
+@test "findings group matching lines with counts and bounded examples" {
+  change lint.yaml $'rules: []\nignore: one\nskip: two\ndisable: three\nallow: four'
+  run inspect_policy
+  [ "$status" -eq 0 ]
+  [ "$(printf '%s' "$output" | jq '.findings|length')" -eq 1 ]
+  [ "$(printf '%s' "$output" | jq '.findings[0].count')" -eq 4 ]
+  [ "$(printf '%s' "$output" | jq '.findings[0].examples|length')" -eq 3 ]
 }
 
 @test "policy reader runs offline without third-party packages" {
@@ -86,11 +148,11 @@ LOCK
   BASE_OID=$(git rev-parse HEAD)
   git checkout --quiet topic
   git rebase --quiet main
-  change vendor/skills/upstream/lint.yaml 'ignore: [rule]'
+  change vendor/skills/upstream/source.go 'func upstream() {} //nolint'
   run inspect_policy
   [ "$status" -eq 0 ]
   [ "$(printf '%s' "$output" | jq '.findings|length')" -eq 0 ]
-  change vendor/skills/custom/lint.yaml 'ignore: [rule]'
+  change vendor/skills/custom/source.go 'func local() {} //nolint'
   run inspect_policy
   [ "$status" -eq 0 ]
   [ "$(printf '%s' "$output" | jq '.findings|length')" -eq 1 ]
@@ -129,7 +191,7 @@ LOCK
 
 @test "merge policy preserves POSIX classes and newline paths" {
   change $'owned/line\nname' content
-  run bash -c 'jq -n '\''{golden_paths:"^$",loosening_markers:"nolint",gate_config_paths:"^$",owner_paths:"^owned/line[[:space:]]name$",disposable_ignored:"^cache/"}'\'' | uv run --quiet --script "$1" inspect "$2" "$3"' _ "$POLICY" "$BASE_OID" "$HEAD_OID"
+  run bash -c 'jq -n '\''{golden_paths:"^$",loosening_markers:"nolint",gate_config_paths:"^$",gate_scan_exempt_paths:"^$",owner_paths:"^owned/line[[:space:]]name$",disposable_ignored:"^cache/"}'\'' | uv run --quiet --script "$1" inspect "$2" "$3"' _ "$POLICY" "$BASE_OID" "$HEAD_OID"
   [ "$status" -eq 0 ]
   [ "$(printf '%s' "$output" | jq '.owner_paths|length')" -eq 1 ]
 }

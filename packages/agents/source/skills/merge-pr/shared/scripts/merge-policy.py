@@ -226,10 +226,15 @@ def owned_remotely(base: str) -> dict[str, bool]:
     return owned
 
 
-def remote_path(path: str, owned: dict[str, bool]) -> bool:
-    """The most specific deployed owner wins; never exempt package sources."""
+def deployed_owner(path: str, owned: dict[str, bool]) -> bool | None:
+    """Return the most specific deployed ownership, when the path has one."""
     matching = [root for root in owned if path == root or path.startswith(root + "/")]
-    return bool(matching) and owned[max(matching, key=len)]
+    return owned[max(matching, key=len)] if matching else None
+
+
+def remote_path(path: str, owned: dict[str, bool]) -> bool:
+    """Only remotely deployed paths are exempt from the scan."""
+    return deployed_owner(path, owned) is True
 
 
 COMMENT = re.compile(r"^\s*(?:#|//|/\*|\*|<!--|;)")
@@ -239,10 +244,12 @@ EXCLUSION = re.compile(
     r"allow[-_]list)[\"']?\s*[:=]",
     re.IGNORECASE,
 )
-REMOVED_GATE = re.compile(
+GATE_LINE = re.compile(
     r"^\s*(?:-\s*id\s*:|(?:-\s*)?[\"']?mise run (?:lint|check|test)|"
     r"(?:lint|check|test)[\w-]*\s*=)"
 )
+HUNK = re.compile(r"^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@")
+MAX_EXAMPLES = 3
 
 
 def inline_comment(text: str) -> str:
@@ -268,14 +275,50 @@ def inline_comment(text: str) -> str:
     return ""
 
 
+def changed_lines(diff: str) -> list[tuple[str, int, str]]:
+    """Return added and removed lines with their destination-side positions."""
+    changed = []
+    old_line = new_line = 0
+    for line in diff.splitlines():
+        hunk = HUNK.match(line)
+        if hunk:
+            old_line, new_line = (int(value) for value in hunk.groups())
+        elif line.startswith("+") and not line.startswith("+++"):
+            changed.append(("+", new_line, line[1:]))
+            new_line += 1
+        elif line.startswith("-") and not line.startswith("---"):
+            changed.append(("-", old_line, line[1:]))
+            old_line += 1
+        elif line.startswith(" "):
+            old_line += 1
+            new_line += 1
+    return changed
+
+
+def add_finding(
+    counts: dict[tuple[str, str], int],
+    examples: dict[tuple[str, str], list[str]],
+    path: str,
+    reason: str,
+    lines: list[str] | None = None,
+) -> None:
+    """Group a reason by path while retaining only a bounded sample."""
+    key = (path, reason)
+    values = lines or []
+    counts[key] = counts.get(key, 0) + max(1, len(values))
+    sample = examples.setdefault(key, [])
+    sample.extend(values[: MAX_EXAMPLES - len(sample)])
+
+
 def inspect(base: str, head: str, config: dict[str, str]) -> dict[str, object]:
     """Return reasons needing an owner and the owner paths for reporting."""
-    golden, markers, configs, owners = [
+    golden, markers, configs, exemptions, owners = [
         regex(config[key])
         for key in (
             "golden_paths",
             "loosening_markers",
             "gate_config_paths",
+            "gate_scan_exempt_paths",
             "owner_paths",
         )
     ]
@@ -299,16 +342,23 @@ def inspect(base: str, head: str, config: dict[str, str]) -> dict[str, object]:
     if not paths:
         fail("Pinned change has no paths")
     owned = owned_remotely(base)
-    findings = []
+    counts: dict[tuple[str, str], int] = {}
+    examples: dict[tuple[str, str], list[str]] = {}
     owner_paths = [path for path in paths if owners.search(path)]
     for path in paths:
         # Configuration changes cannot waive their own policy.
         if path == ".agents/agent-skills.conf":
-            findings.append([path, "changes merge policy"])
+            add_finding(counts, examples, path, "changes merge policy")
+            continue
         if remote_path(path, owned):
             continue
         if golden.search(path):
-            findings.append([path, "changes a golden file"])
+            add_finding(counts, examples, path, "changes a golden file")
+        if exemptions.search(path) and deployed_owner(path, owned) is not False:
+            continue
+        is_new_config = configs.search(path) and not git(
+            "ls-tree", mergebase, "--", path
+        )
         diff = git(
             "diff",
             "--no-ext-diff",
@@ -321,23 +371,42 @@ def inspect(base: str, head: str, config: dict[str, str]) -> dict[str, object]:
             "--",
             path,
         ).decode("utf-8", "surrogateescape")
-        for line in diff.splitlines():
-            if line.startswith(("+++", "---")) or not line.startswith(("+", "-")):
-                continue
-            text = line[1:]
+        removed_gates = []
+        added_gates = 0
+        for sign, number, text in changed_lines(diff):
             if COMMENT.match(text):
                 continue
-            if line.startswith("+") and (
+            if sign == "+" and GATE_LINE.search(text):
+                added_gates += 1
+            elif sign == "-" and configs.search(path) and GATE_LINE.search(text):
+                removed_gates.append(f"-{number}")
+            if sign == "+" and (
                 markers.search(inline_comment(text))
-                or (configs.search(path) and EXCLUSION.search(text))
+                or (
+                    configs.search(path)
+                    and not is_new_config
+                    and EXCLUSION.search(text)
+                )
             ):
-                findings.append([path, "adds a suppression or exclusion"])
-            elif (
-                line.startswith("-")
-                and configs.search(path)
-                and REMOVED_GATE.search(text)
-            ):
-                findings.append([path, "removes a hook or gate"])
+                add_finding(
+                    counts,
+                    examples,
+                    path,
+                    "adds a suppression or exclusion",
+                    [f"+{number}"],
+                )
+        unmatched = removed_gates[added_gates:]
+        if unmatched:
+            add_finding(counts, examples, path, "removes a hook or gate", unmatched)
+    findings = [
+        {
+            "path": path,
+            "reason": reason,
+            "count": count,
+            "examples": examples[(path, reason)],
+        }
+        for (path, reason), count in counts.items()
+    ]
     return {"findings": findings, "owner_paths": owner_paths}
 
 

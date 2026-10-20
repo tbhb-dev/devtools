@@ -19,9 +19,11 @@ owner_paths = ^owned/
 golden_paths = ^golden/
 loosening_markers = noqa|nolint|shellcheck disable|vale (off|disable)
 gate_config_paths = (^|/)(lint|hooks)\.(ya?ml|toml)$
+gate_scan_exempt_paths = ^(vendor/|tests/fixtures/)
 disposable_ignored = ^cache/
 CONF
-  git add -- .agents/agent-skills.conf
+  printf '%s\n' 'rules: []' >lint.yaml
+  git add -- .agents/agent-skills.conf lint.yaml
   git commit --quiet -m 'test: configure policy'
   BASE_OID=$(git rev-parse HEAD)
   git checkout --quiet topic
@@ -51,7 +53,7 @@ approve_owner() {
 }
 
 policy_config() {
-  jq -n '{golden_paths:"^golden/",loosening_markers:"noqa|nolint|vale (off|disable)",gate_config_paths:"lint[.]yaml$",owner_paths:"^owned/",disposable_ignored:"^cache/"}'
+  jq -n '{golden_paths:"^golden/",loosening_markers:"noqa|nolint|vale (off|disable)",gate_config_paths:"(^|/)(lint|hooks)[.]yaml$",gate_scan_exempt_paths:"^(vendor/|tests/fixtures/)",owner_paths:"^owned/",disposable_ignored:"^cache/"}'
 }
 
 inspect_policy() { policy_config | uv run --quiet --script "$POLICY" inspect "$BASE_OID" "$HEAD_OID"; }

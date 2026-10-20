@@ -40,13 +40,14 @@ lint_squash_cmd = mise run lint-squash-msg
 owner_review_label = owner-review
 ruleset_dir = .github/rulesets
 golden_paths = ^$
-loosening_markers = nolint|shellcheck disable|vale (off|disable)
+loosening_markers = coverage-ignore|nolint|shellcheck disable|vale (off|disable)
 gate_config_paths = ^(lint|hooks)\.(yaml|toml)$
+gate_scan_exempt_paths = ^(vendor/|tests/fixtures/)
 disposable_ignored = ^cache/
 merge_ready_cmd =
 ```
 
-The commit and publication values preceding are defaults. Merge requires explicit nonempty `golden_paths`, `loosening_markers`, `gate_config_paths`, `owner_paths`, and `disposable_ignored` patterns. Use `^$` for a deliberately empty set. The merge examples are placeholders for consumer policy, not built-in protected paths. The round bound accepts integers from 1 to 9. Success resets the corresponding finding counter. Reaching the bound blocks further reviews even after preflight or a new commit.
+The commit and publication values preceding are defaults. Merge requires explicit nonempty `golden_paths`, `loosening_markers`, `gate_config_paths`, `owner_paths`, and `disposable_ignored` patterns. Use `^$` for a deliberately empty set. The optional `gate_scan_exempt_paths` also defaults to `^$`. The merge examples are placeholders for consumer policy, not built-in protected paths. Limit scan exemptions to owned vendored or fixture-only trees. Ordinary first-party source and gate configuration stay in scope. The round bound accepts integers from 1 to 9. Success resets the corresponding finding counter. Reaching the bound blocks further reviews even after preflight or a new commit.
 
 Inspect the last review before an operator clears the worktree's `agent-skills/commit.rounds` , `agent-skills/pr.rounds`, or `agent-skills/squash.rounds` file under its Git directory. Failed reviewer execution and changed inputs don't count as findings.
 
@@ -73,7 +74,7 @@ Reports print locally unless both `mail_cmd` and `mail_to` are nonempty. The com
 | `review_cmd`, `review_model`, `review_effort`, `delegation_check`, `gh_login`, `required_reviewer`, `merge_owner` | Machine configuration under `~/.config/devtools/` or corresponding `DEVTOOLS_` variables |
 | `review_commit_criteria`, `review_pr_criteria`, `review_squash_criteria` | Installed review skills plus the existing trusted repository review policy |
 | `lint_squash_cmd`, `owner_review_label`, `ruleset_dir`, `merge_ready_cmd` | Repository configuration. Readiness can refuse but can't grant authority |
-| `golden_paths`, `loosening_markers`, `gate_config_paths`, `disposable_ignored` | Repository configuration. Inspect patterns before migration |
+| `golden_paths`, `loosening_markers`, `gate_config_paths`, `gate_scan_exempt_paths`, `disposable_ignored` | Repository configuration. Inspect patterns before migration |
 | `merge_verify_tries` | Retired: shared merge execution reads the result once and never retries the write |
 
 Repository configuration can't select a reviewer, GitHub account, or delegation checker. Unattended publication requires a nonempty machine `gh_login` with no built-in account default. It rejects `--confirmed`. Either session pre-approval or machine delegation must grant the action, and neither skill prompts or grants itself authority.
@@ -105,7 +106,7 @@ Golden-file changes and detected gate loosening require an APPROVED review from 
 
 Reports record whether execution used an override and the approving login. The owner-review label still holds a PR for the owner, and the override doesn't waive it or any other merge gate.
 
-The scan skips full comment lines. It recognizes exclusion keys instead of matching words inside values and ignores suppression text inside quoted values. Non-local APM deployments come from `apm.lock.yaml` at the pinned base commit. Local deployment overrides stay in scope. A missing lockfile means no deployment exemptions. Malformed ownership data refuses the scan. A PR can't grant itself an exemption by editing its lockfile. Changes to `.agents/agent-skills.conf` always require the owner approval so a policy edit can't waive its own check. The scan is a backstop and doesn't replace review.
+The scan skips full comment lines. It recognizes exclusion keys instead of matching words inside values and ignores suppression text inside quoted values. Exclusion-style keys in a wholly new gate configuration don't loosen the base, while the same additions to existing configuration remain findings. Added gates pair with removed gates in the same file, leaving net removals for owner review. Findings group by path and reason, include a count, and keep at most three line-number examples. Non-local APM deployments come from `apm.lock.yaml` at the pinned base commit. Explicit `gate_scan_exempt_paths` cover owned vendored or fixture-only trees. Local deployment overrides and ordinary first-party paths stay in scope. A missing lockfile means no deployment exemptions. Malformed ownership data refuses the scan. A PR can't grant itself an exemption by editing its lockfile. Changes to `.agents/agent-skills.conf` always require the owner approval so a policy edit can't waive its own check. The scan is a backstop and doesn't replace review.
 
 Required checks come from GitHub's applied branch rules and active ruleset JSON files in `ruleset_dir` at the pinned base. Requirements match names exactly. The merge requires a nonempty list of known required checks and a nonempty rollup. Skipped required checks, unknown states, and missing results refuse the merge. Check judgement uses `agentrepo checks evaluate` instead of another check judge. A configured `merge_ready_cmd` must be an executable path and receives `<repo-root> <pr> <head>`. Its nonzero status blocks, while empty readiness doesn't add a check.
 

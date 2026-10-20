@@ -99,6 +99,8 @@ ma_gates() {
       value=$(dt_repo_conf "$key") || return $?
       config=$(printf '%s' "$config" | jq --arg key "$key" --arg value "$value" '. + {($key):$value}') || return $?
     done
+    value=$(dt_repo_conf gate_scan_exempt_paths '^$') || return $?
+    config=$(printf '%s' "$config" | jq --arg value "$value" '. + {gate_scan_exempt_paths:$value}') || return $?
     ma_policy inspect "$base_oid" "$head" <<<"$config" >"$st/merge.policy.json" || return $?
   fi
   if [ "$final" != true ]; then MA_POLICY=$(cat "$st/merge.policy.json") || return $?; fi
