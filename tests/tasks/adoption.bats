@@ -49,6 +49,29 @@ INI
   [ "$status" -eq 0 ]
 }
 
+@test "outside repository drafts report the path problem and remedy" {
+  outside="$BATS_TEST_TMPDIR/outside.md"
+  typo="spell""bad"
+  printf '# Draft\n\n%s.\n' "$typo" > "$outside"
+  ln -s "$outside" linked.md
+  for draft in "$outside" ../outside.md linked.md; do
+    run mise run lint-draft "$draft"
+    echo "$output"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"$draft:1 [error] outside-repo"* ]]
+    [[ "$output" == *'cspell only lints files under the repository; move the draft inside it'* ]]
+  done
+}
+
+@test "repository drafts still receive spelling diagnostics" {
+  typo="spell""bad"
+  printf '# Draft\n\n%s.\n' "$typo" > draft.md
+  run mise run lint-draft draft.md
+  echo "$output"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Unknown word ($typo)"* ]]
+}
+
 @test "APM reconciliation preserves other settings and removes obsolete hooks" {
   mkdir -p .claude .agents .codex bin
   printf '{"hooks":{"obsolete":[]},"permissions":{"allow":["Read"]}}\n' > .claude/settings.json
