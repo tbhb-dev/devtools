@@ -11,7 +11,9 @@
 # what would let a Renovate PR bumping a pin alone pass while the
 # committed digests drift.
 #
-# The empty MISE_CONFIG_DIR is what scopes that check to the repository.
+# The empty MISE_CONFIG_DIR excludes user-global configuration.
+# MISE_CEILING_PATHS stops discovery before the checkout's parent, so
+# nested worktrees do not inherit another checkout's tools or lockfiles.
 # `locked` applies to the merged tool set, so without it the gate fails
 # on whatever unlocked tools a developer happens to declare in their own
 # ~/.config/mise/config.toml -- tools the repo neither declares nor
@@ -29,7 +31,7 @@ run = '''
 set -euo pipefail
 empty_cfg=$(mktemp -d)
 trap 'rm -rf "$empty_cfg"' EXIT
-if MISE_CONFIG_DIR="$empty_cfg" MISE_LOCKED=1 mise install --dry-run-code; then
+if MISE_CONFIG_DIR="$empty_cfg" MISE_CEILING_PATHS="$(dirname "$PWD")" MISE_LOCKED=1 mise install --dry-run-code; then
   echo "toolchain matches the mise config and lockfiles"
 else
   echo "toolchain is out of date, or a pin is missing from a lockfile" >&2
