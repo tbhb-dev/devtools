@@ -130,6 +130,7 @@ funlen
 fuzztime
 getline
 getset
+ghapp
 ghassignees
 ghlabels
 ghmilestones
