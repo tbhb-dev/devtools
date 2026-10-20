@@ -14,6 +14,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/tbhb-dev/devtools/internal/credentials"
 )
 
 // Agent uses a clock supplied by the caller so renewal has no background state.
@@ -68,17 +70,9 @@ func (a Agent) load(ctx context.Context) error {
 	if a.Config.Provider == "file" {
 		return commandResult(a.command(ctx, "ssh-add", "-t", ttl, a.Config.KeyFile).Run())
 	}
-	// Operator configuration supplies an op reference as one argument, never shell text.
-	//nolint:gosec // The provider reference is operator-owned configuration.
-	provider := exec.CommandContext(ctx, "op", "read", a.Config.OPReference)
-	if a.Config.TokenCommand != "" {
-		// The configured command is an operator-owned executable, not shell text.
-		//nolint:gosec // The operator explicitly selects this executable.
-		token, err := exec.CommandContext(ctx, a.Config.TokenCommand).Output()
-		if err != nil {
-			return fmt.Errorf("read provider token: %w", err)
-		}
-		provider.Env = append(os.Environ(), "OP_SERVICE_ACCOUNT_TOKEN="+strings.TrimSpace(string(token)))
+	provider, err := credentials.OPCommand(ctx, a.Config.OPReference, a.Config.TokenCommand, false)
+	if err != nil {
+		return fmt.Errorf("signing provider: %w", err)
 	}
 	pipe, err := provider.StdoutPipe()
 	if err != nil {
