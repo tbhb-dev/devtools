@@ -40,24 +40,30 @@ dt_agent_context() {
   gitr rev-parse --verify --quiet HEAD >/dev/null || dt_die "Create the initial commit through the interactive commit skill first."
 }
 
-# Persistent bounds count findings only, including findings after a new commit.
+# Persistent bounds count findings only for one review subject.
 dt_agent_rounds() {
-  local state rounds max
+  local state subject rounds max stored_subject
   state=$(dt_state_dir) || return $?
+  subject=$2
   max=$(dt_repo_conf review_max_rounds 3) || return $?
   case $max in
   [1-9]) ;;
   *) dt_die "review_max_rounds must be an integer from 1 to 9" ;;
   esac
   rounds=0
-  [ ! -f "$state/$1.rounds" ] || rounds=$(cat "$state/$1.rounds") || return $?
+  if [ -f "$state/$1.rounds" ]; then
+    stored_subject=$(sed -n 's/^subject //p' "$state/$1.rounds") || return $?
+    if [ "$stored_subject" = "$subject" ]; then
+      rounds=$(sed -n 's/^rounds //p' "$state/$1.rounds") || return $?
+    fi
+  fi
   case $rounds in
   [0-9]) ;;
   *) rounds=$max ;;
   esac
-  if [ "${2:-check}" = finding ]; then
+  if [ "${3:-check}" = finding ]; then
     rounds=$((rounds + 1))
-    printf '%s\n' "$rounds" >"$state/$1.rounds"
+    printf 'subject %s\nrounds %s\n' "$subject" "$rounds" >"$state/$1.rounds"
   fi
   if [ "$rounds" -ge "$max" ]; then
     printf 'BLOCKED: review reached the bound of %s finding rounds. Leave the draft and index in place and report the findings.\n' "$max" >&2

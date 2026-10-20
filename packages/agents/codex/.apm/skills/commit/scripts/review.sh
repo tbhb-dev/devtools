@@ -117,6 +117,7 @@ dt_review_policy "$inputs" "$head" "$tree"
 criteria=$DT_LIB_DIR/../../review-commit-message/SKILL.md
 status=0
 dt_review commit "$draft" "$snapshot" "$criteria" "$root$arguments_suffix" "$inputs" still_as_gathered \
+  "tree:$tree" \
   tree "$tree" head "$head" mode "$mode" note "$note_digest" || status=$?
 case $status in
 0) ;;

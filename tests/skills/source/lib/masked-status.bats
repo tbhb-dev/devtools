@@ -133,7 +133,7 @@ function_from() {
     dt_review_prompt() { echo prompt; return 9; }
     dt_run_reviewer() { cat >/dev/null; echo "VERDICT: PASS"; }
     current() { return 0; }
-    dt_review t draft inputs/draft criteria args inputs current
+    dt_review t draft inputs/draft criteria args inputs current test-subject
   '
   [ "$status" -eq 4 ]
   [ ! -e .git/agent-skills/t.stamp ]
@@ -147,7 +147,7 @@ function_from() {
     dt_digest() { echo abc; [ ! -f reviewed ]; }
     dt_run_reviewer() { cat >/dev/null; touch reviewed; echo "VERDICT: PASS"; }
     current() { return 0; }
-    dt_review t draft inputs/draft criteria args inputs current
+    dt_review t draft inputs/draft criteria args inputs current test-subject
   '
   [ "$status" -eq 5 ]
   [ ! -e .git/agent-skills/t.stamp ]

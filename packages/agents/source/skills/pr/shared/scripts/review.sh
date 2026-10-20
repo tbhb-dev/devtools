@@ -124,6 +124,7 @@ dt_review_policy "$inputs" "$head" "$head"
 criteria=$DT_LIB_DIR/../../review-pr-description/SKILL.md
 status=0
 dt_review pr "$draft" "$snapshot" "$criteria" "$root" "$inputs" still_as_gathered \
+  "branch:$branch:$head" \
   head "$head" base "$base_ref" base_oid "$base_oid" mergebase "$mergebase" note "$note_digest" branch "$branch" || status=$?
 case $status in
 0) ;;
