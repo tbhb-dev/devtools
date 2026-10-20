@@ -78,6 +78,41 @@ GO
 	[ "$status" -ne 0 ]
 }
 
+@test "mutation task forwards Gremlins arguments and path exactly once" {
+	mkdir bin
+	cat >bin/go <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' "$@" >"$GREMLINS_ARGS"
+SH
+	chmod +x bin/go
+	cat >>mise.toml <<'TOML'
+[env]
+_.path = ["bin"]
+TOML
+	export GREMLINS_ARGS="$WORK/args"
+	run mise run devtools:mutate-go "./package with spaces" -- --dry-run --tags "tag one"
+	[ "$status" -eq 0 ] || {
+		echo "$output"
+		return 1
+	}
+	printf '%s\n' tool gremlins unleash --timeout-coefficient 100 "./package with spaces" --dry-run --tags "tag one" >expected
+	run diff -u expected "$GREMLINS_ARGS"
+	[ "$status" -eq 0 ]
+	run mise run devtools:mutate-go -- --dry-run
+	[ "$status" -eq 0 ]
+	printf '%s\n' tool gremlins unleash --timeout-coefficient 100 . --dry-run >expected
+	run diff -u expected "$GREMLINS_ARGS"
+	[ "$status" -eq 0 ]
+	run mise run devtools:mutate-go
+	[ "$status" -eq 0 ]
+	printf '%s\n' tool gremlins unleash --timeout-coefficient 100 . >expected
+	run diff -u expected "$GREMLINS_ARGS"
+	[ "$status" -eq 0 ]
+	run mise run devtools:mutate-go --help
+	[ "$status" -eq 0 ]
+	[[ "$output" == *'-- [Gremlins arguments]'* ]]
+}
+
 @test "mutation config bounds Gremlins to a four-CPU runner" {
 	for config in "$ROOT/.gremlins.yaml" "$ROOT/.devtools/config/go/.gremlins.yaml"; do
 		run python3 - "$config" <<'PY'
