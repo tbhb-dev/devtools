@@ -16,6 +16,7 @@ setup() {
   printf 'gate helper\n' >packages/agents/source/lib/gates.py
   printf 'agent helper\n' >packages/agents/source/lib/agent.sh
   printf 'signing helper\n' >packages/agents/source/lib/signing.sh
+  printf 'worktree helper\n' >packages/agents/source/lib/worktree-ready.sh
   printf -- '---\nname: demo\n---\n\n# Claude\n\n@include parts/body.md\n' >"$src/SKILL.claude.md"
   printf -- '---\nname: demo\n---\n\n# Codex\n\n@include parts/body.md\n' >"$src/SKILL.codex.md"
   printf 'Shared body.\n' >"$src/parts/body.md"
@@ -48,6 +49,15 @@ setup() {
 @test "generate leaves out the library where no script mentions it" {
   printf '#!/usr/bin/env bash\n' >"$src/shared/scripts/run.sh"
   bash "$GEN"
+  [ ! -e "$CLAUDE_OUT/scripts/lib.sh" ]
+}
+
+@test "generate copies the worktree helper where a script mentions it" {
+  printf '#!/usr/bin/env bash\nbash "$(dirname "$0")/worktree-ready.sh"\n' >"$src/shared/scripts/run.sh"
+
+  bash "$GEN"
+
+  [ "$(cat "$CLAUDE_OUT/scripts/worktree-ready.sh")" = 'worktree helper' ]
   [ ! -e "$CLAUDE_OUT/scripts/lib.sh" ]
 }
 

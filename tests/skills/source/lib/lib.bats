@@ -10,6 +10,7 @@ setup() {
   isolate_git
   ROOT="${BATS_TEST_DIRNAME}/../../../.."
   LIB="${ROOT}/packages/agents/claude/.apm/skills/commit/scripts/lib.sh"
+  WORKTREE_READY="${ROOT}/packages/agents/claude/.apm/skills/commit/scripts/worktree-ready.sh"
   REPO="${BATS_TEST_TMPDIR}/repo"
   unset CLAUDE_CODE_SESSION_ID CODEX_THREAD_ID CLAUDECODE DEVTOOLS_HARNESS
   unset DEVTOOLS_REVIEW_CMD DEVTOOLS_REVIEW_MODEL DEVTOOLS_REVIEW_EFFORT DEVTOOLS_DELEGATION_CHECK DEVTOOLS_REVIEW_TIMEOUT
@@ -52,6 +53,50 @@ lib() {
   [ "$output" = s ]
   CODEX_THREAD_ID=t lib dt_session_id
   [ "$output" = t ]
+}
+
+@test "dt_worktree_ready stops on an untrusted mise config without trusting it" {
+  printf '[env]\nVALUE = "unsafe"\n' >mise.toml
+  cat >"$BATS_TEST_TMPDIR/bin/mise" <<'STUB'
+#!/usr/bin/env bash
+case "$*" in
+*"trust --show") printf '%s: untrusted\n' "$PWD" ;;
+*"trust"*) touch "$BATS_TEST_TMPDIR/trusted" ;;
+esac
+STUB
+  chmod +x "$BATS_TEST_TMPDIR/bin/mise"
+
+  run bash "$WORKTREE_READY"
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"mise config is untrusted"* ]]
+  [[ "$output" == *"mise trust"* ]]
+  [ ! -e "$BATS_TEST_TMPDIR/trusted" ]
+}
+
+@test "dt_worktree_ready stops on missing Vale styles with the setup command" {
+  printf '[*]\nBasedOnStyles = Google\n' >.vale.ini
+  cat >"$BATS_TEST_TMPDIR/bin/vale" <<'STUB'
+#!/usr/bin/env bash
+echo "Style 'Google' isn't on the StylesPath" >&2
+exit 2
+STUB
+  chmod +x "$BATS_TEST_TMPDIR/bin/vale"
+
+  run bash "$WORKTREE_READY"
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Vale styles are missing"* ]]
+  [[ "$output" == *"mise run devtools:worktree-setup"* ]]
+}
+
+@test "all gate preflights run the shared worktree readiness check" {
+  for skill in commit pr merge-pr rebase; do
+    grep -q 'worktree-ready[.]sh' "$ROOT/packages/agents/source/skills/$skill/shared/scripts/preflight.sh"
+  done
+  for skill in agent-commit agent-pr agent-merge-pr; do
+    grep -q '../../.*scripts/preflight.sh' "$ROOT/packages/agents/source/skills/$skill/shared/scripts/preflight.sh"
+  done
 }
 
 @test "dt_conf reads the environment, then the machine files, never the repository" {

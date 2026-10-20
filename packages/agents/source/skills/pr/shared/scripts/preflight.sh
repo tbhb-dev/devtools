@@ -88,6 +88,7 @@ ahead_behind() {
 
 root=$(git rev-parse --show-toplevel)
 cd "$root"
+bash "$(dirname "${BASH_SOURCE[0]}")/worktree-ready.sh"
 pr_agent_context
 branch=$(git rev-parse --abbrev-ref HEAD)
 
