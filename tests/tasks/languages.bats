@@ -78,6 +78,26 @@ GO
 	[ "$status" -ne 0 ]
 }
 
+@test "mutation config bounds Gremlins to a four-CPU runner" {
+	for config in "$ROOT/.gremlins.yaml" "$ROOT/.devtools/config/go/.gremlins.yaml"; do
+		run python3 - "$config" <<'PY'
+import sys
+
+import yaml
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    unleash = yaml.safe_load(stream)["unleash"]
+
+assert unleash["workers"] == 2
+assert unleash["test-cpu"] == 2
+PY
+		[ "$status" -eq 0 ] || {
+			echo "$output"
+			return 1
+		}
+	done
+}
+
 @test "ldflags derives the consumer module and honors metadata overrides" {
 	printf 'module example.com/consumer\n\ngo 1.27.1\n' >go.mod
 	run bash .devtools/scripts/go-ldflags.sh

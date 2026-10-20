@@ -10,7 +10,13 @@
 # The timeout coefficient stays a recipe flag so the nightly workflow
 # can override it per run (a CLI flag outranks this file); see the
 # `mutate` task in mise.toml.
+#
+# Keep the worker and per-test CPU budgets within the four CPUs available
+# on a standard GitHub-hosted runner. Gremlins otherwise starts one worker
+# per CPU while leaving every concurrent `go test` process unconstrained.
 
 unleash:
+  workers: 2
+  test-cpu: 2
   exclude-files:
     - "^vendor/"
