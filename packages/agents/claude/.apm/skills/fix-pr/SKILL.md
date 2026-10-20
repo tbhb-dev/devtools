@@ -90,7 +90,7 @@ The description is on GitHub at this point, and often nothing sits on disk. Fetc
 bash .claude/skills/fix-pr/scripts/populate-description.sh <number>
 ```
 
-That rebuilds `PR_AGENTDESC.md` from what the pull request currently says, reassembling the frontmatter from the properties set on the pull request. It refuses to overwrite an existing draft without `--force`, because a `pr` workflow further up the stack may have one in flight.
+That rebuilds `PR_AGENTDESC.md` from what the pull request currently says, reassembling the frontmatter from the properties set on the pull request. Read its status before editing. `current` means the existing draft already matches the published pull request, while `refreshed` means the script created or replaced it. `hold` exits 75 because a nonempty draft differs. If a `pr` workflow further up the stack wrote that draft, preserve it and continue there. Otherwise the local file is stale. Rerun with `--force` to reconstruct the published description. Never silently replace an in-flight draft.
 
 A fix changes what the branch does, so the published description now describes a branch that has moved. Where the change alters what a reader needs to know, revise `PR_AGENTDESC.md` in this session or invoke the optional `write-pr-description` helper with the repository root and a note saying which commits arrived since the last publish.
 
