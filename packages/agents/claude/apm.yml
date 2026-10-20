@@ -9,7 +9,7 @@
 # depends on it by local path. The cog pre-bump hook keeps `version`
 # in lockstep with the root (see cog.toml).
 name: devtools-agents-claude
-version: 0.12.0
+version: 0.13.0
 description: Claude Code agent primitives for tbhb repositories
 author: tbhb
 license: Apache-2.0

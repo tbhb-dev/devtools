@@ -5,6 +5,40 @@ All notable changes to this project will be documented in this file. See [conven
 - - -
 <!-- release -->
 
+## [v0.13.0](https://github.com/tbhb-dev/devtools/compare/e6b8b816ad43d3ce6539f7febe47ba1e12ced6a4..v0.13.0) - 2026-10-20
+
+### Features
+
+- (**checks**) assess saved pull request check summaries (#242) - ([a433e7d](https://github.com/tbhb-dev/devtools/commit/a433e7d20524088f93a9c9a608ebafe2cb990146)) - tbhb.dev Agent
+- (**commit**) lint outgoing messages before push (#278) - ([388b543](https://github.com/tbhb-dev/devtools/commit/388b543b7d24187a3a97c1f5e3afeb8c8607df1e)) - tbhb.dev Agent
+- (**lint**) replace shell commit-message linters with Go (#257) - ([3628de6](https://github.com/tbhb-dev/devtools/commit/3628de6f1788d3262d947f0404f1101410bd9f01)) - tbhb.dev Agent
+- (**rust**) require justified and expiring lint exceptions (#256) - ([046ae37](https://github.com/tbhb-dev/devtools/commit/046ae3782ba828d5f7d91a02c6efce1abfc508aa)) - tbhb.dev Agent
+- (**skills**) add unattended pull request merging (#279) - ([ea48037](https://github.com/tbhb-dev/devtools/commit/ea480377b1e282d747fdf4c8590edd1444436352)) - tbhb.dev Agent
+- (**skills**) add unattended pull request publication (#269) - ([0a501c0](https://github.com/tbhb-dev/devtools/commit/0a501c0edec6fe99a10399646f2b445193be7c76)) - tbhb.dev Agent
+- (**skills**) add unattended agent commits (#268) - ([5e8a49f](https://github.com/tbhb-dev/devtools/commit/5e8a49f3d60b7e75af36cf178f5390a112e8976a)) - tbhb.dev Agent
+- (**tasks**) add opt-in Rust gates and starter policy (#247) - ([ebc577a](https://github.com/tbhb-dev/devtools/commit/ebc577ae7216e7bc1e75c4f325802991c460c8c0)) - tbhb.dev Agent
+- (**tools**) establish the shell migration baseline (#243) - ([8ce2704](https://github.com/tbhb-dev/devtools/commit/8ce2704e44088340895e60676aa0ae0582577235)) - tbhb.dev Agent
+
+### Bug Fixes
+
+- (**commit**) provision commit-lint for consumers (#302) - ([cc11120](https://github.com/tbhb-dev/devtools/commit/cc11120a822c57b15940343896201aa43a108495)) - tbhb.dev Agent
+- (**commit**) fall back to Git sign-off identity (#299) - ([bd6160f](https://github.com/tbhb-dev/devtools/commit/bd6160fddc6dc3257e165ece467faf2177f36142)) - tbhb.dev Agent
+- (**commit**) refuse configured agent sign-offs (#270) - ([f27dbed](https://github.com/tbhb-dev/devtools/commit/f27dbed82b0f1adbf973b49fc4e343cd327b4f7d)) - tbhb.dev Agent
+- (**deps**) update module github.com/pelletier/go-toml/v2 to v2.4.3 (#271) - ([21c2af4](https://github.com/tbhb-dev/devtools/commit/21c2af4e72498f289cbf6b23eb16685068683e3c)) - tbhb-dev-renovate[bot]
+- (**docs**) split the script inventory into smaller sections (#248) - ([1fc1359](https://github.com/tbhb-dev/devtools/commit/1fc135971e4c5b34f916d6cd3cecdb293dcec8f1)) - tbhb.dev Agent
+- (**lint**) check first-party agent skills and rules (#239) - ([f07e183](https://github.com/tbhb-dev/devtools/commit/f07e183a04dee24b9d7bc18f0135791f8960ef47)) - tbhb.dev Agent
+- (**merge-pr**) confirm merge completion before cleanup (#258) - ([91b0570](https://github.com/tbhb-dev/devtools/commit/91b05700166c11df8cb9dbe3e7a8a8ec8ba9ac6d)) - tbhb.dev Agent
+- (**release**) check authentication for the active account (#255) - ([e923ed9](https://github.com/tbhb-dev/devtools/commit/e923ed90ab65ffe8c0c29f543970b8f201cd65ef)) - tbhb.dev Agent
+- (**renovate**) keep Rust MSRV updates with the toolchain pin (#276) - ([8a9ca34](https://github.com/tbhb-dev/devtools/commit/8a9ca348bf59742e00fd59bf0df570ba5b5ae59a)) - tbhb.dev Agent
+- (**review**) bound reviewer execution and clean up its process group (#267) - ([5482f60](https://github.com/tbhb-dev/devtools/commit/5482f6040309d950b9903f6571840fd347d96054)) - tbhb.dev Agent
+- (**skills**) allow pull request drafting in the calling session (#252) - ([efbad91](https://github.com/tbhb-dev/devtools/commit/efbad91e056ab77b24294e3ace8608a0172b1b91)) - tbhb.dev Agent
+- (**tests**) pin the scanner stub in the mise fixture (#250) - ([152f925](https://github.com/tbhb-dev/devtools/commit/152f92555ab91568640280cc742c88c2a15a2e22)) - tbhb.dev Agent
+- apply commit rules to message previews (#238) - ([e6b8b81](https://github.com/tbhb-dev/devtools/commit/e6b8b816ad43d3ce6539f7febe47ba1e12ced6a4)) - tbhb.dev Agent
+
+- - -
+
+<!-- release -->
+
 ## [v0.12.0](https://github.com/tbhb-dev/devtools/compare/d318a049d711d71d610276b1864fb039ce99923c..v0.12.0) - 2026-10-17
 
 ### Features
