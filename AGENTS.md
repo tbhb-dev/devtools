@@ -136,6 +136,28 @@ Every scripted review reports the policy path, SHA-256 digest of the applied byt
 
 The same reader and prompt precedence serve commit, PR, and merge reviews on both harnesses.
 
+### Reviewer and Claude Code permissions
+
+`review_cmd` chooses the reviewer. It isn't only a display label. A Codex session needs a reviewer its approval layer permits it to start. Repository machines use `agy` in read-only plan mode through this machine setting in `~/.config/devtools/devtools.conf`:
+
+```text
+review_cmd = agy -p "$(cat)" --mode plan --add-dir "$DEVTOOLS_REVIEW_INPUTS" --print-timeout 900s
+```
+
+Claude Code operators can put these narrow rules in their personal `permissions.allow` settings after approving the corresponding action:
+
+```text
+Bash(bash .claude/skills/commit/scripts/review.sh *)
+Bash(bash .claude/skills/agent-commit/scripts/review.sh *)
+Bash(bash .claude/skills/merge-pr/scripts/review.sh *)
+Bash(bash .claude/skills/agent-merge-pr/scripts/review.sh *)
+Bash(bash .claude/skills/pr/scripts/create-pr.sh --rewrite)
+Bash(bash .claude/skills/pr/scripts/create-pr.sh --confirmed --rewrite)
+Bash(bash .claude/skills/agent-pr/scripts/publish.sh --rewrite)
+```
+
+The trailing wildcard covers each review script's optional current arguments and its bare invocation. These scripts have no `--unblock` flag. Permission rules come from an owner, never an agent expanding its own permissions.
+
 ## GitHub API quota in pull request skills
 
 PR publication, merge, and watch scripts read the active account through GraphQL `viewer.login`. An exhausted REST core quota doesn't prevent that check. Before a push, publication, or merge, the configured account must still match. A failed request prints GitHub's error. Account mismatches report the actual and configured logins.
