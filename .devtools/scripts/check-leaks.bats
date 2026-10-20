@@ -1131,6 +1131,34 @@ HOOK
 	[ ! -f "$BATS_TEST_TMPDIR/prek-ran" ]
 }
 
+@test "the wrapper names the required mise pin before reading stdin" {
+	hook_repo
+	cat >>.pre-commit-config.yaml <<'YAML'
+      - id: commit-msg-pre-push
+        name: commit-msg-pre-push
+        entry: true
+        language: system
+        stages: [pre-push]
+        always_run: true
+        pass_filenames: false
+YAML
+	bash .devtools/scripts/install-pre-push.sh >/dev/null
+	hooks=$(git rev-parse --git-path hooks)
+	mkdir -p "$BATS_TEST_TMPDIR/no-commit-lint"
+	cat >"$BATS_TEST_TMPDIR/no-commit-lint/cat" <<'STUB'
+#!/bin/sh
+touch "$BATS_TEST_TMPDIR/stdin-read"
+exit 0
+STUB
+	chmod +x "$BATS_TEST_TMPDIR/no-commit-lint/cat"
+
+	PATH="$BATS_TEST_TMPDIR/no-commit-lint:/usr/bin:/bin" run "$hooks/pre-push" origin
+
+	[ "$status" -eq 1 ]
+	[ "$output" = 'pre-push: commit-lint is not installed; add "go:github.com/tbhb-dev/devtools/cmd/commit-lint" = "<devtools-version>" to mise.toml [tools]' ]
+	[ ! -e "$BATS_TEST_TMPDIR/stdin-read" ]
+}
+
 @test "the installer check fails without the wrapper, and is skipped in CI" {
 	hook_repo
 	hooks=$(git rev-parse --git-path hooks)

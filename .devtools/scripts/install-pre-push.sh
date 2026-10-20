@@ -35,6 +35,10 @@ wrapper() {
 # devtools pre-push wrapper (installed by .devtools/scripts/install-pre-push.sh).
 # Runs the commit-message and optional leak checks on Git's ref lines,
 # then runs prek's hook with the same arguments and lines.
+if [ "$commit_lint" = true ] && ! command -v commit-lint >/dev/null 2>&1; then
+  echo 'pre-push: commit-lint is not installed; add "go:github.com/tbhb-dev/devtools/cmd/commit-lint" = "<devtools-version>" to mise.toml [tools]' >&2
+  exit 1
+fi
 hooks=$(cd "$(dirname "$0")" && pwd)
 input=$(mktemp) || exit 1
 trap 'rm -f "$input"' EXIT

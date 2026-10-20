@@ -91,16 +91,21 @@ PR, merge, and watch readers use GraphQL so REST core quota exhaustion doesn't p
 
 ### Bootstrap the runtime
 
-These instructions describe the current main branch for the next release. The v0.11.0 examples show pin syntax. That release lacks the new adoption tasks. Choose one released tag containing these changes for every devtools reference. Copy the [vendir manifest](.devtools/vendir.yml) into the consumer as `vendir.yml` and replace both refs with that tag. It delivers the whole `.devtools` tree and the mise drop-ins. Keep both paths in Git so updates can check their contents against the index. Existing consumers syncing only `.devtools/tasks` must expand the manifest to `.devtools/**` with `newRootPath: .devtools`.
+These instructions describe the current main branch for v0.13.0.
 
-The consumer needs mise and vendir before its first sync. Declare vendir, uv and APM in its root mise tools, then run `vendir sync` and `mise install`. Add the guard tool in the root tools table, using the same tag as the manifest:
+Choose that release for every devtools reference once it's available. Copy the [vendir manifest](.devtools/vendir.yml) into the consumer as `vendir.yml` and replace both refs with that tag. It delivers the whole `.devtools` tree and the mise drop-ins. Keep both paths in Git so updates can check their contents against the index. Existing consumers syncing only `.devtools/tasks` must expand the manifest to `.devtools/**` with `newRootPath: .devtools`.
+
+The consumer needs mise and vendir before its first sync. Declare vendir, uv and APM in its root mise tools, then run `vendir sync` and `mise install`. Add the guard and commit-message tools in the root tools table, using the same tag as the manifest:
 
 ```toml
 [tools]
-"go:github.com/tbhb-dev/devtools/cmd/guard-markdown" = "v0.11.0"
+"go:github.com/tbhb-dev/devtools/cmd/guard-markdown" = "v0.13.0"
+"go:github.com/tbhb-dev/devtools/cmd/commit-lint" = "v0.13.0"
 ```
 
-The optional `agentrepo` declaration enables [reviewer deadlines](docs/reviewer-timeout.md) once pinned to a release containing `review run`. Add it to the root tools table. Replace `<release-containing-review-run>` with the same released devtools version used by the other pins, choosing a release that includes `review run`:
+The optional `agentrepo` declaration enables [reviewer deadlines](docs/reviewer-timeout.md) once pinned to a release containing `review run`.
+
+Add it to the root tools table. Replace `<release-containing-review-run>` with the same released devtools version used by the other pins, choosing a release that includes `review run`:
 
 ```toml
 "go:github.com/tbhb-dev/devtools/cmd/agentrepo" = "<release-containing-review-run>"
@@ -108,7 +113,7 @@ The optional `agentrepo` declaration enables [reviewer deadlines](docs/reviewer-
 
 `devtools:update-pins` rewrites this declaration when present. `devtools:check-pins` checks it when present and recommends it when absent without failing.
 
-The baseline payload pins Go, which builds the guard. Keep this tool declaration in the root `mise.toml`: the pin tasks read and update that location. Replacing the old manual `go install` step puts the executable on the mise task PATH and makes its version part of the update contract. Run agent sessions under `mise exec --` so their hooks inherit that PATH too.
+The baseline payload pins Go, which builds both required commands. Keep these tool declarations in the root `mise.toml`: the pin tasks read and update that location. Replacing old manual `go install` steps puts the executables on the mise task PATH and makes their versions part of the update contract. Run agent sessions under `mise exec --` so their hooks inherit that PATH too.
 
 ### Configure draft tasks
 
@@ -151,7 +156,7 @@ Keep tag references and commit references aligned. The pin tasks read these form
 | Site | Form |
 | --- | --- |
 | `apm.yml` | `tbhb-dev/devtools#vX.Y.Z` or a supported agent sub-package with the same suffix |
-| Root `mise.toml` | Guard tool version `vX.Y.Z` in `[tools]` |
+| Root `mise.toml` | Guard and commit-message tool versions `vX.Y.Z` in `[tools]` |
 | `vendir.yml` | Both devtools Git refs use `vX.Y.Z` |
 | `.pre-commit-config.yaml` | Full commit SHA with `# frozen: vX.Y.Z` |
 | `.github/workflows/*.yml` or `*.yaml` | devtools `uses` calls use a full commit SHA with `# vX.Y.Z` |
@@ -165,7 +170,9 @@ To verify adoption, create a draft at a Vale-scoped path, run `mise run lint-dra
 
 For the next release, run `mise run devtools:update-pins <version>`.
 
-It resolves the tag and moves APM, guard, vendir, hook, workflow, and preset pins. It then syncs the payload and refreshes configured lock platforms. After installing the tools and reconciling APM, it checks the new pins. The consumer must select `apm.toml` alongside `pins.toml`. It no longer needs to supply an `apm-sync` task. Review and commit the resulting files. Unpinned Renovate presets remain unpinned and cause a disagreement with versioned sites.
+Upgrading to v0.13.0 requires the preceding `commit-lint` declaration. Add it before running `devtools:update-pins`. The update and pin-check tasks now treat it as a required site alongside `guard-markdown`.
+
+It resolves the tag and moves APM, tool, vendir, hook, workflow, and preset pins. It then syncs the payload and refreshes configured lock platforms. After installing the tools and reconciling APM, it checks the new pins. The consumer must select `apm.toml` alongside `pins.toml`. It no longer needs to supply an `apm-sync` task. Review and commit the resulting files. Unpinned Renovate presets remain unpinned and cause a disagreement with versioned sites.
 
 Wire `devtools:check-pins`, `devtools:check-vendored`, `devtools:check-toolchain` and `devtools:lint-apm` into the consumer's combined lint task. Keep local policy outside the vendored directories.
 
