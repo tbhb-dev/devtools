@@ -56,10 +56,14 @@ bash .claude/skills/merge-pr/scripts/squash-message.sh <number>
 Fix the prose findings with the `fix-prose` skill first, passing the draft and the task that judges it:
 
 ```text
-Skill(fix-prose, args: "SQUASH_AGENTMSG mise run lint-squash-msg")
+Skill(fix-prose, args: "SQUASH_AGENTMSG bash .claude/skills/merge-pr/scripts/lint-squash-msg.sh <number>")
 ```
 
-Then run the task yourself:
+Then run the wrapper yourself:
+
+```text
+bash .claude/skills/merge-pr/scripts/lint-squash-msg.sh <number>
+```
 
 @include parts/gates.md
 

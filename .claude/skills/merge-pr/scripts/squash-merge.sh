@@ -227,7 +227,7 @@ if [ "${DT_UNATTENDED:-0}" != 1 ]; then
   mise task info lint-squash-msg >/dev/null 2>&1 ||
     die "mise run lint-squash-msg is absent; the squash-message gate cannot run."
 fi
-ma_lint ||
+ma_lint "$reviewed_head" ||
   die "the squash message fails the commit-msg gates. Fix it, review it again, retry."
 commit-lint --rules trailers --require-assisted-from "$base_oid..$reviewed_head" "$SQUASH_DRAFT" ||
   die "the squash message lacks attribution required by the commits it collapses. Fix it, review it again, retry."

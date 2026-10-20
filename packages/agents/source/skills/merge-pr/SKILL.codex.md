@@ -48,7 +48,11 @@ bash .agents/skills/merge-pr/scripts/squash-message.sh <number>
 
 ## Step 4: run the commit-msg gates
 
-Fix the prose findings with the `fix-prose` skill first, on `SQUASH_AGENTMSG mise run lint-squash-msg`. Then run the task yourself:
+Fix the prose findings with the `fix-prose` skill first, on `SQUASH_AGENTMSG bash .agents/skills/merge-pr/scripts/lint-squash-msg.sh <number>`. Then run the wrapper yourself:
+
+```text
+bash .agents/skills/merge-pr/scripts/lint-squash-msg.sh <number>
+```
 
 @include parts/gates.md
 

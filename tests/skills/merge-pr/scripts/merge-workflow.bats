@@ -6,6 +6,7 @@
 # fixtures and log what they were asked; the reviewer is a stub set
 # through DEVTOOLS_REVIEW_CMD; the harness session variables are cleared
 # so the confirmation chain starts empty.
+# cspell:words absentword headword
 
 setup_file() {
   local source_root
@@ -229,6 +230,41 @@ setup() {
   [ "$status" -eq 1 ]
   [[ "$output" == *"lint-squash-msg is absent"* ]]
   [ ! -e "$GH_FIXTURES/merged" ]
+}
+
+@test "squash lint reads words from the pull request head, not the checkout (#274)" {
+  cat >.cspell.jsonc <<'JSON'
+{"dictionaryDefinitions":[{"name":"project","path":"./.cspell-words.txt","addWords":true}],"dictionaries":["project"]}
+JSON
+  printf 'headword\n' >.cspell-words.txt
+  git add -- .cspell.jsonc .cspell-words.txt
+  git commit --quiet -m 'test: add a project word'
+  HEAD_OID=$(git rev-parse HEAD)
+  pr ".headRefOid = \"$HEAD_OID\""
+  git checkout --quiet main
+  printf 'fix: use headword (#7)\n' >SQUASH_AGENTMSG
+
+  MISE_REAL_SQUASH_LINT=1 run bash "$SCRIPTS/lint-squash-msg.sh" 7
+
+  [ "$status" -eq 0 ]
+}
+
+@test "squash lint still rejects a word absent from the pull request head (#274)" {
+  cat >.cspell.jsonc <<'JSON'
+{"dictionaryDefinitions":[{"name":"project","path":"./.cspell-words.txt","addWords":true}],"dictionaries":["project"]}
+JSON
+  printf 'headword\n' >.cspell-words.txt
+  git add -- .cspell.jsonc .cspell-words.txt
+  git commit --quiet -m 'test: add a project word'
+  HEAD_OID=$(git rev-parse HEAD)
+  pr ".headRefOid = \"$HEAD_OID\""
+  git checkout --quiet main
+  printf 'fix: use absentword (#7)\n' >SQUASH_AGENTMSG
+
+  MISE_REAL_SQUASH_LINT=1 run bash "$SCRIPTS/lint-squash-msg.sh" 7
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"absentword"* ]]
 }
 
 @test "squash-merge waits out an UNKNOWN mergeability and then merges" {

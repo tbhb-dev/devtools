@@ -67,7 +67,6 @@ mp_need_tools
 root=$(dt_root)
 cd "$root"
 ma_context
-if [ "${DT_UNATTENDED:-0}" = 1 ]; then ma_lint; fi
 draft=$root/SQUASH_AGENTMSG
 [ -s "$draft" ] || dt_die "SQUASH_AGENTMSG is missing or empty. Run squash-message.sh and write the body first."
 drafted_for=$(head -n 1 "$draft" | sed -n 's/.*(#\([0-9][0-9]*\))[[:space:]]*$/\1/p')
@@ -89,6 +88,7 @@ mp_require_reviews "$view" "$number"
 head=$(mp_field "$view" headRefOid)
 base=$(mp_field "$view" baseRefName)
 [ -n "$head" ] && [ -n "$base" ] || dt_die "#$number names no head or no base."
+if [ "${DT_UNATTENDED:-0}" = 1 ]; then ma_lint "$head"; fi
 base_oid=$(mp_base_oid "$base") || exit $?
 [ -n "$base_oid" ] || dt_die "Could not read where $base points."
 ma_gates "$view" "$number" "$base_oid"
