@@ -138,3 +138,32 @@ func TestConfig(t *testing.T) {
 	_, err = ReadConfig(home, get)
 	require.Error(t, err)
 }
+
+func TestEntryRun(t *testing.T) {
+	home := t.TempDir()
+	keyFile := filepath.Join(home, "key.pem")
+	t.Setenv("DEVTOOLS_REVIEWER_CONFIG", filepath.Join(home, "missing.env"))
+	t.Setenv("DEVTOOLS_REVIEWER_PROVIDER", "file")
+	t.Setenv("DEVTOOLS_REVIEWER_APP_ID", "123")
+	t.Setenv("DEVTOOLS_REVIEWER_KEY_FILE", keyFile)
+	require.Error(t, Run(t.Context(), home, []string{"--install", "invalid"}))
+	require.NoError(t, Run(t.Context(), home, []string{"--install"}))
+	require.NoError(t, Run(t.Context(), home, []string{"--install", "--force"}))
+	now := time.Now()
+	c, err := ReadConfig(home, os.Getenv)
+	require.NoError(t, err)
+	require.NoError(t, storeToken(c, "owner/repo", ghapp.Token{Value: "cached-token", Expires: now.Add(time.Hour)}))
+	original := execGH
+	t.Cleanup(func() { execGH = original })
+	called := false
+	execGH = func(_ string, argv, env []string) error {
+		called = true
+		require.Equal(t, []string{"gh", "pr", "review", "-R", "owner/repo"}, argv)
+		require.Contains(t, env, "GH_TOKEN=cached-token")
+		return os.ErrPermission
+	}
+	require.ErrorIs(t, Run(t.Context(), home, []string{"pr", "review", "-R", "owner/repo"}), os.ErrPermission)
+	require.True(t, called)
+	t.Setenv("DEVTOOLS_REVIEWER_PROVIDER", "invalid")
+	require.Error(t, Run(t.Context(), home, nil))
+}

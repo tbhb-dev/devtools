@@ -34,3 +34,12 @@ func TestInstall(t *testing.T) {
 		require.Equal(t, os.FileMode(0o700), info.Mode().Perm())
 	}
 }
+
+func TestInstallErrors(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	require.Error(t, Install(home, filepath.Join(home, "missing"), false))
+	blocker := filepath.Join(t.TempDir(), "file")
+	require.NoError(t, os.WriteFile(blocker, []byte("block directory creation"), 0o600))
+	require.Error(t, Install(blocker, blocker, false))
+}

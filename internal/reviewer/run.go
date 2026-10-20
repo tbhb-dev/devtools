@@ -16,6 +16,9 @@ import (
 	"github.com/tbhb-dev/devtools/internal/ghapp"
 )
 
+//nolint:gochecknoglobals // Platform initialization selects the implementation before use.
+var execGH = execOther
+
 // Runner exposes the clock, GitHub transport and final exec for offline tests.
 type Runner struct {
 	Config Config

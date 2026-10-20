@@ -10,9 +10,12 @@ import (
 	"syscall"
 )
 
-func execGH(binary string, args, env []string) error {
-	if err := syscall.Exec(binary, args, env); err != nil {
-		return fmt.Errorf("replace reviewer process: %w", err)
-	}
-	return nil
+//nolint:gochecknoinits // Select process replacement before any reviewer command runs.
+func init() {
+	execGH = execUnix
+}
+
+func execUnix(binary string, args, env []string) error {
+	// A successful call replaces the process, so this function only returns an error.
+	return fmt.Errorf("replace reviewer process: %w", syscall.Exec(binary, args, env))
 }
