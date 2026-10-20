@@ -149,21 +149,26 @@ func TestEntryRun(t *testing.T) {
 	require.Error(t, Run(t.Context(), home, []string{"--install", "invalid"}))
 	require.NoError(t, Run(t.Context(), home, []string{"--install"}))
 	require.NoError(t, Run(t.Context(), home, []string{"--install", "--force"}))
-	now := time.Now()
-	c, err := ReadConfig(home, os.Getenv)
-	require.NoError(t, err)
-	require.NoError(t, storeToken(c, "owner/repo", ghapp.Token{Value: "cached-token", Expires: now.Add(time.Hour)}))
-	original := execGH
-	t.Cleanup(func() { execGH = original })
-	called := false
-	execGH = func(_ string, argv, env []string) error {
-		called = true
-		require.Equal(t, []string{"gh", "pr", "review", "-R", "owner/repo"}, argv)
-		require.Contains(t, env, "GH_TOKEN=cached-token")
-		return os.ErrPermission
-	}
-	require.ErrorIs(t, Run(t.Context(), home, []string{"pr", "review", "-R", "owner/repo"}), os.ErrPermission)
-	require.True(t, called)
+	t.Run("cached exec failure", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("Windows file modes cannot satisfy the cache's Unix permission checks")
+		}
+		now := time.Now()
+		c, err := ReadConfig(home, os.Getenv)
+		require.NoError(t, err)
+		require.NoError(t, storeToken(c, "owner/repo", ghapp.Token{Value: "cached-token", Expires: now.Add(time.Hour)}))
+		original := execGH
+		t.Cleanup(func() { execGH = original })
+		called := false
+		execGH = func(_ string, argv, env []string) error {
+			called = true
+			require.Equal(t, []string{"gh", "pr", "review", "-R", "owner/repo"}, argv)
+			require.Contains(t, env, "GH_TOKEN=cached-token")
+			return os.ErrPermission
+		}
+		require.ErrorIs(t, Run(t.Context(), home, []string{"pr", "review", "-R", "owner/repo"}), os.ErrPermission)
+		require.True(t, called)
+	})
 	t.Setenv("DEVTOOLS_REVIEWER_PROVIDER", "invalid")
 	require.Error(t, Run(t.Context(), home, nil))
 }
