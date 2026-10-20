@@ -77,6 +77,8 @@ mise run build
 
 [mise](https://mise.jdx.dev) pins the toolchain and runs the workflow: `mise run bootstrap` sets up a fresh clone, `mise run lint` runs the full lint suite, `mise run test` runs the tests, and `mise run build` compiles the binaries into `bin/`. On a machine with no mise, the committed shim at `tools/mise-bootstrap` runs in place of `mise` and installs the pinned release on first use. The pins live in [mise.toml](mise.toml) and the drop-ins under `.config/mise/conf.d/`, locked by digest in the committed `mise.lock` files. See [AGENTS.md](AGENTS.md) for the agent-facing contributor guide.
 
+After creating a linked worktree, inspect its configuration and run `mise trust`, then run `mise run devtools:worktree-setup`. The setup task refuses an untrusted configuration. Once trusted, it prepares the worktree-local Vale styles with `vale sync` and the Python environment with `uv sync`. Skill setup checks stop with these commands when the configuration is untrusted or the ignored Vale styles are absent.
+
 The test task includes Go, Python, hook Bats, and leak Bats suites. Run `mise run test-hooks` or `mise run test-leaks` for the shell suites. CI runs them in `test-bats (ubuntu-24.04)` and `test-bats (macos-15)`. See the [task and CI routing guide](AGENTS.md#tasks) for the check names `fix-pr` recognizes.
 
 ### Review and delegated runs

@@ -57,6 +57,7 @@ root=$(git rev-parse --show-toplevel)
 cd "$root"
 readonly SOURCE=packages/agents/source
 readonly LIB=$SOURCE/lib/lib.sh
+readonly WORKTREE_READY=$SOURCE/lib/worktree-ready.sh
 
 scratch=$(mktemp -d)
 trap 'rm -rf "$scratch"' EXIT
@@ -111,6 +112,9 @@ build() {
     cp -p "$LIB" "$out/scripts/lib.sh"
     cp -p "$SOURCE/lib/gates.py" "$out/scripts/gates.py"
     cp -p "$SOURCE/lib/agent.sh" "$SOURCE/lib/signing.sh" "$out/scripts/"
+  fi
+  if [ -d "$out/scripts" ] && grep -rqF 'worktree-ready.sh' "$out/scripts"; then
+    cp -p "$WORKTREE_READY" "$out/scripts/worktree-ready.sh"
   fi
 }
 

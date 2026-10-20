@@ -39,6 +39,7 @@ none() { printf '(none)\n'; }
 
 root=$(dt_root)
 cd "$root"
+bash "$(dirname "${BASH_SOURCE[0]}")/worktree-ready.sh"
 ma_context
 
 section "gh"

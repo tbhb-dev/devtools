@@ -34,6 +34,10 @@ IFS=$' \t\n'
 # shellcheck disable=SC1091 # lib.sh is generated beside this script
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
+root=$(git rev-parse --show-toplevel)
+cd "$root"
+bash "$(dirname "${BASH_SOURCE[0]}")/worktree-ready.sh"
+
 # Diff budget. The full patch is worth inlining when it is small enough
 # to read, and actively harmful when it is not: an oversized paste
 # crowds out the rest of the skill. Past the cap the report prints the
@@ -101,8 +105,6 @@ behind_count() {
   printf '%s\n' "${counts%%[[:space:]]*}"
 }
 
-root=$(git rev-parse --show-toplevel)
-cd "$root"
 if [ "${DT_UNATTENDED:-0}" = 1 ]; then
   dt_agent_context
   dt_agent_signing

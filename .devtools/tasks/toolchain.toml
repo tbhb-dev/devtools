@@ -37,3 +37,21 @@ else
   exit 1
 fi
 '''
+
+["devtools:worktree-setup"]
+description = "Prepare ignored dependencies in a trusted worktree"
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+trust=$(mise trust --show)
+case $trust in
+*": untrusted"*)
+  echo "worktree setup: mise config is untrusted. Run:" >&2
+  echo >&2
+  echo "  mise trust" >&2
+  exit 1
+  ;;
+esac
+vale sync
+uv sync
+'''

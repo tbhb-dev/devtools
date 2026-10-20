@@ -92,6 +92,7 @@ behind_count() {
 
 root=$(git rev-parse --show-toplevel)
 cd "$root"
+bash "$(dirname "${BASH_SOURCE[0]}")/worktree-ready.sh"
 branch=$(git rev-parse --abbrev-ref HEAD)
 
 default_branch=main
