@@ -114,10 +114,36 @@ ma_identity() {
   [ "$want" = "$actual" ] || dt_die "gh is signed in as $actual, not $want"
 }
 
+ma_readiness_command() {
+  local source=$1 configured=$2 ready result
+  [ -n "$configured" ] || return 0
+  ready=$(dt_path "$configured") || return $?
+  [ -x "$ready" ] || dt_die "$source merge_ready_cmd must name an executable"
+  if "$ready" "$root" "$pr" "$head"; then
+    return 0
+  else
+    result=$?
+  fi
+  printf '%s merge_ready_cmd refused merge (exit %s)\n' "$source" "$result" >&2
+  return "$result"
+}
+
+ma_readiness() {
+  local repository_ready machine_ready repository_status machine_status
+  repository_ready=$(dt_repo_conf merge_ready_cmd) || return $?
+  machine_ready=$(dt_conf merge_ready_cmd) || return $?
+  repository_status=0
+  machine_status=0
+  ma_readiness_command repository "$repository_ready" || repository_status=$?
+  ma_readiness_command machine "$machine_ready" || machine_status=$?
+  [ "$repository_status" -eq 0 ] || return "$repository_status"
+  return "$machine_status"
+}
+
 # Reused before review and again immediately before every merge write.
 ma_gates() {
   ma_require_gates || return 0
-  local view=$1 pr=$2 base_oid=$3 final=${4:-false} head base reviewer reviewer_type label ready config key value required default dir st root encoded merge_base
+  local view=$1 pr=$2 base_oid=$3 final=${4:-false} head base reviewer reviewer_type label config key value required default dir st root encoded merge_base
   ma_context || return $?
   st=$(dt_state_dir) || return $?
   root=$(dt_root) || return $?
@@ -174,12 +200,7 @@ ma_gates() {
   set -- checks evaluate --file "$view" --expected-head "$head" --pr "$pr" --base "$base_oid" --merge-base "$merge_base"
   while IFS= read -r value; do set -- "$@" --required "$value"; done <<<"$required"
   "$_DEVTOOLS_AGENTREPO_BIN" "$@" || return $?
-  ready=$(dt_repo_conf merge_ready_cmd) || return $?
-  if [ "$final" != true ] && [ -n "$ready" ]; then
-    ready=$(dt_path "$ready") || return $?
-    [ -x "$ready" ] || dt_die "merge_ready_cmd must name an executable"
-    "$ready" "$root" "$pr" "$head" || return $?
-  fi
+  if [ "$final" != true ]; then ma_readiness || return $?; fi
 }
 
 ma_prepare_children() {

@@ -106,7 +106,7 @@ RULE
   [ "$status" -ne 0 ]
 }
 
-@test "readiness command refusal and changed message prevent a merge" {
+@test "repository readiness command can refuse a merge" {
   cat >"$BATS_TEST_TMPDIR/ready" <<'READY'
 #!/usr/bin/env bash
 exit 1
@@ -121,7 +121,55 @@ READY
   approve_owner
   run bash "$AGENT/review.sh" 7
   [ "$status" -ne 0 ]
+  [[ "$output" == *"repository merge_ready_cmd refused merge"* ]]
   [ ! -f "$GH_FIXTURES/merged" ]
+}
+
+@test "machine readiness command can refuse a merge" {
+  mkdir -p "$XDG_CONFIG_HOME/devtools"
+  cat >"$BATS_TEST_TMPDIR/machine-ready" <<'READY'
+#!/usr/bin/env bash
+exit 1
+READY
+  chmod +x "$BATS_TEST_TMPDIR/machine-ready"
+  printf 'merge_ready_cmd = %s\n' "$BATS_TEST_TMPDIR/machine-ready" >"$XDG_CONFIG_HOME/devtools/repo.conf"
+  run bash "$AGENT/review.sh" 7
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"machine merge_ready_cmd refused merge"* ]]
+}
+
+@test "repository and machine readiness commands both run and can refuse" {
+  mkdir -p "$XDG_CONFIG_HOME/devtools"
+  cat >"$BATS_TEST_TMPDIR/repository-ready" <<'READY'
+#!/usr/bin/env bash
+printf 'repository\n' >>"$GH_FIXTURES/readiness"
+exit 1
+READY
+  cat >"$BATS_TEST_TMPDIR/machine-ready" <<'READY'
+#!/usr/bin/env bash
+printf 'machine\n' >>"$GH_FIXTURES/readiness"
+exit 2
+READY
+  chmod +x "$BATS_TEST_TMPDIR/repository-ready" "$BATS_TEST_TMPDIR/machine-ready"
+  printf '\nmerge_ready_cmd = %s\n' "$BATS_TEST_TMPDIR/repository-ready" >>.agents/agent-skills.conf
+  printf 'merge_ready_cmd = %s\n' "$BATS_TEST_TMPDIR/machine-ready" >"$XDG_CONFIG_HOME/devtools/repo.conf"
+  git add -- .agents/agent-skills.conf
+  git commit --quiet -m 'test: readiness'
+  HEAD_OID=$(git rev-parse HEAD)
+  git push --quiet origin topic
+  pr ".headRefOid=\"$HEAD_OID\" | .reviews[0].commit.oid=\"$HEAD_OID\""
+  approve_owner
+  run bash "$AGENT/review.sh" 7
+  [ "$status" -eq 1 ]
+  [ "$(cat "$GH_FIXTURES/readiness")" = $'repository\nmachine' ]
+  [[ "$output" == *"repository merge_ready_cmd refused merge"* ]]
+  [[ "$output" == *"machine merge_ready_cmd refused merge"* ]]
+}
+
+@test "no readiness configuration adds no check" {
+  run bash "$AGENT/review.sh" 7
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"merge_ready_cmd"* ]]
 }
 
 @test "owner approval withdrawn by delegation blocks before merge" {
