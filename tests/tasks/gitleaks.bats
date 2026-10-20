@@ -13,6 +13,22 @@ setup() {
   export NO_COLOR=1
 }
 
+@test "the task description matches its Git history scan" {
+  run uv run python - "${BATS_TEST_DIRNAME}/../../.devtools/tasks/security.toml" <<'PY'
+import pathlib
+import sys
+import tomllib
+
+source = pathlib.Path(sys.argv[1]).read_text()
+task = tomllib.loads(source)["devtools:gitleaks"]
+assert "gitleaks git --verbose --redact ." in task["run"]
+assert task["description"] == "Scan Git history for committed secrets"
+assert "it reads git history rather than the\n# working tree" in source
+PY
+
+  [ "$status" -eq 0 ]
+}
+
 @test "a committed fake token reports its rule and location without the secret" {
   git init -q
   local fake_token

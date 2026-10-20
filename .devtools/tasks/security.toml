@@ -21,7 +21,7 @@
 # The output goes to a file rather than through a pipe so gitleaks' own
 # exit code survives.
 ["devtools:gitleaks"]
-description = "Scan the working tree and full git history for committed secrets"
+description = "Scan Git history for committed secrets"
 run = '''
 #!/usr/bin/env bash
 set -eu
