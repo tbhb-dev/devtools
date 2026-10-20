@@ -50,3 +50,7 @@ Under its own category, the gomodscan report remains unfiltered.
 Run `mise run devtools:lint-workflows` and `mise exec -- bats tests/workflows/security.bats tests/workflows/sarif.bats` in devtools to verify the workflow contracts and SARIF fixtures.
 
 The Rust advisory workflow runs `devtools:vuln-rust` and fails on findings or scanner errors. The caller includes the shared Rust tasks and pins Rust and `cargo-deny` in its own mise configuration. See [Rust adoption](rust-adoption.md) for the tool block and starter policy.
+
+The text `devtools:gomodscan` task and `devtools:vendor-check` intentionally skip modules without a tracked `vendor/modules.txt`, with a skip diagnostic. They don't create a vendor directory for these modules. Vendored modules keep the scan and vendor drift checks. The SARIF task requires a tracked vendor manifest. Non-vendoring modules must omit the gomodscan upload workflow.
+
+The wrappers support the pinned gomodscan v0.1.0 completion diagnostics. Any extra stderr output, including a module lookup failure, or a missing completion summary is a tool failure (status 2). Diagnostics keep the module and service error. Complete text scans return 0 when clean and 1 for findings. Complete SARIF scans return 0 for either outcome, after validating the report's JSON, SARIF version, runs, tool names, and result messages. SARIF validation requires `jq`. The output parent directory must already exist. An output open failure or invalid report fails the task with the requested path in the error.
