@@ -54,7 +54,7 @@
 # this task from a git hook today, which is exactly why the failure would
 # be a surprise.
 ["devtools:update-pins"]
-description = "Move every tbhb-dev/devtools pin to <version> and run the follow-ons (alias: devtools:update)"
+description = "Move every tbhb-dev/devtools pin to <version> and run the follow-ons; check-pins flags prose mentions for manual edits (alias: devtools:update)"
 alias = "devtools:update"
 usage = 'arg "<version>" help="The devtools release to move to, e.g. v0.5.0"'
 run = '''
@@ -342,6 +342,27 @@ fi
 
 if [ "$rc" -ne 0 ]; then
   echo "         run 'mise run devtools:update-pins <version>' to move every site together" >&2
+  exit 1
+fi
+
+# Search tracked working-tree text, including adapted configuration headers.
+# git grep returns 1 for no matches; other failures must still fail the gate.
+mentions=$(git grep -nI -o -E 'tbhb-dev/devtools[[:space:]]+v[0-9]+\.[0-9]+\.[0-9]+' --) || {
+  status=$?
+  [ "$status" -eq 1 ] || exit "$status"
+}
+if ! printf '%s\n' "$mentions" | awk -v pin="$guard_version" '
+  NF {
+    mention = $0
+    sub(/^.*tbhb-dev\/devtools[[:space:]]+/, "", mention)
+    if (mention != pin) {
+      site = $0; sub(/:tbhb-dev\/devtools[[:space:]]+v[0-9]+\.[0-9]+\.[0-9]+$/, "", site)
+      printf "%s: prose mentions %s; pinned %s (edit manually)\n", site, mention, pin > "/dev/stderr"
+      bad = 1
+    }
+  }
+  END { exit bad }
+'; then
   exit 1
 fi
 

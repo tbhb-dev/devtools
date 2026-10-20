@@ -10,8 +10,16 @@ setup() {
   cp "${BATS_TEST_DIRNAME}/../../.devtools/vendir.yml" "$WORK/vendir.yml"
   extract_task devtools:update-pins > "${BATS_TEST_TMPDIR}/update.sh"
   extract_task devtools:check-pins > "${BATS_TEST_TMPDIR}/check.sh"
+  export REAL_GIT
+  REAL_GIT=$(command -v git)
+  cd "$WORK"
+  "$REAL_GIT" init -q
+  "$REAL_GIT" add -- mise.toml apm.yml vendir.yml .github
   cat > "$STUB/git" <<'STUB'
 #!/usr/bin/env bash
+if [ "$1" != ls-remote ]; then
+  exec "$REAL_GIT" "$@"
+fi
 printf 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\trefs/tags/v0.11.0^{}\n'
 STUB
   cat > "$STUB/mise" <<'STUB'
@@ -179,4 +187,35 @@ YAML
   run bash "$CHECK_SCRIPT"
   [ "$status" -eq 1 ]
   [[ "$output" == *'missing guard-markdown'* ]]
+}
+
+@test "check accepts a matching tracked prose mention" {
+  printf '# adapted from tbhb-dev/devtools v0.10.0.\n' > tombi.toml
+  git add -- tombi.toml
+  run bash "$CHECK_SCRIPT"
+  [ "$status" -eq 0 ]
+}
+
+@test "check rejects every stale prose mention with its location and pin" {
+  printf '# adapted from tbhb-dev/devtools v0.9.0 and tbhb-dev/devtools v0.8.0.\n' > tombi.toml
+  git add -- tombi.toml
+  run bash "$CHECK_SCRIPT"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *'tombi.toml:1'*'v0.9.0'*'pinned v0.10.0'* ]]
+  [[ "$output" == *'tombi.toml:1'*'v0.8.0'*'pinned v0.10.0'* ]]
+}
+
+@test "check accepts no prose mention and ignores untracked mentions" {
+  printf '# adapted from tbhb-dev/devtools v0.9.0\n' > untracked.toml
+  run bash "$CHECK_SCRIPT"
+  [ "$status" -eq 0 ]
+}
+
+@test "update leaves prose for a manual edit reported by check" {
+  printf '# adapted from tbhb-dev/devtools v0.10.0\n' > tombi.toml
+  git add -- tombi.toml
+  run env usage_version=v0.11.0 bash "${BATS_TEST_TMPDIR}/update.sh"
+  [ "$status" -eq 1 ]
+  grep -Fxq '# adapted from tbhb-dev/devtools v0.10.0' tombi.toml
+  [[ "$output" == *'tombi.toml:1'*'pinned v0.11.0'* ]]
 }
