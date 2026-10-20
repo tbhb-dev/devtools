@@ -80,6 +80,8 @@ GO
 
 @test "mutation task forwards Gremlins arguments and path exactly once" {
 	mkdir bin
+	# Exercise stock Bash, including macOS Bash 3.2's empty-array behavior.
+	ln -s /bin/bash bin/bash
 	cat >bin/go <<'SH'
 #!/usr/bin/env bash
 printf '%s\n' "$@" >"$GREMLINS_ARGS"

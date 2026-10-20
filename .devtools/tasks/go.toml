@@ -139,7 +139,7 @@ run = '''
 set -eu
 # mise supplies variadic arguments as a shell-quoted string.
 eval "args=(${usage_args:-})"
-go tool gremlins unleash --timeout-coefficient "${GREMLINS_TIMEOUT_COEFFICIENT:-100}" "$usage_path" "${args[@]}"
+go tool gremlins unleash --timeout-coefficient "${GREMLINS_TIMEOUT_COEFFICIENT:-100}" "$usage_path" ${args[@]+"${args[@]}"}
 '''
 
 ["devtools:mutate-go-all"]
