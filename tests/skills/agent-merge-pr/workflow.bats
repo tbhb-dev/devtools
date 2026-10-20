@@ -4,6 +4,11 @@ setup() {
   agent_setup
 }
 
+@test "unattended review requests every shared gate field" {
+  run bash "$AGENT/review.sh" 7
+  [ "$status" -eq 0 ]
+}
+
 @test "unattended merger rejects confirmed even with session grant" {
   grant merge
   run bash "$AGENT/merge.sh" --confirmed 7

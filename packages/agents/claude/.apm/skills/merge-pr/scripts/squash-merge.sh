@@ -114,7 +114,7 @@ printf 'drafted for #%s\n' "$number"
 view=$state/merge.view.json
 read_live() {
   mp_view "$number" "$view" \
-    state,isDraft,mergeable,mergeStateStatus,reviewDecision,headRefName,baseRefName,headRefOid,isCrossRepository,statusCheckRollup,labels,reviews || exit $?
+    "$MA_GATE_FIELDS,reviewDecision,headRefName,isCrossRepository" || exit $?
   head_oid=$(mp_field "$view" headRefOid)
   base_ref=$(mp_field "$view" baseRefName)
   base_oid=$(mp_base_oid "$base_ref") || exit $?

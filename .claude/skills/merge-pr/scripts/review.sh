@@ -81,7 +81,7 @@ esac
 # response, which names the head and the base it describes.
 inputs=$(dt_new_inputs squash)
 view=$inputs/pull-request.json
-mp_view "$number" "$view" number,title,body,state,baseRefName,headRefName,headRefOid,commits,reviewDecision,labels,reviews,statusCheckRollup || exit $?
+mp_view "$number" "$view" "$MA_GATE_FIELDS,number,title,body,headRefName,commits,reviewDecision" || exit $?
 pr_state=$(mp_field "$view" state) || exit $?
 [ "$pr_state" = OPEN ] || dt_die "#$number is $pr_state, not OPEN."
 mp_require_reviews "$view" "$number"
