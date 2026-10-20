@@ -344,8 +344,8 @@ printf 'removed %s and %s\n' "$SQUASH_DRAFT" "$DESC_DRAFT"
 
 # The remote branch goes; the local one may be the branch this worktree
 # stands on, and deleting that would strand the session. Say so instead.
-if [ "$cross_repo" = false ] && git ls-remote --exit-code --heads origin "$head_ref" >/dev/null 2>&1; then
-  if deleted=$(git push --force-with-lease="refs/heads/$head_ref:$reviewed_head" origin ":refs/heads/$head_ref" 2>&1); then
+if [ "$cross_repo" = false ] && dt_git_network ls-remote --exit-code --heads origin "$head_ref" >/dev/null 2>&1; then
+  if deleted=$(dt_git_network push --force-with-lease="refs/heads/$head_ref:$reviewed_head" origin ":refs/heads/$head_ref" 2>&1); then
     printf 'deleted origin/%s\n' "$head_ref"
   elif printf '%s\n' "$deleted" | grep -Fq 'remote ref does not exist'; then
     printf 'origin/%s was already deleted\n' "$head_ref"
@@ -354,7 +354,7 @@ if [ "$cross_repo" = false ] && git ls-remote --exit-code --heads origin "$head_
   fi
 fi
 
-git fetch --quiet origin "$base_ref" 2>/dev/null || true
+dt_git_network fetch --quiet origin "$base_ref" 2>/dev/null || true
 if [ "$cross_repo" = true ]; then
   printf 'left fork branch %s untouched\n' "$head_ref"
 elif [ "$branch" = "$head_ref" ]; then

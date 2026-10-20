@@ -160,7 +160,10 @@ printf 'commit guard: armed at %s, inert again once HEAD moves\n' "$head"
 section "rebase base"
 fetch_state=skipped
 if [ "$DO_FETCH" = "1" ]; then
-  if run_with_timeout "$FETCH_TIMEOUT" git fetch --quiet origin "$default_branch" 2>/dev/null; then
+  # shellcheck disable=SC2016 # The child Bash expands the positional parameters.
+  if run_with_timeout "$FETCH_TIMEOUT" bash -c \
+    '. "$1"; shift; dt_git_network "$@"' _ "$DT_LIB_DIR/lib.sh" \
+    fetch --quiet origin "$default_branch" 2>/dev/null; then
     fetch_state=ok
   else
     fetch_state="failed (origin counts below may be stale)"

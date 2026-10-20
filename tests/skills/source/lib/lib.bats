@@ -12,7 +12,7 @@ setup() {
   LIB="${ROOT}/packages/agents/claude/.apm/skills/commit/scripts/lib.sh"
   REPO="${BATS_TEST_TMPDIR}/repo"
   unset CLAUDE_CODE_SESSION_ID CODEX_THREAD_ID CLAUDECODE DEVTOOLS_HARNESS
-  unset DEVTOOLS_REVIEW_CMD DEVTOOLS_REVIEW_MODEL DEVTOOLS_REVIEW_EFFORT DEVTOOLS_DELEGATION_CHECK DEVTOOLS_REVIEW_TIMEOUT
+  unset DEVTOOLS_REVIEW_CMD DEVTOOLS_REVIEW_MODEL DEVTOOLS_REVIEW_EFFORT DEVTOOLS_DELEGATION_CHECK DEVTOOLS_REVIEW_TIMEOUT DEVTOOLS_GH_LOGIN
   export XDG_CONFIG_HOME="${BATS_TEST_TMPDIR}/config"
   export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
   git init --quiet --initial-branch=main "$REPO"
@@ -33,6 +33,38 @@ STUB
 # lib runs a snippet with the library sourced, in the scratch repository.
 lib() {
   run bash -c '. "$1"; shift; eval "$*"' _ "$LIB" "$@"
+}
+
+# A local remote keeps credential resolution out of the test. The Git
+# wrapper records the network invocation, while the gh stub proves that
+# merely selecting it as the HTTPS helper does not execute it for a
+# non-HTTPS remote.
+network_git_fixture() {
+  export REAL_GIT NETWORK_GIT_LOG GH_CALLS
+  REAL_GIT=$(command -v git)
+  NETWORK_GIT_LOG="${BATS_TEST_TMPDIR}/network-git.log"
+  GH_CALLS="${BATS_TEST_TMPDIR}/gh-network.log"
+  : >"$NETWORK_GIT_LOG"
+  : >"$GH_CALLS"
+  "$REAL_GIT" init --quiet --bare --initial-branch=main "${BATS_TEST_TMPDIR}/origin.git"
+  "$REAL_GIT" remote add origin "${BATS_TEST_TMPDIR}/origin.git"
+  cat >"$BATS_TEST_TMPDIR/bin/git" <<'STUB'
+#!/usr/bin/env bash
+record=false
+for arg in "$@"; do
+  case $arg in fetch | push | ls-remote) record=true ;; esac
+done
+if [ "$record" = true ]; then
+  printf 'arg=%s\n' "$@" >>"$NETWORK_GIT_LOG"
+fi
+exec "$REAL_GIT" "$@"
+STUB
+  cat >"$BATS_TEST_TMPDIR/bin/gh" <<'STUB'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >>"$GH_CALLS"
+exit 99
+STUB
+  chmod +x "$BATS_TEST_TMPDIR/bin/git" "$BATS_TEST_TMPDIR/bin/gh"
 }
 
 @test "dt_harness reads the session variables before the library path" {
@@ -69,6 +101,26 @@ lib() {
   [ "$output" = from-env ]
   lib dt_conf review_effort fallback
   [ "$output" = fallback ]
+}
+
+@test "dt_git_network uses the gh credential helper when gh_login is configured" {
+  network_git_fixture
+
+  DEVTOOLS_GH_LOGIN=agent lib 'dt_git_network ls-remote origin HEAD'
+
+  [ "$status" -eq 0 ]
+  [ "$(cat "$NETWORK_GIT_LOG")" = $'arg=-c\narg=credential.https://github.com.helper=\narg=-c\narg=credential.https://github.com.helper=!gh auth git-credential\narg=ls-remote\narg=origin\narg=HEAD' ]
+  [ ! -s "$GH_CALLS" ]
+}
+
+@test "dt_git_network keeps plain git when gh_login is not configured" {
+  network_git_fixture
+
+  lib 'dt_git_network ls-remote origin HEAD'
+
+  [ "$status" -eq 0 ]
+  [ "$(cat "$NETWORK_GIT_LOG")" = $'arg=ls-remote\narg=origin\narg=HEAD' ]
+  [ ! -s "$GH_CALLS" ]
 }
 
 @test "dt_verdict accepts only a bare PASS line" {

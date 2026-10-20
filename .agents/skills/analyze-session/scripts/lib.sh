@@ -51,10 +51,13 @@ dt_die() {
 # and core.quotePath would quote a name with a byte outside ASCII, so a
 # path comparison would miss it.
 #
-# Plain `git` stays available on purpose. Config reads, fetch, and the
-# commit itself need the operator's real configuration: the sign-off
-# identity may come from an includeIf work profile, and the network
-# calls need credential helpers.
+# Plain `git` stays available on purpose. Config reads and the commit
+# itself need the operator's real configuration: the sign-off identity
+# may come from an includeIf work profile. Network calls go through
+# dt_git_network instead. Without a configured gh_login it keeps plain
+# git and the operator's credential helpers. With one, it overrides only
+# GitHub's HTTPS helper so the account already checked through gh supplies
+# the credential without disturbing signing or unrelated Git config.
 gitr() {
   env git --no-pager \
     -c log.showSignature=false \
@@ -63,6 +66,20 @@ gitr() {
     -c diff.noprefix=false -c diff.mnemonicPrefix=false \
     -c diff.renames=true -c diff.context=3 \
     "$@"
+}
+
+# dt_git_network <git-arguments>: run a network Git command with the
+# configured gh account's credential when gh_login names one. Keep the
+# path without this setting byte-for-byte equivalent to plain git.
+dt_git_network() {
+  local login
+  login=$(dt_conf gh_login) || return $?
+  if [ -n "$login" ]; then
+    git -c credential.https://github.com.helper= \
+      -c 'credential.https://github.com.helper=!gh auth git-credential' "$@"
+  else
+    git "$@"
+  fi
 }
 
 dt_root() { gitr rev-parse --show-toplevel; }

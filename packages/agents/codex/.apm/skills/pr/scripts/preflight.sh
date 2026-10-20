@@ -39,8 +39,8 @@ IFS=$' \t\n'
 # lib.sh brings gitr, which runs git for output this script parses with
 # every formatting knob pinned, and the session, configuration, and
 # review helpers the sections below report on. Plain `git` stays
-# available on purpose: config reads and fetch need the operator's real
-# configuration.
+# available for local config reads; network Git calls use the shared
+# credential policy.
 # shellcheck disable=SC1091 # lib.sh is generated beside this script
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 # shellcheck disable=SC1091 # generated beside preflight
@@ -128,7 +128,10 @@ fi
 section "base and divergence"
 fetch_state=skipped
 if [ "$DO_FETCH" = "1" ]; then
-  if run_with_timeout "$FETCH_TIMEOUT" git fetch --quiet origin "$default_branch" 2>/dev/null; then
+  # shellcheck disable=SC2016 # The child Bash expands the positional parameters.
+  if run_with_timeout "$FETCH_TIMEOUT" bash -c \
+    '. "$1"; shift; dt_git_network "$@"' _ "$DT_LIB_DIR/lib.sh" \
+    fetch --quiet origin "$default_branch" 2>/dev/null; then
     fetch_state=ok
   else
     fetch_state="failed (counts below may be stale)"

@@ -131,10 +131,10 @@ mp_local_diff() {
   local shallow
   shallow=$(gitr rev-parse --is-shallow-repository) || return $?
   if [ "$shallow" = true ]; then
-    gitr -c credential.helper= -c 'credential.helper=!gh auth git-credential' fetch --no-tags --no-write-fetch-head --unshallow "$repository" "$1" "$2" ||
+    dt_git_network fetch --no-tags --no-write-fetch-head --unshallow "$repository" "$1" "$2" ||
       dt_die "Could not fetch the complete pinned base and head histories."
   else
-    gitr -c credential.helper= -c 'credential.helper=!gh auth git-credential' fetch --no-tags --no-write-fetch-head "$repository" "$1" "$2" ||
+    dt_git_network fetch --no-tags --no-write-fetch-head "$repository" "$1" "$2" ||
       dt_die "Could not fetch the pinned base and head."
   fi
   gitr diff --no-ext-diff --no-textconv --no-color --binary --full-index "$1...$2" -- >"$3/change.diff" ||

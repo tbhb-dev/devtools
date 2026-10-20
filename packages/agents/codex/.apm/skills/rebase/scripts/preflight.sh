@@ -27,23 +27,10 @@ export PYTHONUTF8=1
 unset CDPATH GH_REPO GH_HOST GREP_OPTIONS
 IFS=$' \t\n'
 
-# gitr runs git for output this script parses, with every formatting
-# knob pinned. log.showSignature is the one that matters most: it
-# prepends a verification line per commit to stdout, ahead of the format
-# string, so a --oneline listing silently becomes two lines per commit
-# and any head -n cap shows half a branch as though it were all of it.
-#
-# Plain `git` stays available on purpose. Config reads and the fetch need
-# the operator's real configuration.
-gitr() {
-  command git --no-pager \
-    -c log.showSignature=false \
-    -c color.ui=false -c color.diff=false -c color.status=false \
-    -c core.quotePath=false \
-    -c diff.noprefix=false -c diff.mnemonicPrefix=false \
-    -c diff.renames=true -c diff.context=3 \
-    "$@"
-}
+# lib.sh supplies pinned local Git reads and the shared network credential
+# policy.
+# shellcheck disable=SC1091 # lib.sh is generated beside this script
+. "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 readonly DO_FETCH=${REBASE_PREFLIGHT_FETCH:-1}
 readonly FETCH_TIMEOUT=${REBASE_PREFLIGHT_FETCH_TIMEOUT:-10}
@@ -167,7 +154,10 @@ fi
 section "rebase base"
 fetch_state=skipped
 if [ "$DO_FETCH" = "1" ]; then
-  if run_with_timeout "$FETCH_TIMEOUT" git fetch --quiet origin "$default_branch" 2>/dev/null; then
+  # shellcheck disable=SC2016 # The child Bash expands the positional parameters.
+  if run_with_timeout "$FETCH_TIMEOUT" bash -c \
+    '. "$1"; shift; dt_git_network "$@"' _ "$DT_LIB_DIR/lib.sh" \
+    fetch --quiet origin "$default_branch" 2>/dev/null; then
     fetch_state=ok
   else
     fetch_state="failed (origin counts below may be stale)"

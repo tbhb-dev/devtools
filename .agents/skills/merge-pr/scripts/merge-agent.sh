@@ -152,7 +152,7 @@ ma_verify() {
   local repository wanted actual live_base
   repository=$(dt_gh repo view --json url --jq .url) || return $?
   live_base=$(mp_base_oid "$base_ref") || return $?
-  gitr -c credential.helper= -c 'credential.helper=!gh auth git-credential' fetch --no-tags --no-write-fetch-head "$repository" "$live_base" "$merge_commit" || return $?
+  dt_git_network fetch --no-tags --no-write-fetch-head "$repository" "$live_base" "$merge_commit" || return $?
   gitr merge-base --is-ancestor "$merge_commit" "$live_base" || dt_die "merged-not-as-reviewed: merge commit is not on the live base"
   wanted=$(git stripspace <"$message") || return $?
   actual=$(gitr cat-file commit "$merge_commit" | sed '1,/^$/d' | git stripspace) || return $?

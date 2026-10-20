@@ -15,7 +15,7 @@ IFS=$' \t\n'
 # that is neither a fast-forward nor a rewrite --rewrite allows.
 
 plan_push() {
-  remote_refs=$(git ls-remote origin "refs/heads/$branch") ||
+  remote_refs=$(dt_git_network ls-remote origin "refs/heads/$branch") ||
     die "could not read ${branch} from origin; nothing was pushed."
   was=$(printf '%s\n' "$remote_refs" | cut -f1) || return $?
   if [ -z "$was" ]; then
@@ -101,12 +101,12 @@ plan_push
 case $push_kind in
 current) printf 'nothing to push\n' ;;
 rewrite)
-  git push --set-upstream --force-with-lease="refs/heads/$branch:$was" origin "HEAD:refs/heads/$branch" ||
+  dt_git_network push --set-upstream --force-with-lease="refs/heads/$branch:$was" origin "HEAD:refs/heads/$branch" ||
     die "the rewrite push failed; origin may have moved past ${was}. Nothing was published."
   printf 'REWRITE: %s on origin went from %s to %s\n' "$branch" "$was" "$head"
   ;;
 *)
-  git push --set-upstream origin "HEAD:refs/heads/$branch" ||
+  dt_git_network push --set-upstream origin "HEAD:refs/heads/$branch" ||
     die "git push failed; nothing was published."
   ;;
 esac
@@ -116,7 +116,7 @@ esac
 current_head=$(dt_head) || exit $?
 [ "$current_head" = "$head" ] ||
   die "HEAD moved during the push. No pull request was touched; review again."
-remote_refs=$(git ls-remote origin "refs/heads/$branch") || exit $?
+remote_refs=$(dt_git_network ls-remote origin "refs/heads/$branch") || exit $?
 remote=$(printf '%s\n' "$remote_refs" | cut -f1) || exit $?
 [ "$remote" = "$head" ] ||
   die "origin has ${remote:-no ${branch}} after the push, not the reviewed ${head}. No pull request was touched."
