@@ -69,12 +69,14 @@ Re-run the reproducer until it passes.
 
 ## Step 4: commit
 
-The caller decides how the fix gets onto the branch. `$ARGUMENTS` holds that answer when `pr` routed here, and where it doesn't, ask before committing with `AskUserQuestion`: `question` set to `How should this fix land?`, `header` set to `Fixes`, `multiSelect` set to `false`, and these options:
+The caller decides how the fix gets onto the branch. `$ARGUMENTS` holds that answer when `pr` routed here. In an interactive session where it doesn't, ask before committing with `AskUserQuestion`: `question` set to `How should this fix land?`, `header` set to `Fixes`, `multiSelect` set to `false`, and these options:
 
 | Label | Description |
 | --- | --- |
 | `Separate commit` | `The fix lands as its own commit. History keeps the record of what broke.` |
 | `Amend and force-push` | `The fix folds into the commit that caused it, pushed with --force-with-lease.` |
+
+In a headless session with no supplied strategy, use a separate commit without prompting. No headless default authorizes a force-push. An explicit caller choice can still select an amend and force-with-lease.
 
 Either way, the `commit` skill takes it from there, and it writes the message and runs the review and the gates exactly as it always does. One thing changes for an amend: the commit skill's review and commit scripts both take `--amend`. The reviewer then reads the amended commit's whole content rather than the staged delta. Skip that and the reviewer judges a whole message against a partial diff, returning findings that look certain and are wrong. Where the fix splits into unrelated groups the commit skill says so and takes them one at a time, which suits a separate commit better than an amend.
 
@@ -86,11 +88,16 @@ The description is on GitHub at this point, and often nothing sits on disk. Fetc
 bash .claude/skills/fix-pr/scripts/populate-description.sh <number>
 ```
 
-That rebuilds `PR_AGENTDESC.md` from what the pull request currently says, reassembling the frontmatter from the properties set on the pull request. It refuses to overwrite an existing draft without `--force`, because a `pr` workflow further up the stack may have one in flight.
+That rebuilds `PR_AGENTDESC.md` from what the pull request currently says, reassembling the frontmatter from the properties set on the pull request. Read its status before editing. `current` means the existing draft already matches the published pull request, while `refreshed` means the script created or replaced it. `hold` exits 75 because a nonempty draft differs. If a `pr` workflow further up the stack wrote that draft, preserve it and continue there. Otherwise the local file is stale. Rerun with `--force` to reconstruct the published description. Never silently replace an in-flight draft.
 
 A fix changes what the branch does, so the published description now describes a branch that has moved. Where the change alters what a reader needs to know, revise `PR_AGENTDESC.md` in this session or invoke the optional `write-pr-description` helper with the repository root and a note saying which commits arrived since the last publish.
 
-Then review it with `bash .claude/skills/pr/scripts/review.sh` and loop on the verdict the same way the `pr` skill does, bounded at three rounds. Publish the result with `bash .claude/skills/pr/scripts/create-pr.sh`, which updates the open pull request rather than opening another and pushes the branch on the way. Pass `--confirmed` only where the operator chose a route including fixes in this session, or answered now. After an amend, pass `--rewrite` as well, because the push replaces the commit stored on origin. The script leases on that exact commit and refuses where origin moved.
+Choose the republish route from the workflow that invoked `fix-pr`:
+
+- In an interactive session, review with `bash .claude/skills/pr/scripts/review.sh` and publish with `bash .claude/skills/pr/scripts/create-pr.sh [--confirmed] [--rewrite]`. Pass `--confirmed` only where the operator chose a route including fixes in this session, or answered now.
+- In an unattended session, run `bash .claude/skills/agent-pr/scripts/check.sh`, review with `bash .claude/skills/agent-pr/scripts/review.sh`, and publish with `bash .claude/skills/agent-pr/scripts/publish.sh [--rewrite]`. Use the existing session pre-approval or machine delegation, and never pass `--confirmed`.
+
+Loop on either review verdict the same way the selected skill does, bounded at three rounds. After an amend, pass `--rewrite` to the selected publisher because the push replaces the commit stored on origin. Both publishers lease on that exact commit and refuse where origin moved.
 
 Skip this where the fix left the description accurate. A typo in a lint rule rarely changes what the branch is for. Say which way you judged it.
 

@@ -22,7 +22,9 @@ Fix only the cause. Don't weaken a rule, exclusion, or threshold without user ap
 
 ## Choose and commit the fix
 
-Honor a strategy supplied by `pr`. Otherwise, in Default mode ask in the final response whether to create a separate commit or amend and force-push. Don't commit in that turn. After confirmation, invoke `commit`. For an amendment, pass `--amend` to the commit skill's review and commit scripts. The reviewer then reads the amended commit's whole content rather than the staged delta.
+Honor a strategy supplied by `pr`. Otherwise, in Default mode ask in the final response whether to create a separate commit or amend and force-push. Don't commit in that turn. In a headless session with no supplied strategy, use a separate commit without prompting. No headless default authorizes a force-push. An explicit caller choice can still select an amend and force-with-lease.
+
+After the interactive confirmation or headless default, invoke `commit`. For an amendment, pass `--amend` to the commit skill's review and commit scripts. The reviewer then reads the amended commit's whole content rather than the staged delta.
 
 ## Refresh the description when material
 
@@ -32,13 +34,28 @@ Rebuild the local draft:
 bash .agents/skills/fix-pr/scripts/populate-description.sh <number>
 ```
 
-If the fix changes what readers need to know, revise `PR_AGENTDESC.md` in this session or use the optional `write-pr-description` helper, then review it with `bash .agents/skills/pr/scripts/review.sh`, which stamps the draft on a pass. Bound findings at three rounds. Update the pull request only through:
+Read its status before editing. `current` means the existing draft already matches the published pull request, while `refreshed` means the script created or replaced it. `hold` exits 75 because a nonempty draft differs. If an outer `pr` workflow wrote that draft, preserve it and continue there. Otherwise the local file is stale. Rerun with `--force` to reconstruct the published description. Never silently replace an in-flight draft.
+
+If the fix changes what readers need to know, revise `PR_AGENTDESC.md` in this session or use the optional `write-pr-description` helper. Bound review findings at three rounds.
+
+In an interactive session, review and update through:
 
 ```bash
+bash .agents/skills/pr/scripts/review.sh
 bash .agents/skills/pr/scripts/create-pr.sh [--confirmed] [--rewrite]
 ```
 
-It pushes the branch on the way. Pass `--confirmed` only where the operator chose a route including fixes, or answered now. After an amend, pass `--rewrite`, because the push replaces the commit on origin. It leases on that exact commit.
+Pass `--confirmed` only where the operator chose a route including fixes, or answered now.
+
+In an unattended session, use the agent entry points:
+
+```bash
+bash .agents/skills/agent-pr/scripts/check.sh
+bash .agents/skills/agent-pr/scripts/review.sh
+bash .agents/skills/agent-pr/scripts/publish.sh [--rewrite]
+```
+
+Use the existing session pre-approval or machine delegation, and never pass `--confirmed`. Both publishers push the branch on the way. After an amend, pass `--rewrite` to the selected publisher because the push replaces the commit on origin. Its lease checks still refuse where origin moved.
 
 Skip redrafting when the existing description remains accurate, and state that judgment.
 
