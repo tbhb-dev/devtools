@@ -1,5 +1,6 @@
 HEAD_OID=1111111111111111111111111111111111111111
 BASE_OID=2222222222222222222222222222222222222222
+# cspell:words baseword
 
 merge_setup() {
   source "$(dirname "${BASH_SOURCE[0]}")/../../test_helper.bash"
@@ -16,6 +17,7 @@ merge_setup() {
   mkdir -p "$GH_FIXTURES/api" "${BATS_TEST_TMPDIR}/bin"
   export PATH="${BATS_TEST_TMPDIR}/bin:$PATH"
   export MERGE_STUB="$ROOT/tests/skills/merge-pr/gh-merge.bash"
+  export CSPELL_COMMIT_MSG="$ROOT/scripts/cspell-commit-msg.sh"
   write_stubs
   write_fixtures
 
@@ -24,7 +26,11 @@ merge_setup() {
   git -C "$REPO" config user.email tester@example.com
   cd "$REPO"
   printf 'SQUASH_AGENTMSG\n' >.gitignore
-  git add -- .gitignore
+  cat >.cspell.jsonc <<'JSON'
+{"dictionaryDefinitions":[{"name":"project","path":"./.cspell-words.txt","addWords":true}],"dictionaries":["project"]}
+JSON
+  printf 'baseword\n' >.cspell-words.txt
+  git add -- .gitignore .cspell.jsonc .cspell-words.txt
   git commit --quiet -m 'test: initial state'
   BASE_OID=$(git rev-parse HEAD)
   git checkout --quiet -b topic
@@ -116,7 +122,12 @@ STUB
 printf '%s\n' "$*" >>"$GH_FIXTURES/mise.log"
 case "$1 $2" in
 "task info") [ -z "${MISE_NO_TASK:-}" ] ;;
-"run lint-squash-msg") exit "${MISE_LINT_STATUS:-0}" ;;
+"run lint-squash-msg")
+  if [ "${MISE_REAL_SQUASH_LINT:-0}" = 1 ]; then
+    exec "$CSPELL_COMMIT_MSG" SQUASH_AGENTMSG
+  fi
+  exit "${MISE_LINT_STATUS:-0}"
+  ;;
 *) exit 1 ;;
 esac
 STUB

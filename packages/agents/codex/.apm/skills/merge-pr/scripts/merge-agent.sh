@@ -19,14 +19,38 @@ ma_context() {
 }
 
 ma_lint() {
-  local cmd
-  if [ "${DT_UNATTENDED:-0}" = 1 ]; then
-    cmd=$(dt_repo_conf lint_squash_cmd 'mise run lint-squash-msg') || return $?
-    [ -n "$cmd" ] || dt_die "lint_squash_cmd must not be empty"
-    bash -c "$cmd"
-  else
-    mise run lint-squash-msg
+  local head=$1 cmd config tmp status
+  mp_fetch_commit "$head" || return $?
+  tmp=$(mktemp -d "${TMPDIR:-/tmp}/devtools-squash-cspell.XXXXXX") || return $?
+  config=$tmp/.cspell.jsonc
+  if ! gitr show "$head:.cspell.jsonc" >"$config"; then
+    rm -rf -- "$tmp"
+    dt_die "Could not read .cspell.jsonc from the pull request head."
+    return 1
   fi
+  if gitr cat-file -e "$head:.cspell-words.txt" 2>/dev/null; then
+    if ! gitr show "$head:.cspell-words.txt" >"$tmp/.cspell-words.txt"; then
+      rm -rf -- "$tmp"
+      dt_die "Could not read .cspell-words.txt from the pull request head."
+      return 1
+    fi
+  fi
+  status=0
+  if [ "${DT_UNATTENDED:-0}" = 1 ]; then
+    cmd=$(dt_repo_conf lint_squash_cmd 'mise run lint-squash-msg') || status=$?
+    if [ "$status" -eq 0 ] && [ -z "$cmd" ]; then
+      rm -rf -- "$tmp"
+      dt_die "lint_squash_cmd must not be empty"
+      return 1
+    fi
+    if [ "$status" -eq 0 ]; then
+      DEVTOOLS_CSPELL_CONFIG="$config" bash -c "$cmd" || status=$?
+    fi
+  else
+    DEVTOOLS_CSPELL_CONFIG="$config" mise run lint-squash-msg || status=$?
+  fi
+  rm -rf -- "$tmp"
+  return "$status"
 }
 
 ma_policy() { uv run --quiet --script "$DT_LIB_DIR/merge-policy.py" "$@"; }

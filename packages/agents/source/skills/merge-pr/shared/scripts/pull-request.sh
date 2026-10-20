@@ -143,5 +143,17 @@ mp_local_diff() {
     dt_die "Could not list the pinned diff files."
 }
 
+# mp_fetch_commit <oid>: make one pinned pull request commit available
+# without moving a branch, the index, or FETCH_HEAD.
+mp_fetch_commit() {
+  gitr cat-file -e "$1^{commit}" 2>/dev/null && return 0
+  local repository
+  repository=$(dt_gh repo view --json url --jq .url) || return $?
+  [ -n "$repository" ] || dt_die "Could not locate the pull request repository."
+  gitr -c credential.helper= -c 'credential.helper=!gh auth git-credential' \
+    fetch --no-tags --no-write-fetch-head "$repository" "$1" ||
+    dt_die "Could not fetch the pinned pull request head."
+}
+
 # shellcheck disable=SC1091 # generated beside this reader
 . "$DT_LIB_DIR/merge-agent.sh"
