@@ -893,6 +893,10 @@ push_blocked() {
 	fi
 }
 
+v012_wrapper() {
+	sed 's/# devtools pre-push wrapper /# check-leaks pre-push wrapper /' "$1" >"$2"
+}
+
 @test "a clean push passes through the wrapper to prek's hook" {
 	hook_repo
 	git switch -q -c clean
@@ -1096,6 +1100,44 @@ push_blocked() {
 	bash .devtools/scripts/install-pre-push.sh >/dev/null
 	bash .devtools/scripts/install-pre-push.sh --check
 	[ ! -e "$hooks/pre-push.legacy" ]
+}
+
+@test "the installer upgrades a v0.12 wrapper left behind by prek" {
+	hook_repo
+	hooks=$(git rev-parse --git-path hooks)
+	v012_wrapper "$hooks/pre-push" "$BATS_TEST_TMPDIR/v0.12-pre-push"
+	cp "$BATS_TEST_TMPDIR/v0.12-pre-push" "$hooks/pre-push"
+	prek install -t pre-push >/dev/null 2>&1
+	grep -qF 'check-leaks pre-push wrapper' "$hooks/pre-push.legacy"
+
+	bash .devtools/scripts/install-pre-push.sh >/dev/null
+	[ ! -e "$hooks/pre-push.legacy" ]
+	echo clean >clean.txt
+	git add clean.txt
+	git -c core.hooksPath=/dev/null commit -q -m "chore: clean"
+	unset O11Y_PRIVATE_STRINGS
+	push_ok origin main
+	[ "$(grep -cF 'no private values loaded' <<<"$output")" -eq 1 ]
+	[ -f "$BATS_TEST_TMPDIR/prek-ran" ]
+}
+
+@test "the installer leaves a foreign pre-push legacy hook alone" {
+	hook_repo
+	hooks=$(git rev-parse --git-path hooks)
+	prek install -t pre-push >/dev/null 2>&1
+	printf '%s\n' '#!/bin/sh' 'echo foreign' >"$hooks/pre-push.legacy"
+
+	bash .devtools/scripts/install-pre-push.sh >/dev/null
+	[ "$(cat "$hooks/pre-push.legacy")" = $'#!/bin/sh\necho foreign' ]
+}
+
+@test "the installer check fails on a stale v0.12 legacy wrapper" {
+	hook_repo
+	hooks=$(git rev-parse --git-path hooks)
+	v012_wrapper "$hooks/pre-push" "$hooks/pre-push.legacy"
+
+	run bash .devtools/scripts/install-pre-push.sh --check
+	[ "$status" -eq 1 ]
 }
 
 @test "the wrapper gives commit-lint the original pre-push ranges" {
