@@ -107,6 +107,15 @@ Any of the four first answers is what `--confirmed` stands for in step 7. Record
 
 ## Step 7: publish the pull request
 
+After the operator agrees to rewrite the remote branch, these personal `permissions.allow` rules let Claude Code auto mode run the exact supported forms:
+
+```text
+Bash(bash .claude/skills/pr/scripts/create-pr.sh --rewrite)
+Bash(bash .claude/skills/pr/scripts/create-pr.sh --confirmed --rewrite)
+```
+
+The operator adds them to their Claude Code settings. The agent never changes its own permissions.
+
 ```text
 bash .claude/skills/pr/scripts/create-pr.sh [--confirmed] [--rewrite]
 ```

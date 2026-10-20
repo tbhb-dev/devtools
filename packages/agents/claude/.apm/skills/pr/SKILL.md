@@ -97,6 +97,12 @@ This step is mandatory, and `create-pr.sh` enforces it.
 
 A clean verdict writes a stamp binding the draft's exact bytes, `HEAD`, the resolved base ref, that ref's commit, and the merge base. Findings remove any earlier stamp. Editing the draft, a new commit, or a fetch that moves the base voids it, and the publish refuses until the review runs again.
 
+`review_cmd` chooses the reviewer. It isn't only a label. From Codex, configure a reviewer that the session may start. These repository machines use `agy` in read-only plan mode through this line in `~/.config/devtools/devtools.conf`:
+
+```text
+review_cmd = agy -p "$(cat)" --mode plan --add-dir "$DEVTOOLS_REVIEW_INPUTS" --print-timeout 900s
+```
+
 `DEVTOOLS_REVIEW_CMD`, `DEVTOOLS_REVIEW_MODEL`, and `DEVTOOLS_REVIEW_EFFORT`, or the same keys in `~/.config/devtools/<repository>.conf`, replace the default reviewer. No repository file can.
 
 ## Step 5: run the validator and the prose gates
@@ -167,6 +173,15 @@ Neither answer is the safe default in general. A separate commit suits a branch 
 Any of the four first answers is what `--confirmed` stands for in step 7. Record both answers. Step 8 routes on the first and passes the second to `fix-pr` in its arguments, so nobody asks either one again. Where the operator wants the description changed instead, redraft it, put it back through the review, and return here.
 
 ## Step 7: publish the pull request
+
+After the operator agrees to rewrite the remote branch, these personal `permissions.allow` rules let Claude Code auto mode run the exact supported forms:
+
+```text
+Bash(bash .claude/skills/pr/scripts/create-pr.sh --rewrite)
+Bash(bash .claude/skills/pr/scripts/create-pr.sh --confirmed --rewrite)
+```
+
+The operator adds them to their Claude Code settings. The agent never changes its own permissions.
 
 ```text
 bash .claude/skills/pr/scripts/create-pr.sh [--confirmed] [--rewrite]

@@ -65,6 +65,8 @@ bash .claude/skills/commit/scripts/review.sh
 
 Add `--amend` when step 9 is going to amend.
 
+In auto mode, the operator can add `Bash(bash .claude/skills/commit/scripts/review.sh *)` to `permissions.allow` in their Claude Code settings after agreeing to the review. The trailing wildcard covers the documented optional arguments and the bare command. The current script has no `--unblock` flag. Don't add a rule for one. An owner adds this permission, never the agent.
+
 Pass `--note <file>` to include a decision the operator actually made, with the operator's reason. Never use it for the agent's own preference.
 
 @include parts/review.md

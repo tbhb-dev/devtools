@@ -19,6 +19,16 @@ Install the sibling `pr` and `review-pr-description` skills from the same packag
 
 Publication normally requires a forward push. Use `--rewrite` only on the operator's explicit authorization for that branch. It leases on the exact known remote commit and refuses when `HEAD` is behind origin or the remote commit wasn't fetched. A failed or uncertain GitHub write requires inspection before retrying.
 
+## Reviewer selection
+
+`review_cmd` chooses the independent reviewer. From Codex, configure one the session may start. These repository machines put this line in `~/.config/devtools/devtools.conf` so `agy` reviews in read-only plan mode:
+
+```text
+review_cmd = agy -p "$(cat)" --mode plan --add-dir "$DEVTOOLS_REVIEW_INPUTS" --print-timeout 900s
+```
+
+## Repository configuration
+
 Repository settings are declarative lines in `.agents/agent-skills.conf`: `pr_template`, `lint_pr_cmd`, `pr_log_entry`, `pr_related_pattern`, `pr_title_check_cmd`, `owner_paths`, `review_max_rounds`, and optional `mail_cmd`, `mail_to`, and `mail_from`. Commands execute at their configured gate, never by sourcing the file. Authorities remain in machine configuration. Owner paths add `--owner-path` to the delegation check when any changed path on the branch matches.
 
 A successful publication records `pr.result.json` under the worktree's Git `agent-skills` directory and resets the finding counter. Reports print locally unless the configuration supplies a mailbox command and recipient. A failed report delivery prints the report without retrying publication. See the consumer migration note in devtools for settings and cleanup.

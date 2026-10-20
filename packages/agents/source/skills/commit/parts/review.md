@@ -15,4 +15,10 @@ Fix everything it returns and run it again. Push back only when it's demonstrabl
 
 The script records every readable verdict with the draft digest and staged tree. After `CHANGES REQUIRED`, it refuses to send byte-identical text for the same tree to another reviewer. The reviewer can read a changed draft.
 
+`review_cmd` chooses the reviewer. It isn't only a label. From Codex, configure a reviewer that the session may start. These repository machines use `agy` in read-only plan mode through this line in `~/.config/devtools/devtools.conf`:
+
+```text
+review_cmd = agy -p "$(cat)" --mode plan --add-dir "$DEVTOOLS_REVIEW_INPUTS" --print-timeout 900s
+```
+
 `DEVTOOLS_REVIEW_CMD`, `DEVTOOLS_REVIEW_MODEL`, and `DEVTOOLS_REVIEW_EFFORT`, or the same keys in `~/.config/devtools/<repository>.conf`, replace the default reviewer. No repository file can, so a commit never chooses who reviews the next one.

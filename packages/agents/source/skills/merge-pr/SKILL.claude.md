@@ -69,6 +69,8 @@ Then run the task yourself:
 bash .claude/skills/merge-pr/scripts/review.sh <number>
 ```
 
+In auto mode, the operator can add `Bash(bash .claude/skills/merge-pr/scripts/review.sh *)` to `permissions.allow` in their Claude Code settings after agreeing to the review. The unattended wrapper is `Bash(bash .claude/skills/agent-merge-pr/scripts/review.sh *)`. Both current scripts accept a pull request number and `--note`, but no `--unblock` flag. An owner adds these permissions, never the agent.
+
 Pass `--note <file>` to include a decision the operator actually made, with the operator's reason. Never use it for the agent's own preference.
 
 @include parts/review.md
