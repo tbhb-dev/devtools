@@ -24,7 +24,9 @@ Fix only the cause. Don't weaken a rule, exclusion, or threshold without user ap
 
 ## Choose and commit the fix
 
-Honor a strategy supplied by `pr`. Otherwise, in Default mode ask in the final response whether to create a separate commit or amend and force-push. Don't commit in that turn. After confirmation, invoke `commit`. For an amendment, pass `--amend` to the commit skill's review and commit scripts. The reviewer then reads the amended commit's whole content rather than the staged delta.
+Honor a strategy supplied by `pr`. Otherwise, in Default mode ask in the final response whether to create a separate commit or amend and force-push. Don't commit in that turn. In a headless session with no supplied strategy, use a separate commit without prompting. No headless default authorizes a force-push. An explicit caller choice can still select an amend and force-with-lease.
+
+After the interactive confirmation or headless default, invoke `commit`. For an amendment, pass `--amend` to the commit skill's review and commit scripts. The reviewer then reads the amended commit's whole content rather than the staged delta.
 
 ## Refresh the description when material
 

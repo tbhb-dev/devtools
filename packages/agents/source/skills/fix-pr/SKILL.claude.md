@@ -71,12 +71,14 @@ Re-run the reproducer until it passes.
 
 ## Step 4: commit
 
-The caller decides how the fix gets onto the branch. `$ARGUMENTS` holds that answer when `pr` routed here, and where it doesn't, ask before committing with `AskUserQuestion`: `question` set to `How should this fix land?`, `header` set to `Fixes`, `multiSelect` set to `false`, and these options:
+The caller decides how the fix gets onto the branch. `$ARGUMENTS` holds that answer when `pr` routed here. In an interactive session where it doesn't, ask before committing with `AskUserQuestion`: `question` set to `How should this fix land?`, `header` set to `Fixes`, `multiSelect` set to `false`, and these options:
 
 | Label | Description |
 | --- | --- |
 | `Separate commit` | `The fix lands as its own commit. History keeps the record of what broke.` |
 | `Amend and force-push` | `The fix folds into the commit that caused it, pushed with --force-with-lease.` |
+
+In a headless session with no supplied strategy, use a separate commit without prompting. No headless default authorizes a force-push. An explicit caller choice can still select an amend and force-with-lease.
 
 Either way, the `commit` skill takes it from there, and it writes the message and runs the review and the gates exactly as it always does. One thing changes for an amend: the commit skill's review and commit scripts both take `--amend`. The reviewer then reads the amended commit's whole content rather than the staged delta. Skip that and the reviewer judges a whole message against a partial diff, returning findings that look certain and are wrong. Where the fix splits into unrelated groups the commit skill says so and takes them one at a time, which suits a separate commit better than an amend.
 
