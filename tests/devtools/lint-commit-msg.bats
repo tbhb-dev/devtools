@@ -95,6 +95,21 @@ HOOK
 	[ ! -e "$(dirname "$(cat preview-path)")" ]
 }
 
+@test "preview accepts 72-character body lines and rejects 73" {
+	cat >bin/prek <<STUB
+#!/usr/bin/env bash
+exec "$BATS_FILE_TMPDIR/commit-lint" --rules shape "\$5"
+STUB
+	chmod +x bin/prek
+	printf 'fix: preview the draft\n\nThis body line deliberately reaches the configured body line width limit\n' >COMMIT_AGENTMSG
+	run bash "$helper"
+	[ "$status" -eq 0 ]
+	printf 'fix: preview the draft\n\nThis body line deliberately reaches the configured body line width limit.\n' >COMMIT_AGENTMSG
+	run bash "$helper"
+	[ "$status" -eq 1 ]
+	[[ $output == *'body line 3 exceeds 72 chars (73)'* ]]
+}
+
 @test "preview rejects a draft with a commit-scope Vale finding" {
 	sed "s|^StylesPath = .*|StylesPath = $root/.vale|" "$root/.vale.ini" >.vale.ini
 	printf 'fix: preview the draft\n\nFurthermore, use the preview.\n' >COMMIT_AGENTMSG
