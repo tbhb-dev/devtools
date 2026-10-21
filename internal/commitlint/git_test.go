@@ -18,6 +18,35 @@ import (
 
 const zeroOID = "0000000000000000000000000000000000000000"
 
+func TestGitRepoIgnoresEnvironmentConfig(t *testing.T) {
+	for _, name := range []string{"count", "parameters"} {
+		t.Run(name, func(t *testing.T) {
+			signer := filepath.Join(t.TempDir(), "missing-signer")
+			t.Setenv("GIT_CONFIG_COUNT", "3")
+			t.Setenv("GIT_CONFIG_KEY_0", "commit.gpg"+"sign")
+			t.Setenv("GIT_CONFIG_VALUE_0", "true")
+			t.Setenv("GIT_CONFIG_KEY_1", "gpg.format")
+			t.Setenv("GIT_CONFIG_VALUE_1", "ssh")
+			t.Setenv("GIT_CONFIG_KEY_2", "gpg.ssh.program")
+			t.Setenv("GIT_CONFIG_VALUE_2", signer)
+			t.Setenv("GIT_CONFIG_PARAMETERS", "")
+			if name == "parameters" {
+				t.Setenv("GIT_CONFIG_COUNT", "0")
+				t.Setenv(
+					"GIT_CONFIG_PARAMETERS",
+					"'commit.gpg"+"sign=true' 'gpg.format=ssh' 'gpg.ssh.program="+signer+"'",
+				)
+			}
+
+			repo := newGitRepo(t)
+			makeCommit(t, repo, signedMessage("test: ignore environment config"), personIdentity(), personIdentity())
+			if got := gitCommand(t, repo, "config", "--get", "commit.gpg"+"sign"); got != "false" {
+				t.Fatalf("fixture signing config = %q, want false", got)
+			}
+		})
+	}
+}
+
 func TestPrePushCleanRangePasses(t *testing.T) {
 	repo := newGitRepo(t)
 	base := makeCommit(t, repo, signedMessage("chore: establish base"), personIdentity(), personIdentity())
@@ -161,6 +190,8 @@ func newGitRepo(t *testing.T) string {
 	writeFile(t, globalConfig, "")
 	t.Setenv("GIT_CONFIG_GLOBAL", globalConfig)
 	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	t.Setenv("GIT_CONFIG_PARAMETERS", "")
+	t.Setenv("GIT_CONFIG_COUNT", "0")
 	t.Setenv("GIT_AUTHOR_NAME", "Person")
 	t.Setenv("GIT_AUTHOR_EMAIL", "person@example.com")
 	t.Setenv("GIT_COMMITTER_NAME", "Person")
