@@ -59,6 +59,59 @@ PY
   [[ $output == *"gitleaks walked 0 commits"* ]]
 }
 
+@test "an empty README root commit has no content to scan" {
+  git init -q
+  touch README.md
+  git add -- README.md
+  git -c core.hooksPath=/dev/null -c commit.gpgSign=false \
+    -c user.name=Test -c user.email=test@example.com commit -qm fixture
+
+  run bash "$SCRIPT"
+
+  [ "$status" -eq 0 ]
+  [[ $output == *"no content to scan"* ]]
+}
+
+@test "a content commit is scanned" {
+  git init -q
+  printf 'Public documentation\n' > README.md
+  git add -- README.md
+  git -c core.hooksPath=/dev/null -c commit.gpgSign=false \
+    -c user.name=Test -c user.email=test@example.com commit -qm fixture
+
+  run bash "$SCRIPT"
+
+  [ "$status" -eq 0 ]
+  [[ $output == *"1 commits scanned"* ]]
+  [[ $output == *"no leaks found"* ]]
+}
+
+@test "a repository without HEAD fails the zero-commits guard" {
+  git init -q
+
+  run bash "$SCRIPT"
+
+  [ "$status" -eq 1 ]
+  [[ $output == *"gitleaks walked 0 commits"* ]]
+}
+
+@test "a history with content still fails when the scanner walks zero commits" {
+  git init -q
+  printf 'Public documentation\n' > README.md
+  git add -- README.md
+  git -c core.hooksPath=/dev/null -c commit.gpgSign=false \
+    -c user.name=Test -c user.email=test@example.com commit -qm fixture
+  mkdir "${BATS_TEST_TMPDIR}/bin"
+  printf '#!/usr/bin/env bash\necho "0 commits scanned"\n' > "${BATS_TEST_TMPDIR}/bin/gitleaks"
+  chmod +x "${BATS_TEST_TMPDIR}/bin/gitleaks"
+  export PATH="${BATS_TEST_TMPDIR}/bin:$PATH"
+
+  run bash "$SCRIPT"
+
+  [ "$status" -eq 1 ]
+  [[ $output == *"gitleaks walked 0 commits"* ]]
+}
+
 install_fixture_policy() {
   local config="${BATS_TEST_DIRNAME}/../../.devtools/config/gitleaks.toml"
   # Activate the documented example exactly as a consumer would.
