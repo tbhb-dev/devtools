@@ -55,7 +55,7 @@ gitleaks = "8.30.1"
 # downloads. Matches the go.mod toolchain directive; go.mod stays the
 # authority for module builds, because GOTOOLCHAIN=auto fetches the
 # directive's version whenever this pin trails it.
-go = "1.27.2"
+go = "1.27.3"
 golangci-lint = "2.14.0"
 # cspell ships only as an npm package. Homebrew was installing node too --
 # its formula's shebang already pointed at one. The difference is that
