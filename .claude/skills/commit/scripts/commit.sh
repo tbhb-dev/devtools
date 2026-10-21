@@ -126,6 +126,19 @@ whether the staged change is really one logical change. Run it:
 the same. Run the review again against the current draft and index:
 
   bash $here/review.sh$review_suffix"
+  local note_path note_digest recorded_note_digest
+  note_path=$(dt_stamp_value commit note_path) || return $?
+  recorded_note_digest=$(dt_stamp_value commit note) || return $?
+  if [ -n "$note_path" ]; then
+    [ -f "$note_path" ] || fail "Operator note is missing after its review: $note_path
+Run the review again with the intended note."
+    note_digest=$(dt_digest "$note_path") || return $?
+    [ "$note_digest" = "$recorded_note_digest" ] ||
+      fail "Operator note changed after its review: $note_path
+Run the review again with the intended note."
+  elif [ "$recorded_note_digest" != none ]; then
+    fail "The review stamp has no operator note path. Run the review again with --note."
+  fi
 }
 require_reviewed
 dt_commit_lint "$draft" "$rerun_gates"
@@ -133,11 +146,12 @@ mise run devtools:lint-leaks
 mise run devtools:gitleaks
 dt_gate lint "" "$rerun_gates" mise run lint
 dt_gate test "" "$rerun_gates" mise run test
-if [ "$mode" = amend ]; then
-  DT_UNATTENDED=${DT_UNATTENDED:-0} bash "$here/review.sh" --amend
-else
-  DT_UNATTENDED=${DT_UNATTENDED:-0} bash "$here/review.sh"
-fi
+require_reviewed
+review_args=()
+[ "$mode" != amend ] || review_args+=(--amend)
+note_path=$(dt_stamp_value commit note_path)
+[ -z "$note_path" ] || review_args+=(--note "$note_path")
+DT_UNATTENDED=${DT_UNATTENDED:-0} bash "$here/review.sh" "${review_args[@]}"
 require_reviewed
 [ "$dry_run" = false ] || exit 0
 tree=$(gitr write-tree)

@@ -458,3 +458,96 @@ STUB
   [ "$status" -eq 1 ]
   [ "$output" = 'commit preflight: commit-lint is not installed; add "go:github.com/tbhb-dev/devtools/cmd/commit-lint" = "<devtools-version>" to mise.toml [tools]' ]
 }
+
+# Record note delivery separately from the verdict so both passes are checked.
+review_with_note() {
+  printf 'The operator chose this grouping because deployment is shared.\n' >'operator note.txt'
+  export NOTE_LOG="$BATS_TEST_TMPDIR/note.log"
+  export DEVTOOLS_REVIEW_CMD='prompt=$(cat); if grep -qF "The operator chose this grouping because deployment is shared." <<<"$prompt"; then echo note >>"$NOTE_LOG"; echo "VERDICT: PASS"; else echo missing >>"$NOTE_LOG"; echo "VERDICT: CHANGES REQUIRED"; fi'
+  bash "$SCRIPTS/review.sh" --note 'operator note.txt' "$@"
+}
+
+@test "commit delivers the same operator note to both review passes (#380)" {
+  initial_commit
+  stage tracked.txt reviewed
+  review_with_note
+
+  run bash "$SCRIPTS/commit.sh" --confirmed
+
+  [ "$status" -eq 0 ]
+  [ "$(cat "$NOTE_LOG")" = $'note\nnote' ]
+  [ "$(git show HEAD:tracked.txt)" = reviewed ]
+}
+
+@test "amend delivers the same operator note to both review passes (#380)" {
+  initial_commit
+  stage tracked.txt reviewed
+  review_with_note --amend
+
+  run bash "$SCRIPTS/commit.sh" --amend --confirmed
+
+  [ "$status" -eq 0 ]
+  [ "$(cat "$NOTE_LOG")" = $'note\nnote' ]
+  [ "$(git rev-list --count HEAD)" = 1 ]
+  [ "$(git show HEAD:tracked.txt)" = reviewed ]
+}
+
+@test "commit refuses an operator note changed between review passes (#380)" {
+  initial_commit
+  stage tracked.txt reviewed
+  review_with_note
+  printf 'Changed decision.\n' >'operator note.txt'
+
+  run bash "$SCRIPTS/commit.sh" --confirmed
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Operator note changed after its review"* ]]
+  [ "$(cat "$NOTE_LOG")" = note ]
+  [ "$(git log -1 --format=%s)" = 'test: initial state' ]
+}
+
+@test "commit refuses an operator note removed between review passes (#380)" {
+  initial_commit
+  stage tracked.txt reviewed
+  review_with_note
+  rm 'operator note.txt'
+
+  run bash "$SCRIPTS/commit.sh" --confirmed
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Operator note is missing after its review"* ]]
+  [ "$(cat "$NOTE_LOG")" = note ]
+  [ "$(git log -1 --format=%s)" = 'test: initial state' ]
+}
+
+@test "commit refuses an operator note changed by a gate before reviewing again (#380)" {
+  initial_commit
+  stage tracked.txt reviewed
+  review_with_note
+  cat >"$BATS_TEST_TMPDIR/bin/mise" <<'STUB'
+#!/usr/bin/env bash
+if [ "$1 $2" = 'run test' ]; then
+  printf 'Changed during gates.\n' >'operator note.txt'
+fi
+STUB
+
+  run bash "$SCRIPTS/commit.sh" --confirmed
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Operator note changed after its review"* ]]
+  [ "$(cat "$NOTE_LOG")" = note ]
+  [ "$(git log -1 --format=%s)" = 'test: initial state' ]
+}
+
+@test "commit refuses an old note stamp without its path (#380)" {
+  initial_commit
+  stage tracked.txt reviewed
+  review_with_note
+  sed -i '/^note_path /d' "$(stamp_file)"
+
+  run bash "$SCRIPTS/commit.sh" --confirmed
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"The review stamp has no operator note path"* ]]
+  [ "$(cat "$NOTE_LOG")" = note ]
+}
