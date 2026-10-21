@@ -6,6 +6,7 @@ package signing
 import (
 	"bytes"
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -34,6 +35,7 @@ func fixture(t *testing.T) Agent {
 	t.Cleanup(func() { require.NoError(t, os.RemoveAll(dir)) })
 	key := filepath.Join(dir, "source-key")
 	require.NoError(t, exec.CommandContext(t.Context(), "ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", key).Run())
+	var agentPID string
 	a := Agent{
 		Config: Config{
 			RunDir:    filepath.Join(dir, "run"),
@@ -44,13 +46,15 @@ func fixture(t *testing.T) Agent {
 			Reload:    45 * time.Minute,
 		},
 		Now: time.Now,
+		agentStarted: func(output string) {
+			agentPID = parseAgentPID(t, output)
+		},
 	}
 	t.Cleanup(func() {
-		// Kill only the temporary agent, never the session's agent.
-		cmd := a.command(context.Background(), "ssh-agent", "-k")
-		data, readErr := os.ReadFile(filepath.Join(a.Config.RunDir, "pid"))
-		if readErr == nil {
-			cmd.Env = append(cmd.Env, "SSH_AGENT_PID="+string(data))
+		if agentPID != "" {
+			// Kill only the temporary agent, never the session's agent.
+			cmd := a.command(context.Background(), "ssh-agent", "-k")
+			cmd.Env = append(cmd.Env, "SSH_AGENT_PID="+agentPID)
 			require.NoError(t, cmd.Run())
 		}
 	})
@@ -60,13 +64,33 @@ func fixture(t *testing.T) Agent {
 func startFixture(t *testing.T, a Agent) {
 	t.Helper()
 	require.NoError(t, os.MkdirAll(a.Config.RunDir, 0o700))
-	output, err := a.command(t.Context(), "ssh-agent", "-a", filepath.Join(a.Config.RunDir, "agent.sock")).Output()
-	require.NoError(t, err)
-	_, tail, ok := strings.Cut(string(output), "SSH_AGENT_PID=")
+	socket := filepath.Join(a.Config.RunDir, "agent.sock")
+	cmd := a.command(t.Context(), "ssh-agent", "-D", "-a", socket)
+	require.NoError(t, cmd.Start())
+	t.Cleanup(func() {
+		killErr := cmd.Process.Kill()
+		if killErr != nil && !errors.Is(killErr, os.ErrProcessDone) {
+			require.NoError(t, killErr)
+		}
+		waitErr := cmd.Wait()
+		var exitErr *exec.ExitError
+		if waitErr != nil && !errors.As(waitErr, &exitErr) {
+			require.NoError(t, waitErr)
+		}
+	})
+	require.Eventually(t, func() bool {
+		_, err := os.Stat(socket)
+		return err == nil
+	}, time.Second, 10*time.Millisecond)
+}
+
+func parseAgentPID(t *testing.T, output string) string {
+	t.Helper()
+	_, tail, ok := strings.Cut(output, "SSH_AGENT_PID=")
 	require.True(t, ok)
 	pid, _, ok := strings.Cut(tail, ";")
 	require.True(t, ok)
-	require.NoError(t, os.WriteFile(filepath.Join(a.Config.RunDir, "pid"), []byte(pid), 0o600))
+	return pid
 }
 
 func fakeOP(t *testing.T, a Agent) string {
@@ -194,19 +218,8 @@ func TestFallback(t *testing.T) {
 func TestStartAndFileProvider(t *testing.T) {
 	t.Parallel()
 	a := fixture(t)
-	// Save the newly started daemon's process ID from a socket query for cleanup.
 	require.NoError(t, a.Ensure(t.Context()))
 	require.NoError(t, a.Probe(t.Context()))
-	// ssh-agent doesn't publish its process ID through the protocol. Find only the
-	// process whose exact command line contains the unique temporary socket.
-	//nolint:gosec // The unique temporary socket identifies only our test daemon.
-	output, err := exec.CommandContext(t.Context(), "pgrep", "-f", "ssh-agent -a "+filepath.Join(a.Config.RunDir, "agent.sock")).
-		Output()
-	require.NoError(t, err)
-	require.NoError(
-		t,
-		os.WriteFile(filepath.Join(a.Config.RunDir, "pid"), []byte(strings.TrimSpace(string(output))), 0o600),
-	)
 }
 
 func TestLockAndFailedLoad(t *testing.T) {
@@ -269,8 +282,9 @@ func TestAgentLifetime(t *testing.T) {
 	// Limit the short lifetime to the expiry check.
 	a.Config.TTL = time.Second
 	require.NoError(t, a.load(t.Context()))
-	time.Sleep(1500 * time.Millisecond)
-	require.Error(t, a.Probe(t.Context()))
+	require.Eventually(t, func() bool {
+		return a.Probe(t.Context()) != nil
+	}, 3*time.Second, 50*time.Millisecond)
 	// The reloaded key must survive runner delays after Ensure returns.
 	a.Config.TTL = time.Hour
 	require.NoError(t, a.Ensure(t.Context()))
