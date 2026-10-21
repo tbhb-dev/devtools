@@ -129,12 +129,17 @@ go test -race ${DEVTOOLS_GO_PACKAGES:-./...} "$@"
 '''
 
 ["devtools:mutate-go"]
-description = "Run mutation testing via gremlins"
-usage = 'arg "<path>" default="."'
+description = "Run mutation testing via gremlins: [path] -- [Gremlins arguments]"
+usage = '''
+arg "[path]" default="."
+arg "[args]" var=#true double_dash="required" help="Gremlins arguments after -- (for example --dry-run)"
+'''
 run = '''
 #!/usr/bin/env bash
 set -eu
-go tool gremlins unleash --timeout-coefficient "${GREMLINS_TIMEOUT_COEFFICIENT:-100}" $usage_path "$@"
+# mise supplies variadic arguments as a shell-quoted string.
+eval "args=(${usage_args:-})"
+go tool gremlins unleash --timeout-coefficient "${GREMLINS_TIMEOUT_COEFFICIENT:-100}" "$usage_path" ${args[@]+"${args[@]}"}
 '''
 
 ["devtools:mutate-go-all"]
