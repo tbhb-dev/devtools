@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 # Repository prose policy; sourced after lib.sh and description.sh.
-export LC_ALL=C
 
 pr_description_policy() {
   local draft=$1 log_policy pattern last related count line item part status failed=0
@@ -10,8 +9,8 @@ pr_description_policy() {
   case $log_policy in
   optional) ;;
   required)
-    last=$(awk 'NF { line=$0 } END { print line }' "$draft") || return $?
-    if ! printf '%s\n' "$last" | grep -Eq '^Log entry: \* \*\*[^*]+\*\*: .+$'; then
+    last=$(LC_ALL=C awk 'NF { line=$0 } END { print line }' "$draft") || return $?
+    if ! printf '%s\n' "$last" | LC_ALL=C grep -Eq '^Log entry: \* \*\*[^*]+\*\*: .+$'; then
       printf 'The description must end with Log entry: * **Label**: text\n'
       failed=1
     fi
@@ -20,14 +19,14 @@ pr_description_policy() {
   esac
   if [ -n "$pattern" ]; then
     status=0
-    grep -E -- "$pattern" </dev/null >/dev/null || status=$?
+    LC_ALL=C grep -E -- "$pattern" </dev/null >/dev/null || status=$?
     [ "$status" -le 1 ] || dt_die "Invalid pr_related_pattern"
-    related=$(awk '
+    related=$(LC_ALL=C awk '
       /^## Related[[:space:]]*$/ { inside=1; next }
       inside && (/^## / || /^Log entry:/) { exit }
       inside && NF { print }
     ' "$draft") || return $?
-    count=$(printf '%s\n' "$related" | grep -c . || true)
+    count=$(printf '%s\n' "$related" | LC_ALL=C grep -c . || true)
     if [ "$count" -eq 0 ]; then
       printf 'Related must contain configured items or None\n'
       failed=1
@@ -43,7 +42,7 @@ pr_description_policy() {
       for part in "${parts[@]}"; do
         part=${part#"${part%%[![:space:]]*}"}
         part=${part%"${part##*[![:space:]]}"}
-        if ! printf '%s\n' "$part" | grep -Eq -- "$pattern"; then
+        if ! printf '%s\n' "$part" | LC_ALL=C grep -Eq -- "$pattern"; then
           printf 'Related contains an invalid item\n'
           failed=1
         fi

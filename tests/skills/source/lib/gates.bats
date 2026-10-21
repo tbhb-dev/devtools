@@ -122,3 +122,25 @@ PY
   gate
   [ "$(cat "$GATE_LOG")" = test ]
 }
+
+@test "gates inherit caller locale, including unset and empty variables (#379)" {
+  export GATE_LOCALE_LOG="$BATS_TEST_TMPDIR/locale.log"
+  LC_ALL=C.UTF-8 LANG=en_US.UTF-8 gate test '' true
+  [ "$(cat "$GATE_LOCALE_LOG")" = 'C.UTF-8|en_US.UTF-8' ]
+  : >"$GATE_LOCALE_LOG"
+  (unset LC_ALL; LANG=C.UTF-8 gate test '' true)
+  [ "$(cat "$GATE_LOCALE_LOG")" = 'unset|C.UTF-8' ]
+  : >"$GATE_LOCALE_LOG"
+  LC_ALL= LANG=C.UTF-8 gate test '' true
+  [ "$(cat "$GATE_LOCALE_LOG")" = '|C.UTF-8' ]
+  : >"$GATE_LOCALE_LOG"
+  (unset LC_ALL LANG; LC_CTYPE=C.UTF-8 gate test '' true)
+  [ "$(cat "$GATE_LOCALE_LOG")" = 'unset|unset' ]
+}
+
+@test "gates keep the UTF-8 charmap of an installed caller locale (#379)" {
+  local caller_locale
+  caller_locale=$(locale -a | LC_ALL=C grep -Ei 'utf-?8$' | head -1)
+  [ -n "$caller_locale" ]
+  LC_ALL="$caller_locale" bash -c '. "$1"; dt_gate test "" true bash -c "$2"' _ "$LIB" '[ "$(locale charmap)" = UTF-8 ]'
+}

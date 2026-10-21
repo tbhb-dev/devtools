@@ -3,7 +3,6 @@
 # pull request head rather than whichever branch the operator has checked out.
 set -euo pipefail
 
-export LC_ALL=C
 export GH_PAGER=cat
 export GH_PROMPT_DISABLED=1
 export PYTHONUTF8=1
@@ -24,7 +23,7 @@ state=$(dt_state_dir)
 number=${1:-}
 if [ -z "$number" ]; then
   subject=$(head -1 "$DRAFT")
-  number=$(printf '%s' "$subject" | sed -n 's/.*(#\([0-9][0-9]*\))[[:space:]]*$/\1/p')
+  number=$(printf '%s' "$subject" | LC_ALL=C sed -n 's/.*(#\([0-9][0-9]*\))[[:space:]]*$/\1/p')
 fi
 case $number in "" | *[!0-9]*) dt_die "Pass the pull request number or name it at the end of the squash subject." ;; esac
 

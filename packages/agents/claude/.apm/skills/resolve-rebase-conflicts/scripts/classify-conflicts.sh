@@ -29,12 +29,11 @@
 set -euo pipefail
 
 # --- environment hardening -------------------------------------------
-# LC_ALL matters more here than anywhere else in this toolchain: the
-# sorted-union classification rests on sort order, and these files were
+# Text commands pin collation because the sorted-union classification
+# rests on sort order, and these files were
 # written under the C collation. Judging them under a UTF-8 one would
 # call a sorted file unsorted and quietly send a mechanical case to a
 # human, or worse, the reverse.
-export LC_ALL=C
 export PYTHONUTF8=1
 unset CDPATH GREP_OPTIONS
 IFS=$' \t\n'
@@ -80,8 +79,8 @@ fi
 scratch=$(mktemp -d)
 trap 'rm -rf "$scratch"' EXIT
 
-stopped=$(tr -d '\n' <"$git_dir/rebase-merge/stopped-sha" 2>/dev/null || true)
-onto=$(tr -d '\n' <"$git_dir/rebase-merge/onto" 2>/dev/null || true)
+stopped=$(LC_ALL=C tr -d '\n' <"$git_dir/rebase-merge/stopped-sha" 2>/dev/null || true)
+onto=$(LC_ALL=C tr -d '\n' <"$git_dir/rebase-merge/onto" 2>/dev/null || true)
 
 printf '== sides ==\n'
 printf 'base-side     = what the branch is being replayed onto'
@@ -97,7 +96,7 @@ while IFS= read -r path; do
   [ -n "$path" ] || continue
   printf '\n== %s ==\n' "$path"
 
-  stages=$(git ls-files -u -- "$path" | awk '{ printf "%s", $3 }')
+  stages=$(git ls-files -u -- "$path" | LC_ALL=C awk '{ printf "%s", $3 }')
   case $stages in
   "")
     printf 'not unmerged. Either it never conflicted, or something already staged\n'
@@ -121,7 +120,7 @@ while IFS= read -r path; do
   *) printf 'kind: content (both sides changed it)\n' ;;
   esac
 
-  declared=$(git check-attr rebase-resolve -- "$path" | sed 's/.*: //')
+  declared=$(git check-attr rebase-resolve -- "$path" | LC_ALL=C sed 's/.*: //')
   case $declared in
   regenerate)
     printf 'declared: rebase-resolve=regenerate\n'
@@ -173,12 +172,12 @@ while IFS= read -r path; do
       body=$(printf '%s\n' "$d" | tail -n +5)
       # shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
       if [ "$(printf '%s\n' "$body" | wc -l)" -le "$SIDE_DIFF_CAP" ]; then
-        printf '%s\n' "$body" | sed 's/^/    /'
+        printf '%s\n' "$body" | LC_ALL=C sed 's/^/    /'
       else
         hint="git diff :1:$path :$stage:$path" # hygiene-ok: advice to print, not a call
         # shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
         printf '    (%s lines. Read it with: %s)\n' \
-          "$(printf '%s\n' "$body" | wc -l | tr -d ' ')" "$hint"
+          "$(printf '%s\n' "$body" | wc -l | LC_ALL=C tr -d ' ')" "$hint"
       fi
     done
   fi

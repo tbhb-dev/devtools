@@ -131,6 +131,9 @@ printf '%s\n' "$*" >>"$GH_FIXTURES/mise.log"
 case "$1 $2" in
 "task info") [ -z "${MISE_NO_TASK:-}" ] ;;
 "run lint-squash-msg")
+  if [ -n "${GATE_LOCALE_LOG:-}" ]; then
+    printf '%s|%s\n' "${LC_ALL-unset}" "${LANG-unset}" >>"$GATE_LOCALE_LOG"
+  fi
   if [ "${MISE_REAL_SQUASH_LINT:-0}" = 1 ]; then
     exec "$CSPELL_COMMIT_MSG" SQUASH_AGENTMSG
   fi

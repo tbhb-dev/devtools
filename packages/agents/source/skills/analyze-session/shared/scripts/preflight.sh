@@ -19,11 +19,9 @@ set -euo pipefail
 
 # --- environment hardening -------------------------------------------
 # The agent reads this output, so the operator's preferences must not
-# change its shape. LC_ALL pins collation, because sort order and the
-# [a-z] ranges shift with the locale. The unsets cover variables that
-# silently retarget a command: CDPATH makes a relative cd print
+# change its shape. Text commands pin their own locale. The unsets cover
+# variables that silently retarget a command: CDPATH makes a relative cd print
 # somewhere else, GIT_DIR points git at another repository.
-export LC_ALL=C
 export PYTHONUTF8=1
 unset CDPATH GIT_DIR GIT_WORK_TREE GREP_OPTIONS
 IFS=$' \t\n'
@@ -99,8 +97,8 @@ else
     found=$(find "$CODEX_STORE" -type f -name "*${id}.jsonl" 2>/dev/null)
     candidate=$(printf '%s\n%s' "$candidate" "$found")
   fi
-  candidate=$(printf '%s\n' "$candidate" | grep . || true)
-  count=$(printf '%s' "$candidate" | grep -c . || true)
+  candidate=$(printf '%s\n' "$candidate" | LC_ALL=C grep . || true)
+  count=$(printf '%s' "$candidate" | LC_ALL=C grep -c . || true)
   if [ "$count" = 1 ]; then
     transcript=$candidate
   elif [ "$count" -gt 1 ]; then
@@ -134,25 +132,25 @@ printf '%s\n' "$retro_out"
 
 # new-retro.sh reports where it put the retro; read that rather than
 # recomputing the harness-dependent location here.
-retro_dir=$(printf '%s\n' "$retro_out" | sed -n 's/^retro dir:  //p')
+retro_dir=$(printf '%s\n' "$retro_out" | LC_ALL=C sed -n 's/^retro dir:  //p')
 artifacts="$retro_dir/artifacts"
 
 # The profile, inlined. These are the same reports sitting in artifacts/,
 # trimmed to what frames the problem: what the session was made of, what
 # repeated, and how the findings arrived.
 section "index"
-sed -n '1,24p' "$artifacts/index.txt" 2>/dev/null || printf '(missing)\n'
+LC_ALL=C sed -n '1,24p' "$artifacts/index.txt" 2>/dev/null || printf '(missing)\n'
 
 section "loops"
 printf 'Ranked by rounds. Each round beyond the first is a wasted trip.\n\n'
 head -n "$LOOP_ROWS" "$artifacts/loops.txt" 2>/dev/null || printf '(missing)\n'
 
 section "lint"
-sed -n '1,14p' "$artifacts/lint.txt" 2>/dev/null || printf '(missing)\n'
+LC_ALL=C sed -n '1,14p' "$artifacts/lint.txt" 2>/dev/null || printf '(missing)\n'
 
 section "artifacts"
 printf '%s\n' "$artifacts"
-find "$artifacts" -maxdepth 1 -type f 2>/dev/null | sed 's|.*/||' | sort | sed 's/^/  /'
+find "$artifacts" -maxdepth 1 -type f 2>/dev/null | LC_ALL=C sed 's|.*/||' | LC_ALL=C sort | LC_ALL=C sed 's/^/  /'
 
 section "next"
 cat <<'NEXT'

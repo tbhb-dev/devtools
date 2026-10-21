@@ -19,6 +19,9 @@ case "$1" in
 ls) printf '%s\n' "${TOOL_VERSION:-{}}" ;;
 run)
   printf '%s\n' "$2" >>"$GATE_LOG"
+  if [ -n "${GATE_LOCALE_LOG:-}" ]; then
+    printf '%s|%s\n' "${LC_ALL-unset}" "${LANG-unset}" >>"$GATE_LOCALE_LOG"
+  fi
   [ "$2" != "${FAIL_GATE:-}" ] || exit 1
   ;;
 esac

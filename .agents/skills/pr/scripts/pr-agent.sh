@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # Unattended policy used by the shared PR entry points.
 # shellcheck disable=SC2034,SC2154 # state is supplied by the shared publisher
-export LC_ALL=C
 set -o pipefail
 # shellcheck disable=SC1091 # generated beside this helper
 . "$DT_LIB_DIR/pr-checks.sh"

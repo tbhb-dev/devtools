@@ -23,7 +23,6 @@ set -euo pipefail
 # The agent reads this output, so the operator's preferences must not
 # change its shape. The editor pins keep `git rebase --continue` from
 # opening a message editor nothing here can answer.
-export LC_ALL=C
 export PYTHONUTF8=1
 export GIT_EDITOR=true
 export GIT_SEQUENCE_EDITOR=true
@@ -76,7 +75,7 @@ Skipping would discard them. Continue instead:
 
   bash $script_dir/continue-rebase.sh"
   fi
-  stopped=$(tr -d '\n' <"$git_dir/rebase-merge/stopped-sha" 2>/dev/null || true)
+  stopped=$(LC_ALL=C tr -d '\n' <"$git_dir/rebase-merge/stopped-sha" 2>/dev/null || true)
   printf 'Skipping a commit whose change is already present:\n'
   if [ -n "$stopped" ]; then
     gitr log -1 --format='  %h %s' "$stopped" 2>/dev/null || printf '  %s\n' "$stopped"
@@ -135,7 +134,7 @@ set -e
 
 printf '%s\n' "$output"
 
-replayed=$(printf '%s\n' "$output" | grep -E "^Resolved .* using previous resolution" || true)
+replayed=$(printf '%s\n' "$output" | LC_ALL=C grep -E "^Resolved .* using previous resolution" || true)
 if [ -n "$replayed" ]; then
   printf '\n== rerere replayed a recorded resolution ==\n'
   printf '%s\n' "$replayed"
@@ -144,7 +143,7 @@ fi
 
 if [ -d "$git_dir/rebase-merge" ]; then
   printf '\n== stopped again ==\n'
-  if printf '%s\n' "$output" | grep -qiE 'is now empty|nothing to commit'; then
+  if printf '%s\n' "$output" | LC_ALL=C grep -qiE 'is now empty|nothing to commit'; then
     printf 'git reports this commit as empty. Where that is because the base already\n'
     printf 'carries the change, drop it:\n\n'
     printf '  bash %s/continue-rebase.sh --skip-empty\n\n' "$script_dir"

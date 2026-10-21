@@ -504,3 +504,12 @@ STUB
   if [[ "$output" == *"write-pr-description skill deployed:"* ]]; then return 1; fi
   [[ "$output" == *"review-pr-description skill deployed:"* ]]
 }
+
+@test "PR gates preserve the caller locale (#379)" {
+  export LC_ALL=C.UTF-8 LANG=C.UTF-8
+  export GATE_LOCALE_LOG="$BATS_TEST_TMPDIR/locale.log"
+  bash "$SCRIPTS/review.sh"
+  bash "$SCRIPTS/create-pr.sh" --dry-run
+  [ -s "$GATE_LOCALE_LOG" ]
+  [ "$(sort -u "$GATE_LOCALE_LOG")" = "C.UTF-8|C.UTF-8" ]
+}

@@ -25,9 +25,8 @@ set -uo pipefail
 
 # --- environment hardening -------------------------------------------
 # The agent reads this output, so the operator's preferences must not
-# change its shape. LC_ALL pins collation, and CDPATH is unset because
+# change its shape. Text commands pin their own locale. CDPATH is unset because
 # it makes a relative path resolve somewhere else entirely.
-export LC_ALL=C
 export PYTHONUTF8=1
 unset CDPATH GREP_OPTIONS
 IFS=$' \t\n'
@@ -81,10 +80,10 @@ if command -v vale >/dev/null 2>&1; then
   probe=$(printf '%s\n' "$CONTROL" |
     vale --path="$rel" --output=ai-tells-agent.tmpl 2>&1)
   rc=$?
-  hits=$(printf '%s\n' "$probe" | grep -c '^[0-9]' || true)
+  hits=$(printf '%s\n' "$probe" | LC_ALL=C grep -c '^[0-9]' || true)
   if [ "$rc" -gt 1 ]; then
     printf 'scoping:  ERROR (vale exited %s; it did not lint anything)\n' "$rc"
-    printf '%s\n' "$probe" | sed 's/^/          /'
+    printf '%s\n' "$probe" | LC_ALL=C sed 's/^/          /'
     printf 'verdict:  BLOCKED (vale could not run, so this says nothing about the document)\n'
     exit 0
   fi

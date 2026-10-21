@@ -52,7 +52,6 @@ set -euo pipefail
 # --- environment hardening -------------------------------------------
 # lib.sh repeats this block; it stays here too so the hygiene gate can
 # see it in the file that calls git and gh.
-export LC_ALL=C
 export GH_PAGER=cat
 export GH_PROMPT_DISABLED=1
 export PYTHONUTF8=1

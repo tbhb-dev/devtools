@@ -109,13 +109,8 @@ for f in "${files[@]}"; do
     continue
   fi
 
-  # Rule 1: anything invoking git or gh pins the locale, because sort
-  # ordering and the [a-z] ranges these scripts use both move with it.
-  if ! grep -q '^export LC_ALL=' "$f"; then
-    report "$f" 1 missing-locale-pin \
-      "invokes git or gh without 'export LC_ALL=C'; sort order and [a-z] ranges shift with the locale"
-  fi
-
+  # Locale pins belong on text-processing commands. A global export here
+  # would also force repository gates and their UTF-8 tools into C.
   # Rule 2: gh reads GH_REPO and GH_HOST from the environment, and
   # either one silently retargets every call at another repository.
   if [ "$calls_gh" != "0" ] && ! grep -q '^unset .*GH_REPO' "$f"; then

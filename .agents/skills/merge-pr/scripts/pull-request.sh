@@ -10,7 +10,6 @@
 # --- environment hardening -------------------------------------------
 # lib.sh and the sourcing script repeat this block; it stays here too so
 # the hygiene gate can see it in the file that calls gh.
-export LC_ALL=C
 export GH_PAGER=cat
 export GH_PROMPT_DISABLED=1
 export PYTHONUTF8=1
@@ -87,7 +86,7 @@ mp_judge_checks() {
     | @tsv
   ' "$1" 2>/dev/null) || return 3
   [ -z "$out" ] || printf '%s\n' "$out"
-  printf '%s\n' "$out" | awk -F'\t' '
+  printf '%s\n' "$out" | LC_ALL=C awk -F'\t' '
     $1 == "fail" { failed = 1 }
     $1 == "pending" { pending = 1 }
     END { exit failed ? 1 : (pending ? 2 : 0) }

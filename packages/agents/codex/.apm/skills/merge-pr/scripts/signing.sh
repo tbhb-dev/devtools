@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # SSH signing and verification shared with the unattended commit entry point.
 
-export LC_ALL=C
 set -o pipefail
 
 dt_signing_key() {
@@ -17,7 +16,7 @@ dt_signing_key() {
     key=$(head -n 1 "$key") || return $?
     ;;
   esac
-  printf '%s\n' "$key" | awk 'NF >= 2 { print $1, $2 }'
+  printf '%s\n' "$key" | LC_ALL=C awk 'NF >= 2 { print $1, $2 }'
 }
 
 dt_agent_signing() {
@@ -34,7 +33,7 @@ dt_agent_signing() {
     case $hook in commit-msg | pre-commit | post-commit | prepare-commit-msg) ;;
     *) dt_die "Unknown required hook: $hook" ;;
     esac
-    if [ ! -x "$dir/$hook" ] || ! grep -qF -- "$marker" "$dir/$hook"; then
+    if [ ! -x "$dir/$hook" ] || ! LC_ALL=C grep -qF -- "$marker" "$dir/$hook"; then
       dt_die "Required hook is missing or has the wrong marker: $hook"
     fi
   done
@@ -58,7 +57,7 @@ dt_agent_verify_commit() {
   entries=$(gitr log -g --format=%H "$DT_COMMIT_REF" | wc -l) || return $?
   entries=$((entries - DT_COMMIT_LOG_SIZE))
   made=$(gitr log -g --format='%H %gs' "$DT_COMMIT_REF" |
-    sed -n "1,${entries}p" | awk '/^[0-9a-f]+ commit( \(amend\))?: / { made=$1 } END { print made }') || return $?
+    LC_ALL=C sed -n "1,${entries}p" | LC_ALL=C awk '/^[0-9a-f]+ commit( \(amend\))?: / { made=$1 } END { print made }') || return $?
   [ "$entries" -gt 0 ] && [ -n "$made" ] || dt_die "BLOCKED: cannot identify this invocation's commit. Inspect the branch history."
   tip=$(gitr rev-parse "$DT_COMMIT_REF") || return $?
   live_ref=$(gitr symbolic-ref --quiet HEAD || true)
@@ -69,7 +68,7 @@ dt_agent_verify_commit() {
     expected=''
   fi
   parents=$(gitr rev-list --parents -n 1 "$made" | cut -s -d' ' -f2-) || return $?
-  actual_text=$(gitr cat-file commit "$made" | sed '1,/^$/d' | git stripspace) || return $?
+  actual_text=$(gitr cat-file commit "$made" | LC_ALL=C sed '1,/^$/d' | git stripspace) || return $?
   printf 'agent-commit %s\n' "$DT_SIGNING_KEY" >"$state/commit.signers"
   if [ "$tip" != "$made" ] || [ "$live_ref" != "$DT_COMMIT_REF" ]; then
     why='a hook moved the branch or HEAD'

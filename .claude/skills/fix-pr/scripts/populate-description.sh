@@ -26,7 +26,6 @@ set -euo pipefail
 # The agent reads this output, so the operator's preferences must not
 # change its shape. GH_REPO in particular would silently pull the
 # description from a different repository.
-export LC_ALL=C
 export GH_PAGER=cat
 export GH_PROMPT_DISABLED=1
 unset CDPATH GH_REPO GH_HOST GREP_OPTIONS

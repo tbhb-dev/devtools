@@ -24,7 +24,6 @@ set -euo pipefail
 # --- environment hardening -------------------------------------------
 # lib.sh repeats this block; it stays here too so the hygiene gate can
 # see it in the file that calls git.
-export LC_ALL=C
 export GH_PAGER=cat
 export GH_PROMPT_DISABLED=1
 export PYTHONUTF8=1
@@ -91,7 +90,7 @@ ahead_behind() {
     return
   fi
   counts=$(git rev-list --left-right --count "$right...$left")
-  printf 'ahead %s, behind %s\n' "${counts##*[[:space:]]}" "${counts%%[[:space:]]*}"
+  printf 'ahead %s, behind %s\n' "${counts##*$'\t'}" "${counts%%$'\t'*}"
 }
 
 # behind_count prints just the behind count of $1 relative to $2, for the
@@ -102,7 +101,7 @@ behind_count() {
     printf '0\n'
     return
   }
-  printf '%s\n' "${counts%%[[:space:]]*}"
+  printf '%s\n' "${counts%%$'\t'*}"
 }
 
 if [ "${DT_UNATTENDED:-0}" = 1 ]; then
@@ -243,7 +242,7 @@ done
 if [ -s COMMIT_AGENTMSG ]; then
   # shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
   printf 'COMMIT_AGENTMSG: present, %s line(s) — a leftover draft; overwrite it\n' \
-    "$(wc -l <COMMIT_AGENTMSG | tr -d ' ')"
+    "$(wc -l <COMMIT_AGENTMSG | LC_ALL=C tr -d ' ')"
 else
   printf 'COMMIT_AGENTMSG: absent or empty (expected before drafting)\n'
 fi

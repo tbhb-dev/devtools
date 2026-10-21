@@ -23,7 +23,6 @@
 # The agent reads what the sourcing scripts print, so the operator's
 # preferences must not change its shape. A CDPATH would also make the
 # cd below print a path, and the directory would come back as two lines.
-export LC_ALL=C
 export GH_PAGER=cat
 export GH_PROMPT_DISABLED=1
 export PYTHONUTF8=1
@@ -138,7 +137,7 @@ dt_session_id() {
 # file or the key is absent.
 _dt_conf_file() {
   [ -f "$1" ] || return 1
-  awk -v key="$2" '
+  LC_ALL=C awk -v key="$2" '
     /^[ \t]*#/ || !/=/ { next }
     {
       k = $0
@@ -159,7 +158,7 @@ _dt_conf_file() {
 # dt_conf <key> [default]: the configured value, or the default.
 dt_conf() {
   local key=$1 default=${2:-} env_name value dir repo
-  env_name=DEVTOOLS_$(printf '%s' "$key" | tr '[:lower:]' '[:upper:]')
+  env_name=DEVTOOLS_$(printf '%s' "$key" | LC_ALL=C tr '[:lower:]' '[:upper:]')
   if [ -n "${!env_name+set}" ]; then
     printf '%s\n' "${!env_name}"
     return 0
@@ -281,8 +280,8 @@ dt_policy_current() {
 dt_review_prompt() {
   local files
   files=$(find "$3" -type f) || return $?
-  files=$(printf '%s\n' "$files" | sort) || return $?
-  awk -v args="$2" '
+  files=$(printf '%s\n' "$files" | LC_ALL=C sort) || return $?
+  LC_ALL=C awk -v args="$2" '
     NR == 1 && /^---$/ { front = 1; next }
     front && /^---$/ { front = 0; next }
     front { next }
@@ -357,7 +356,7 @@ dt_reviewer_label() {
   custom=$(dt_conf review_cmd)
   if [ -n "$custom" ]; then
     # shellcheck disable=SC2312 # Diagnostic text cannot change the confirmation or review verdict.
-    printf 'review_cmd: %s\n' "$(printf '%s' "$custom" | tr '\n\r' '  ')"
+    printf 'review_cmd: %s\n' "$(printf '%s' "$custom" | LC_ALL=C tr '\n\r' '  ')"
   else
     # shellcheck disable=SC2312 # Diagnostic text cannot change the confirmation or review verdict.
     printf '%s headless, model %s, effort %s\n' "$(dt_harness)" \
@@ -432,7 +431,7 @@ dt_verdict() {
   # A NUL or another control byte can end a line early for one reader
   # and not another. A reply carrying one is no verdict.
   local filtered_bytes bytes filtered
-  filtered=$(tr -d '\000-\010\013\014\016-\037' <"$1" && printf '.') || return $?
+  filtered=$(LC_ALL=C tr -d '\000-\010\013\014\016-\037' <"$1" && printf '.') || return $?
   filtered=${filtered%.}
   filtered_bytes=$(printf '%s' "$filtered" | wc -c) || return $?
   bytes=$(wc -c <"$1") || return $?
@@ -440,7 +439,7 @@ dt_verdict() {
     printf 'unreadable\n'
     return 0
   fi
-  awk '
+  LC_ALL=C awk '
     {
       sub(/\r$/, "")
       sub(/[ \t]+$/, "")
@@ -503,9 +502,9 @@ dt_review() {
   fi
   verdict_record=$state/$kind.verdict
   if [ -f "$verdict_record" ] &&
-    grep -Fqx "subject $subject" "$verdict_record" &&
-    grep -Fqx "draft $before" "$verdict_record" &&
-    grep -Fqx 'verdict changes' "$verdict_record"; then
+    LC_ALL=C grep -Fqx "subject $subject" "$verdict_record" &&
+    LC_ALL=C grep -Fqx "draft $before" "$verdict_record" &&
+    LC_ALL=C grep -Fqx 'verdict changes' "$verdict_record"; then
     printf 'BLOCKED: this byte-identical draft already has CHANGES REQUIRED for the same review subject. Change the draft or ask the operator.\n' >&2
     return 3
   fi
@@ -583,7 +582,7 @@ _dt_stamp() {
   {
     printf 'draft %s\n' "$digest"
     while [ $# -ge 2 ]; do
-      binding=$(printf '%s' "$2" | tr '\n\r' '  ') || return $?
+      binding=$(printf '%s' "$2" | LC_ALL=C tr '\n\r' '  ') || return $?
       printf '%s %s\n' "$1" "$binding" || return $?
       shift 2
     done
@@ -600,7 +599,7 @@ dt_stamp_value() {
   stamp=$(dt_state_dir) || return $?
   stamp=$stamp/$1.stamp
   [ -f "$stamp" ] || return 0
-  sed -n "/^$2 /{s/^$2 //;p;q;}" "$stamp"
+  LC_ALL=C sed -n "/^$2 /{s/^$2 //;p;q;}" "$stamp"
 }
 
 # dt_require_stamp <kind> <draft> [name value]...: fail unless the stamp
@@ -673,7 +672,7 @@ dt_preapproval() {
   session=$(dt_session_id) || return $?
   [ -n "$session" ] || return 1
   dir=$(dt_git_dir) || return $?
-  grant=$(awk -v action="$1" '$1 == action { print; exit }' "$dir/preapprovals/$session" 2>/dev/null) || return $?
+  grant=$(LC_ALL=C awk -v action="$1" '$1 == action { print; exit }' "$dir/preapprovals/$session" 2>/dev/null) || return $?
   [ -n "$grant" ] || return 1
   printf '%s\n' "$grant"
 }
@@ -750,13 +749,13 @@ dt_gh() {
   else
     status=$?
   fi
-  if grep -qiE 'rate.?limit|API rate limit exceeded' "$err"; then
+  if LC_ALL=C grep -qiE 'rate.?limit|API rate limit exceeded' "$err"; then
     resource=core
     case "$*" in
     *graphql* | 'pr view '* | 'pr list '* | 'pr checks '* | 'repo view '* | 'label list '* | 'issue list '*) resource=graphql ;;
     esac
-    if grep -qi 'GraphQL' "$err"; then resource=graphql; fi
-    reset=$(awk 'tolower($1) == tolower("X-RateLimit-Reset:") { print $2; exit }' "$err")
+    if LC_ALL=C grep -qi 'GraphQL' "$err"; then resource=graphql; fi
+    reset=$(LC_ALL=C awk 'tolower($1) == tolower("X-RateLimit-Reset:") { print $2; exit }' "$err")
     if [ -z "$reset" ]; then
       reset=$(gh api rate_limit --jq ".resources.${resource}.reset" 2>/dev/null) || reset=""
     fi

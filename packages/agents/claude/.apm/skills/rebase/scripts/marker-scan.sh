@@ -32,7 +32,6 @@ set -euo pipefail
 # --- environment hardening -------------------------------------------
 # The agent reads this output, so the operator's preferences must not
 # change its shape.
-export LC_ALL=C
 export PYTHONUTF8=1
 unset CDPATH GREP_OPTIONS
 IFS=$' \t\n'
@@ -69,10 +68,10 @@ for path in "$@"; do
 
   if [ "$staged" = 1 ]; then
     git cat-file -e ":$path" 2>/dev/null || continue
-    hits=$(git cat-file blob ":$path" 2>/dev/null | grep -cE "$MARKER_RE" || true)
+    hits=$(git cat-file blob ":$path" 2>/dev/null | LC_ALL=C grep -cE "$MARKER_RE" || true)
   else
     [ -f "$path" ] || continue
-    hits=$(grep -cE "$MARKER_RE" "$path" 2>/dev/null || true)
+    hits=$(LC_ALL=C grep -cE "$MARKER_RE" "$path" 2>/dev/null || true)
   fi
 
   if [ "${hits:-0}" -gt 0 ]; then

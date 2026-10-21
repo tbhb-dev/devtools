@@ -3,7 +3,6 @@
 # changing trust or downloading worktree-local dependencies.
 set -euo pipefail
 
-export LC_ALL=C
 unset CDPATH GREP_OPTIONS
 IFS=$' \t\n'
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC2034,SC2154 # state comes from the sourcing merge scripts
 # Unattended merge policy shared by the interactive merge entry points.
-export LC_ALL=C GH_PAGER=cat GH_PROMPT_DISABLED=1 PYTHONUTF8=1
+export GH_PAGER=cat GH_PROMPT_DISABLED=1 PYTHONUTF8=1
 unset CDPATH GH_REPO GH_HOST GREP_OPTIONS
 IFS=$' \t\n'
 set -o pipefail
@@ -164,7 +164,7 @@ ma_verify() {
   gitr -c credential.helper= -c 'credential.helper=!gh auth git-credential' fetch --no-tags --no-write-fetch-head "$repository" "$live_base" "$merge_commit" || return $?
   gitr merge-base --is-ancestor "$merge_commit" "$live_base" || dt_die "merged-not-as-reviewed: merge commit is not on the live base"
   wanted=$(git stripspace <"$message") || return $?
-  actual=$(gitr cat-file commit "$merge_commit" | sed '1,/^$/d' | git stripspace) || return $?
+  actual=$(gitr cat-file commit "$merge_commit" | LC_ALL=C sed '1,/^$/d' | git stripspace) || return $?
   [ "$actual" = "$wanted" ] || dt_die "merged-not-as-reviewed: the remote message differs; preserve evidence and inspect"
 }
 

@@ -31,7 +31,6 @@ set -euo pipefail
 # The agent reads this output, so the operator's preferences must not
 # change its shape. The editor pins belong to the same idea: an operator
 # with a graphical editor configured would otherwise hang this call.
-export LC_ALL=C
 export PYTHONUTF8=1
 export GIT_EDITOR=true
 export GIT_SEQUENCE_EDITOR=true
@@ -120,7 +119,7 @@ printf '%s\n' "$output"
 # was replayed from a recording rather than made here. A recording can
 # be stale, so a replayed path is a claim to check rather than a
 # resolution to trust.
-replayed=$(printf '%s\n' "$output" | grep -E "^Resolved .* using previous resolution" || true)
+replayed=$(printf '%s\n' "$output" | LC_ALL=C grep -E "^Resolved .* using previous resolution" || true)
 if [ -n "$replayed" ]; then
   printf '\n== rerere replayed a recorded resolution ==\n'
   printf '%s\n' "$replayed"
@@ -154,7 +153,7 @@ gitr log --oneline --no-decorate "$base_sha..HEAD" || true
 
 # An autostash that conflicts on the way back leaves the tree in a state
 # no commit describes, and git says so in one line among many.
-if printf '%s\n' "$output" | grep -qE 'Applying autostash resulted in conflicts'; then
+if printf '%s\n' "$output" | LC_ALL=C grep -qE 'Applying autostash resulted in conflicts'; then
   printf '\n== autostash conflicted ==\n'
   printf 'The rebase finished, but the uncommitted work did not reapply cleanly.\n'
   printf 'It is kept in the stash; git named the entry above. Resolve the tree,\n'

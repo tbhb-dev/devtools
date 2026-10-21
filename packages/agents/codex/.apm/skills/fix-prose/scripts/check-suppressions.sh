@@ -57,10 +57,8 @@ set -euo pipefail
 
 # --- environment hardening -------------------------------------------
 # The agent reads this output, so the operator's preferences must not
-# change its shape. LC_ALL pins collation, because the sorts below mean
-# different things under a UTF-8 locale. CDPATH is unset because it
+# change its shape. Each sort pins its own locale. CDPATH is unset because it
 # makes a relative path resolve somewhere else entirely.
-export LC_ALL=C
 unset CDPATH GREP_OPTIONS
 IFS=$' \t\n'
 
@@ -144,7 +142,7 @@ unsanctioned_changes() {
     case $line in
     '< '*) printf 'removed the line: %s\n' "${line#< }" ;;
     '> '*)
-      grep -qxF -- "$path$TAB${line#> }" "$state/allow" 2>/dev/null ||
+      LC_ALL=C grep -qxF -- "$path$TAB${line#> }" "$state/allow" 2>/dev/null ||
         printf 'added a line the operator did not allow: %s\n' "${line#> }"
       ;;
     esac
@@ -217,15 +215,15 @@ digest() {
     {
       gitr diff --no-ext-diff HEAD --name-only
       gitr ls-files --others --exclude-standard
-    } | sort -u | while IFS= read -r f; do
+    } | LC_ALL=C sort -u | while IFS= read -r f; do
       if [ -f "$f" ] || [ -L "$f" ]; then
         shasum -a 256 "$f"
       elif [ -n "$f" ]; then
         printf '%064d  %s\n' 0 "$f"
       fi
     done
-  } | sort -u -k2 |
-    awk -v t="$target" '{p = $0; sub(/^[0-9a-f]+  /, "", p); if (p != t && p !~ /^\.fix-prose\//) print}'
+  } | LC_ALL=C sort -u -k2 |
+    LC_ALL=C awk -v t="$target" '{p = $0; sub(/^[0-9a-f]+  /, "", p); if (p != t && p !~ /^\.fix-prose\//) print}'
 }
 
 # directives prints the suppression comments already in the target, so
@@ -233,7 +231,7 @@ digest() {
 directives() {
   local target=$1
   [ -f "$target" ] || return 0
-  grep -nE "$DIRECTIVES" "$target" || true
+  LC_ALL=C grep -nE "$DIRECTIVES" "$target" || true
 }
 
 mode=${1:-}
@@ -298,7 +296,7 @@ case $mode in
     .vale/* | .vale.ini | .cspell* | .pre-commit-config.yaml | mise.toml | Justfile)
       # A dictionary the operator sanctioned lines in is judged line by
       # line. Without a record for the path, any change fails as before.
-      if sanctionable "$path" && grep -qF -- "$path$TAB" "$BASE/allow" 2>/dev/null; then
+      if sanctionable "$path" && LC_ALL=C grep -qF -- "$path$TAB" "$BASE/allow" 2>/dev/null; then
         changes=$(unsanctioned_changes "$BASE" "$path") || exit $?
         while IFS= read -r reason; do
           [ -n "$reason" ] || continue
@@ -317,7 +315,7 @@ case $mode in
     esac
   done < <(
     diff "$BASE/digest" "$now" |
-      sed -n 's/^[<>] [0-9a-f]\{64\}  //p' | sort -u || true
+      LC_ALL=C sed -n 's/^[<>] [0-9a-f]\{64\}  //p' | LC_ALL=C sort -u || true
   )
 
   # Suppression comments the target didn't carry before.
@@ -327,7 +325,7 @@ case $mode in
       "the fixer added a comment silencing a checker in place: ${line#*:}"
   done < <(
     directives "$target" |
-      grep -vxF -f "$BASE/directives" 2>/dev/null || true
+      LC_ALL=C grep -vxF -f "$BASE/directives" 2>/dev/null || true
   )
 
   if [ "$findings" -gt 0 ]; then
@@ -355,7 +353,7 @@ case $mode in
   # sanctioned, because --verify stays quiet about exactly those.
   if [ -s "$BASE/allow" ]; then
     printf '\nsanctioned by the operator:\n'
-    sed 's/\t/: /' "$BASE/allow"
+    LC_ALL=C sed 's/\t/: /' "$BASE/allow"
   fi
   ;;
 

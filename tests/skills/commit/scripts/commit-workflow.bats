@@ -458,3 +458,14 @@ STUB
   [ "$status" -eq 1 ]
   [ "$output" = 'commit preflight: commit-lint is not installed; add "go:github.com/tbhb-dev/devtools/cmd/commit-lint" = "<devtools-version>" to mise.toml [tools]' ]
 }
+
+@test "preflight review and commit preserve the gate locale (#379)" {
+  export LC_ALL=C.UTF-8 LANG=C.UTF-8
+  export GATE_LOCALE_LOG="$BATS_TEST_TMPDIR/locale.log"
+  stage a.txt a
+  bash "$SCRIPTS/preflight.sh"
+  bash "$SCRIPTS/review.sh"
+  bash "$SCRIPTS/commit.sh" --confirmed
+  [ -s "$GATE_LOCALE_LOG" ]
+  [ "$(sort -u "$GATE_LOCALE_LOG")" = "C.UTF-8|C.UTF-8" ]
+}

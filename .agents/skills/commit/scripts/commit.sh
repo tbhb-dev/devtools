@@ -40,7 +40,6 @@ set -euo pipefail
 # --- environment hardening -------------------------------------------
 # lib.sh repeats this block; it stays here too so the hygiene gate can
 # see it in the file that calls git.
-export LC_ALL=C
 export GH_PAGER=cat
 export GH_PROMPT_DISABLED=1
 export PYTHONUTF8=1
@@ -97,7 +96,7 @@ fi
 start=$(dt_head)
 [ "$mode" = normal ] || [ "$start" != unborn ] || fail "There is no commit to amend yet."
 
-staged() { gitr diff --no-ext-diff --cached --name-only --no-renames | sort; }
+staged() { gitr diff --no-ext-diff --cached --name-only --no-renames | LC_ALL=C sort; }
 
 manifest=$(staged)
 if [ -z "$manifest" ] && [ "$mode" = normal ]; then
@@ -192,7 +191,7 @@ status=0
 if [ "${DT_UNATTENDED:-0}" = 1 ]; then
   command git "$@" >"$state/commit.log" 2>&1 || status=$?
   cat "$state/commit.log"
-  if [ "$status" != 0 ] && grep -Eq "^(error: gpg failed to sign the data|fatal: failed to write commit object)" "$state/commit.log"; then
+  if [ "$status" != 0 ] && LC_ALL=C grep -Eq "^(error: gpg failed to sign the data|fatal: failed to write commit object)" "$state/commit.log"; then
     printf 'HELD: signing failed. Keep the draft and index; restore signing before retrying. Recheck the stamp if hooks changed files.\n' >&2
     exit "$DT_HELD"
   fi
@@ -204,12 +203,12 @@ if [ "$status" != 0 ]; then
   dropped=""
   if [ -n "$manifest" ]; then
     remaining=$(staged) || exit $?
-    dropped=$(comm -23 <(printf '%s\n' "$manifest") <(printf '%s\n' "$remaining")) || exit $?
+    dropped=$(LC_ALL=C comm -23 <(printf '%s\n' "$manifest") <(printf '%s\n' "$remaining")) || exit $?
   fi
   if [ -n "$dropped" ]; then
     printf '\nThe commit failed and the index came back short. These paths were\n' >&2
     printf 'staged before the attempt and are not staged now:\n\n' >&2
-    printf '%s\n' "$dropped" | sed 's/^/  /' >&2
+    printf '%s\n' "$dropped" | LC_ALL=C sed 's/^/  /' >&2
     printf '\nStage them again before retrying, or the retry commits a subset of\n' >&2
     printf 'the group without saying so.\n' >&2
   fi
@@ -251,8 +250,8 @@ landed_paths() {
 }
 missing=""
 if [ -n "$manifest" ]; then
-  landed=$(landed_paths | sort) || exit $?
-  missing=$(comm -23 <(printf '%s\n' "$manifest") <(printf '%s\n' "$landed")) || exit $?
+  landed=$(landed_paths | LC_ALL=C sort) || exit $?
+  missing=$(LC_ALL=C comm -23 <(printf '%s\n' "$manifest") <(printf '%s\n' "$landed")) || exit $?
 fi
 
 gitr show --no-ext-diff --stat --format='%h %s' HEAD
@@ -271,7 +270,7 @@ fi
 if [ -n "$missing" ]; then
   printf '\nThe commit is short of what was staged. These paths were in the\n' >&2
   printf 'index before the commit and are not in it:\n\n' >&2
-  printf '%s\n' "$missing" | sed 's/^/  /' >&2
+  printf '%s\n' "$missing" | LC_ALL=C sed 's/^/  /' >&2
   printf '\nStage them, review again with --amend, and fold them into the commit\n' >&2
   printf 'that just landed:\n\n' >&2
   printf '  git add -- <the paths above>\n' >&2

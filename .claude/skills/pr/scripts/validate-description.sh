@@ -25,11 +25,9 @@ set -euo pipefail
 
 # --- environment hardening -------------------------------------------
 # The agent reads this output, so the operator's preferences must not
-# change its shape. LC_ALL pins collation, because sort and the [a-z]
-# ranges below mean different things under a UTF-8 locale. The unsets
+# change its shape. Text commands pin their own locale. The unsets
 # cover variables that silently retarget a command: GH_REPO sends gh at
 # another repository, CDPATH makes a relative cd print somewhere else.
-export LC_ALL=C
 export GH_PAGER=cat
 export GH_PROMPT_DISABLED=1
 export PYTHONUTF8=1
@@ -91,7 +89,7 @@ contains() {
 # when the draft never declared it. Findings carry a line so that fixing
 # one means opening the draft at that point rather than searching it.
 line_of() {
-  awk -v want="$1" '
+  LC_ALL=C awk -v want="$1" '
     { at = index($0, ":"); if (at && substr($0, at + 1) == want) { print substr($0, 1, at - 1); exit } }
     END { }
   ' <<EOF
@@ -100,7 +98,7 @@ EOF
 }
 
 # The template's level 2 headings, in order, are the required sections.
-required=$(grep '^## ' "$TEMPLATE" || true)
+required=$(LC_ALL=C grep '^## ' "$TEMPLATE" || true)
 [ -n "$required" ] ||
   fatal 0 template-has-no-sections "${TEMPLATE} declares no level 2 headings"
 
@@ -243,7 +241,7 @@ close_section
 # that rather than the whole file, so a label spelled "todo" stays
 # innocent.
 if [ "$fm_close" != 0 ]; then
-  prose=$(sed -n "$((fm_close + 1)),\$p" "$DRAFT")
+  prose=$(LC_ALL=C sed -n "$((fm_close + 1)),\$p" "$DRAFT")
 else
   prose=$(cat "$DRAFT")
 fi
@@ -319,7 +317,7 @@ else
   elif [ "${#title_text}" -gt "$TITLE_MAX" ]; then
     report "$title_line" title-too-long "the title runs past ${TITLE_MAX} characters"
   fi
-  if printf '%s' "$title_text" | grep -Eq '^[a-z]+(\([a-zA-Z0-9_./-]+\))?!?: .+'; then
+  if printf '%s' "$title_text" | LC_ALL=C grep -Eq '^[a-z]+(\([a-zA-Z0-9_./-]+\))?!?: .+'; then
     # The type has to be one the landing commits already use. A branch
     # of documentation commits under a feature title misreports itself
     # in the changelog the moment it squashes.
@@ -328,7 +326,7 @@ else
     title_type=${title_type%!}
     if [ -n "$base_ref" ]; then
       landing_types=$(gitr log --format='%s' "$base_ref..HEAD" |
-        sed -n 's/^\([a-z][a-z]*\)[(!:].*/\1/p' | sort -u | tr '\n' ' ')
+        LC_ALL=C sed -n 's/^\([a-z][a-z]*\)[(!:].*/\1/p' | LC_ALL=C sort -u | LC_ALL=C tr '\n' ' ')
       if [ -n "$landing_types" ] && ! contains "$landing_types" "$title_type"; then
         report "$title_line" title-type-unused \
           "no commit that lands is a \"${title_type}\"; they are: ${landing_types% }"
@@ -351,7 +349,7 @@ anchor_head=""
 anchor_line=$title_line
 while IFS= read -r want; do
   [ -n "$want" ] || continue
-  if printf '%s' "$draft_sections" | grep -qxF "$want"; then
+  if printf '%s' "$draft_sections" | LC_ALL=C grep -qxF "$want"; then
     present_ordered="${present_ordered}${want}
 "
     anchor_head=$want
@@ -370,7 +368,7 @@ EOF
 draft_ordered=""
 while IFS= read -r have; do
   [ -n "$have" ] || continue
-  if printf '%s' "$required" | grep -qxF "$have"; then
+  if printf '%s' "$required" | LC_ALL=C grep -qxF "$have"; then
     draft_ordered="${draft_ordered}${have}
 "
   fi
@@ -379,7 +377,7 @@ $draft_sections
 EOF
 
 if [ "$draft_ordered" != "$present_ordered" ]; then
-  wanted=$(printf '%s' "$present_ordered" | tr '\n' '|' | sed 's/|$//; s/## //g; s/|/, /g')
+  wanted=$(printf '%s' "$present_ordered" | LC_ALL=C tr '\n' '|' | LC_ALL=C sed 's/|$//; s/## //g; s/|/, /g')
   first_wrong=$(printf '%s' "$draft_ordered" | head -1)
   # shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
   report "$(line_of "$first_wrong")" section-order \
@@ -390,7 +388,7 @@ while IFS= read -r entry; do
   [ -n "$entry" ] || continue
   entry_line=${entry%%:*}
   entry_head=${entry#*:}
-  if printf '%s' "$required" | grep -qxF "$entry_head"; then
+  if printf '%s' "$required" | LC_ALL=C grep -qxF "$entry_head"; then
     report "$entry_line" section-empty "\"${entry_head}\" has no content under it"
   fi
 done <<EOF
@@ -401,15 +399,15 @@ EOF
 # arrives in backticks or a fence. Prose alone reports nothing runnable.
 while IFS= read -r head; do
   [ -n "$head" ] || continue
-  name=$(printf '%s' "${head#\#\# }" | tr '[:upper:]' '[:lower:]')
+  name=$(printf '%s' "${head#\#\# }" | LC_ALL=C tr '[:upper:]' '[:lower:]')
   case $name in
   verification | testing | 'test plan' | 'how to test') ;;
   *) continue ;;
   esac
-  if ! printf '%s' "$draft_sections" | grep -qxF "$head"; then
+  if ! printf '%s' "$draft_sections" | LC_ALL=C grep -qxF "$head"; then
     continue
   fi
-  section=$(awk -v want="$head" '
+  section=$(LC_ALL=C awk -v want="$head" '
     /^#{1,2} / { inside = ($0 == want); next }
     inside { print }
   ' "$DRAFT")
@@ -434,14 +432,14 @@ for at in $comment_lines; do
     "an instructional comment survived into the description; replace it with prose"
 done
 
-placeholders=$(printf '%s\n' "$prose" | grep -n -E '\b(TODO|TBD|FIXME|XXX)\b' | cut -d: -f1 || true)
+placeholders=$(printf '%s\n' "$prose" | LC_ALL=C grep -n -E '\b(TODO|TBD|FIXME|XXX)\b' | cut -d: -f1 || true)
 for at in $placeholders; do
   report "$((at + fm_close))" placeholder-left \
     "a placeholder marker reached the description; resolve it or drop the sentence"
 done
 
 dead_links=$(printf '%s\n' "$prose" |
-  grep -n -E '\]\((#|TODO|url|link|https?://example\.(com|org))?\)' | cut -d: -f1 || true)
+  LC_ALL=C grep -n -E '\]\((#|TODO|url|link|https?://example\.(com|org))?\)' | cut -d: -f1 || true)
 for at in $dead_links; do
   report "$((at + fm_close))" link-placeholder \
     "a link points nowhere; give it a real target or drop it"
@@ -449,9 +447,9 @@ done
 
 # An unclosed fence swallows the rest of the description when GitHub
 # renders it.
-fences=$(printf '%s\n' "$prose" | grep -c '^[[:space:]]*```' || true)
+fences=$(printf '%s\n' "$prose" | LC_ALL=C grep -c '^[[:space:]]*```' || true)
 if [ $((fences % 2)) != 0 ]; then
-  last_fence=$(printf '%s\n' "$prose" | grep -n '^[[:space:]]*```' | tail -1 | cut -d: -f1)
+  last_fence=$(printf '%s\n' "$prose" | LC_ALL=C grep -n '^[[:space:]]*```' | tail -1 | cut -d: -f1)
   report "$((last_fence + fm_close))" fence-unclosed "this fence opens a block that never closes"
 fi
 
@@ -468,8 +466,8 @@ fi
 # backticks and taking alternate fields loses the pairing the moment a
 # three-backtick fence throws the parity off.
 # shellcheck disable=SC2016  # the backticks are the pattern, not a substitution
-tokens=$(printf '%s\n' "$prose" | grep -o '`[^`]*`' | tr -d '`' |
-  grep -E '^[A-Za-z0-9._][A-Za-z0-9._/-]*$' | grep '/' | sort -u || true)
+tokens=$(printf '%s\n' "$prose" | LC_ALL=C grep -o '`[^`]*`' | LC_ALL=C tr -d '`' |
+  LC_ALL=C grep -E '^[A-Za-z0-9._][A-Za-z0-9._/-]*$' | LC_ALL=C grep '/' | LC_ALL=C sort -u || true)
 
 for token in $tokens; do
   # A repository reference such as owner/name is not a path, and neither
@@ -488,10 +486,10 @@ for token in $tokens; do
   if [ -e "$token" ]; then
     continue
   fi
-  if printf '%s\n' "$changed" | grep -qxF "$token"; then
+  if printf '%s\n' "$changed" | LC_ALL=C grep -qxF "$token"; then
     continue
   fi
-  at=$(printf '%s\n' "$prose" | grep -n -F "\`${token}\`" | head -1 | cut -d: -f1 || true)
+  at=$(printf '%s\n' "$prose" | LC_ALL=C grep -n -F "\`${token}\`" | head -1 | cut -d: -f1 || true)
   if [ -n "$at" ]; then
     at=$((at + fm_close))
   else

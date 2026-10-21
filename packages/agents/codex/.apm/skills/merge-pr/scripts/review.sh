@@ -28,7 +28,6 @@ set -euo pipefail
 # --- environment hardening -------------------------------------------
 # lib.sh repeats this block; it stays here too so the hygiene gate can
 # see it in the file that calls git and gh.
-export LC_ALL=C
 export GH_PAGER=cat
 export GH_PROMPT_DISABLED=1
 export PYTHONUTF8=1
@@ -69,7 +68,7 @@ cd "$root"
 ma_context
 draft=$root/SQUASH_AGENTMSG
 [ -s "$draft" ] || dt_die "SQUASH_AGENTMSG is missing or empty. Run squash-message.sh and write the body first."
-drafted_for=$(head -n 1 "$draft" | sed -n 's/.*(#\([0-9][0-9]*\))[[:space:]]*$/\1/p')
+drafted_for=$(head -n 1 "$draft" | LC_ALL=C sed -n 's/.*(#\([0-9][0-9]*\))[[:space:]]*$/\1/p')
 [ -n "$drafted_for" ] || dt_die "The subject of SQUASH_AGENTMSG names no pull request; it has to end in (#<number>)."
 [ -n "$number" ] || number=$drafted_for
 case $number in

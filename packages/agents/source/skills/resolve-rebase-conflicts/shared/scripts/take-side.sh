@@ -28,7 +28,6 @@ set -euo pipefail
 # --- environment hardening -------------------------------------------
 # The agent reads this output, so the operator's preferences must not
 # change its shape.
-export LC_ALL=C
 export PYTHONUTF8=1
 unset CDPATH GREP_OPTIONS
 IFS=$' \t\n'
@@ -73,11 +72,11 @@ git_dir=$(git rev-parse --absolute-git-dir)
   [ -f "$git_dir/CHERRY_PICK_HEAD" ] ||
   refuse "no rebase or cherry-pick in progress."
 
-stages=$(git ls-files -u -- "$path" | awk '{ printf "%s", $3 }')
+stages=$(git ls-files -u -- "$path" | LC_ALL=C awk '{ printf "%s", $3 }')
 [ -n "$stages" ] || refuse "$path is not unmerged."
 
-stopped=$(tr -d '\n' <"$git_dir/rebase-merge/stopped-sha" 2>/dev/null || true)
-onto=$(tr -d '\n' <"$git_dir/rebase-merge/onto" 2>/dev/null || true)
+stopped=$(LC_ALL=C tr -d '\n' <"$git_dir/rebase-merge/stopped-sha" 2>/dev/null || true)
+onto=$(LC_ALL=C tr -d '\n' <"$git_dir/rebase-merge/onto" 2>/dev/null || true)
 
 # shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
 printf 'base-side     = %s\n' \
@@ -105,9 +104,9 @@ git cat-file blob ":$stage:$path" >"$path"
 git add -- "$path"
 
 # shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
-printf 'staged %s lines from the %s\n' "$(wc -l <"$path" | tr -d ' ')" "$side"
+printf 'staged %s lines from the %s\n' "$(wc -l <"$path" | LC_ALL=C tr -d ' ')" "$side"
 
-declared=$(git check-attr rebase-resolve -- "$path" | sed 's/.*: //')
+declared=$(git check-attr rebase-resolve -- "$path" | LC_ALL=C sed 's/.*: //')
 if [ "$declared" = regenerate ]; then
   printf '\nThis path is declared rebase-resolve=regenerate, so what was just staged\n'
   printf 'is a placeholder. Run its generator once the rebase finishes and commit\n'

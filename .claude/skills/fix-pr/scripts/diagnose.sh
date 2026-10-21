@@ -19,11 +19,9 @@ set -uo pipefail
 
 # --- environment hardening -------------------------------------------
 # The agent reads this output, so the operator's preferences must not
-# change its shape. LC_ALL pins collation, because sort and the [a-z]
-# ranges below mean different things under a UTF-8 locale. The unsets
+# change its shape. Text commands pin their own locale. The unsets
 # cover variables that silently retarget a command: GH_REPO sends gh at
 # another repository, CDPATH makes a relative cd print somewhere else.
-export LC_ALL=C
 export GH_PAGER=cat
 export GH_PROMPT_DISABLED=1
 export PYTHONUTF8=1
@@ -95,7 +93,7 @@ fi
 # marks a task the shared payload owns; the rest a repository defines
 # itself.
 reproducer() {
-  case $(printf '%s' "$1" | tr '[:upper:]' '[:lower:]') in
+  case $(printf '%s' "$1" | LC_ALL=C tr '[:upper:]' '[:lower:]') in
   *prose* | *vale*) printf 'mise run lint-prose\n' ;;
   *spell*) printf 'mise run devtools:lint-spelling\n' ;;
   *markdown* | *rumdl*) printf 'mise run devtools:lint-markdown\n' ;;
@@ -129,7 +127,7 @@ while IFS="$(printf '\t')" read -r name link; do
   printf 'reproduce:  %s\n' "$(reproducer "$name")"
   printf 'run:        %s\n' "$link"
 
-  run_id=$(printf '%s' "$link" | sed -n 's#.*/runs/\([0-9][0-9]*\).*#\1#p')
+  run_id=$(printf '%s' "$link" | LC_ALL=C sed -n 's#.*/runs/\([0-9][0-9]*\).*#\1#p')
   if [ -z "$run_id" ]; then
     printf 'log:        (not a workflow run; open the link)\n'
     continue

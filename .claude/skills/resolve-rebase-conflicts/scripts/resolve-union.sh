@@ -25,10 +25,9 @@
 set -euo pipefail
 
 # --- environment hardening -------------------------------------------
-# LC_ALL pins the collation this whole resolution rests on: the file is
+# Text commands pin the collation this resolution rests on: the file is
 # sorted under the C locale, and writing it back sorted under another
 # would reorder lines nobody touched.
-export LC_ALL=C
 export PYTHONUTF8=1
 unset CDPATH GREP_OPTIONS
 IFS=$' \t\n'
@@ -76,7 +75,7 @@ failed=0
 for path in "$@"; do
   printf '== %s ==\n' "$path"
 
-  stages=$(git ls-files -u -- "$path" | awk '{ printf "%s", $3 }')
+  stages=$(git ls-files -u -- "$path" | LC_ALL=C awk '{ printf "%s", $3 }')
   if [ "$stages" != "123" ]; then
     printf 'refused: stages present are "%s", not all three. A union needs the\n' "${stages:-none}"
     printf 'common ancestor to tell an addition from a deletion.\n\n'
@@ -88,7 +87,7 @@ for path in "$@"; do
     git cat-file blob ":$stage:$path" >"$scratch/$stage"
   done
 
-  declared=$(git check-attr rebase-resolve -- "$path" | sed 's/.*: //')
+  declared=$(git check-attr rebase-resolve -- "$path" | LC_ALL=C sed 's/.*: //')
   # Exit 3 is the refusal, and every other nonzero status is the tool
   # breaking. Collapsing the two would report a traceback mid-rebase as a
   # routine "read this one yourself", which is the wrong instruction and

@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC2034,SC2154 # state is shared with the sourcing publisher
-export LC_ALL=C
 export GH_PAGER=cat
 export GH_PROMPT_DISABLED=1
 export PYTHONUTF8=1
@@ -143,14 +142,14 @@ if [ -n "$open_number" ]; then
     local item
     while IFS= read -r item; do
       [ -n "$item" ] || continue
-      printf '%s\n' "$3" | grep -qxF -- "$item" ||
+      printf '%s\n' "$3" | LC_ALL=C grep -qxF -- "$item" ||
         dt_gh pr edit "$open_number" "$2" "$item" >/dev/null
     done <<EOF
 $4
 EOF
     while IFS= read -r item; do
       [ -n "$item" ] || continue
-      printf '%s\n' "$4" | grep -qxF -- "$item" ||
+      printf '%s\n' "$4" | LC_ALL=C grep -qxF -- "$item" ||
         dt_gh pr edit "$open_number" "$1" "$item" >/dev/null
     done <<EOF
 $3

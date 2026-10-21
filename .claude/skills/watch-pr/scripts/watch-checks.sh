@@ -32,11 +32,9 @@ set -uo pipefail
 
 # --- environment hardening -------------------------------------------
 # The agent reads this output, so the operator's preferences must not
-# change its shape. LC_ALL pins collation, because sort and the [a-z]
-# ranges below mean different things under a UTF-8 locale. The unsets
+# change its shape. Text commands pin their own locale. The unsets
 # cover variables that silently retarget a command: GH_REPO sends gh at
 # another repository, CDPATH makes a relative cd print somewhere else.
-export LC_ALL=C
 export GH_PAGER=cat
 export GH_PROMPT_DISABLED=1
 export PYTHONUTF8=1
@@ -89,7 +87,7 @@ snapshot() {
       exit 76
     fi
     # shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
-    grep -q 'no checks reported' "$gh_err" ||
+    LC_ALL=C grep -q 'no checks reported' "$gh_err" ||
       fail "could not read checks for #${number}: $(head -n 1 "$gh_err")"
     raw_checks='[]'
   fi
@@ -132,7 +130,7 @@ while :; do
   current=$(printf '%s\n' "$checks" |
     jq -r --argjson pending "$pending" \
       '.[] | select(.bucket != "pending" and (.bucket != "cancel" or $pending == 0)) | "\(.bucket)\t\(.workflow):\(.name)\t\(.name)\t\(.link)"' |
-    sort)
+    LC_ALL=C sort)
 
   # Emit only what has settled since the previous look.
   #
@@ -176,7 +174,7 @@ done
 
 # Recount from the final state rather than trusting the running tally,
 # which a re-run of a failed job would have left stale.
-failures=$(printf '%s\n' "$prev" | grep -c -E '^(fail|cancel)' || true)
+failures=$(printf '%s\n' "$prev" | LC_ALL=C grep -c -E '^(fail|cancel)' || true)
 
 if [ "$failures" = "0" ]; then
   printf 'ALL GREEN #%s\n' "$number"

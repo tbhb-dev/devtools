@@ -13,9 +13,8 @@ set -uo pipefail
 
 # --- environment hardening -------------------------------------------
 # The agent reads this output, so the operator's preferences must not
-# change its shape. LC_ALL pins collation, and CDPATH is unset because
+# change its shape. Text commands pin their own locale. CDPATH is unset because
 # it makes a relative path resolve somewhere else entirely.
-export LC_ALL=C
 export PYTHONUTF8=1
 unset CDPATH GREP_OPTIONS
 IFS=$' \t\n'
@@ -81,7 +80,7 @@ fi
 section "the document, with line numbers"
 # The findings below name lines, so they resolve against this listing
 # without a separate read.
-awk '{printf "%5d  %s\n", NR, $0}' "$target"
+LC_ALL=C awk '{printf "%5d  %s\n", NR, $0}' "$target"
 
 section "findings"
 if [ -z "$lint" ]; then
@@ -110,11 +109,11 @@ if command -v vale >/dev/null 2>&1; then
   probe=$(printf '%s\n' "$CONTROL" |
     vale --path="$target" --output=ai-tells-agent.tmpl 2>&1)
   rc=$?
-  hits=$(printf '%s\n' "$probe" | grep -c '^[0-9]' || true)
+  hits=$(printf '%s\n' "$probe" | LC_ALL=C grep -c '^[0-9]' || true)
   if [ "$rc" -gt 1 ]; then
     printf 'ERROR: vale exited %s and linted nothing, so neither the\n' "$rc"
     printf 'silence above nor this probe measured the document:\n'
-    printf '%s\n' "$probe" | sed 's/^/  /'
+    printf '%s\n' "$probe" | LC_ALL=C sed 's/^/  /'
     printf 'Report BLOCKED.\n'
   elif [ "${hits:-0}" -eq 0 ]; then
     printf 'UNSCOPED: no .vale.ini section matches %s, so vale loads no\n' "$target"
@@ -137,9 +136,9 @@ if command -v vale >/dev/null 2>&1; then
   if [ "$rc" -gt 1 ]; then
     printf 'Unknown: vale exited %s rather than linting, so the count below\n' "$rc"
     printf 'would be zero for the wrong reason:\n'
-    printf '%s\n' "$found" | sed 's/^/  /'
+    printf '%s\n' "$found" | LC_ALL=C sed 's/^/  /'
   else
-    auto=$(printf '%s\n' "$found" | grep -c 'replace_with=' || true)
+    auto=$(printf '%s\n' "$found" | LC_ALL=C grep -c 'replace_with=' || true)
     printf '%s of the vale findings carry a replacement.\n' "${auto:-0}"
     if [ "${auto:-0}" -gt 0 ]; then
       printf 'Clear them first with:\n  mise run fix-prose-replacements %s\n' "$target"

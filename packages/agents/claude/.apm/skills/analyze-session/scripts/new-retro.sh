@@ -15,12 +15,11 @@ set -euo pipefail
 
 # --- environment hardening -------------------------------------------
 # This resolves paths from git and writes files an agent then reads, so
-# the operator's preferences must not change what it does. LC_ALL pins
-# collation, because sort order and the [a-z] ranges shift with the
-# locale. The unsets cover variables that silently retarget a command:
+# the operator's preferences must not change what it does. Text commands
+# pin their own locale. The unsets cover variables that silently retarget
+# a command:
 # CDPATH makes a relative cd print somewhere else, GIT_DIR points git at
 # another repository entirely.
-export LC_ALL=C
 export PYTHONUTF8=1
 unset CDPATH GIT_DIR GIT_WORK_TREE GREP_OPTIONS
 IFS=$' \t\n'
@@ -144,8 +143,8 @@ ignore_entry="$retro_base/"
 exclude="$common_dir/info/exclude"
 mkdir -p "$(dirname "$exclude")"
 touch "$exclude"
-if grep -qxF "$ignore_entry" "$exclude" 2>/dev/null ||
-  grep -qxF "${ignore_entry%/}" "$exclude" 2>/dev/null; then
+if LC_ALL=C grep -qxF "$ignore_entry" "$exclude" 2>/dev/null ||
+  LC_ALL=C grep -qxF "${ignore_entry%/}" "$exclude" 2>/dev/null; then
   ignore_state="already ignored"
 else
   printf '\n# Session retrospectives. Local working notes, never committed.\n%s\n' \

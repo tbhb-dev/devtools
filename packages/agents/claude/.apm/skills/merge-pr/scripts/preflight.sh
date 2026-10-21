@@ -19,7 +19,6 @@ set -euo pipefail
 # --- environment hardening -------------------------------------------
 # lib.sh repeats this block; it stays here too so the hygiene gate can
 # see it in the file that calls git and gh.
-export LC_ALL=C
 export GH_PAGER=cat
 export GH_PROMPT_DISABLED=1
 export PYTHONUTF8=1
@@ -106,7 +105,7 @@ if [ "$status" = 3 ]; then
 elif [ -z "$judged" ]; then
   printf 'no checks reported\n'
 else
-  printf '%s\n' "$judged" | sort -t"$(printf '\t')" -k3 | awk -F'\t' '{ printf "%-14s %s\n", $2, $3 }'
+  printf '%s\n' "$judged" | LC_ALL=C sort -t"$(printf '\t')" -k3 | LC_ALL=C awk -F'\t' '{ printf "%-14s %s\n", $2, $3 }'
   superseded=$(mp_superseded "$view")
   if [ "$superseded" != 0 ]; then
     printf '(%s earlier run(s) left out: a later run of the same check replaced each)\n' "$superseded"
@@ -213,7 +212,7 @@ fi
 if [ ! -s "$DRAFT" ]; then
   printf '%s: absent (expected before drafting)\n' "$DRAFT"
 else
-  drafted_for=$(head -1 "$DRAFT" | sed -n 's/.*(#\([0-9][0-9]*\))[[:space:]]*$/\1/p')
+  drafted_for=$(head -1 "$DRAFT" | LC_ALL=C sed -n 's/.*(#\([0-9][0-9]*\))[[:space:]]*$/\1/p')
   if [ "$drafted_for" = "$number" ]; then
     printf '%s: present, drafted for #%s\n' "$DRAFT" "$number"
   else

@@ -13,11 +13,9 @@ set -euo pipefail
 
 # --- environment hardening -------------------------------------------
 # The agent reads this output, so the operator's preferences must not
-# change its shape. LC_ALL pins collation, because sort and the [a-z]
-# ranges below mean different things under a UTF-8 locale. The unsets
+# change its shape. Text commands pin their own locale. The unsets
 # cover variables that silently retarget a command: GH_REPO sends gh at
 # another repository, CDPATH makes a relative cd print somewhere else.
-export LC_ALL=C
 export GH_PAGER=cat
 export GH_PROMPT_DISABLED=1
 export PYTHONUTF8=1
@@ -64,7 +62,7 @@ fi
 # comparing against whatever the description already committed to.
 base=${1:-}
 if [ -z "$base" ] && [ -s "$DRAFT" ]; then
-  base=$(sed -n 's/^base:[[:space:]]*//p' "$DRAFT" | head -1)
+  base=$(LC_ALL=C sed -n 's/^base:[[:space:]]*//p' "$DRAFT" | head -1)
 fi
 [ -n "$base" ] || base=$default_branch
 
@@ -96,7 +94,7 @@ fi
 section "commit types on the branch"
 if [ "$landing" != "0" ]; then
   gitr log --format='%s' "$base_ref..HEAD" |
-    sed -n 's/^\([a-z][a-z]*\)[(!:].*/\1/p' | sort | uniq -c | sort -rn
+    LC_ALL=C sed -n 's/^\([a-z][a-z]*\)[(!:].*/\1/p' | LC_ALL=C sort | uniq -c | LC_ALL=C sort -rn
   printf '\nThe title takes one of these. A squash merge turns it into the\n'
   printf 'commit subject on the default branch.\n'
 else

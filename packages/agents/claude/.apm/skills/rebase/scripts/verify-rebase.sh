@@ -26,7 +26,6 @@ set -euo pipefail
 # --- environment hardening -------------------------------------------
 # The agent reads this output, so the operator's preferences must not
 # change its shape.
-export LC_ALL=C
 export PYTHONUTF8=1
 unset CDPATH GREP_OPTIONS
 IFS=$' \t\n'
@@ -71,8 +70,8 @@ if [ -z "$before" ] && [ -f "$state_file" ] && [ ! -f "$completed_file" ]; then
   exit 1
 fi
 if [ -z "$before" ] && [ -f "$state_file" ]; then
-  before=$(awk -F= '$1 == "before" { print $2 }' "$state_file")
-  base=$(awk -F= '$1 == "base_sha" { print $2 }' "$state_file")
+  before=$(LC_ALL=C awk -F= '$1 == "before" { print $2 }' "$state_file")
+  base=$(LC_ALL=C awk -F= '$1 == "base_sha" { print $2 }' "$state_file")
   origin=state
 fi
 if [ -z "$before" ]; then
@@ -155,7 +154,7 @@ if [ -n "${spec:-}" ]; then
   elif [ "$(printf '%s\n' "$rd" | wc -l)" -le "$RANGE_DIFF_CAP" ]; then
     printf '%s\n' "$rd"
   else
-    printf '%s\n' "$rd" | grep -E '^[ 0-9-]+: +[0-9a-f-]+ [!<>=]' || true
+    printf '%s\n' "$rd" | LC_ALL=C grep -E '^[ 0-9-]+: +[0-9a-f-]+ [!<>=]' || true
     printf '\n(the per-commit diff runs past %s lines. The pairing above is the\n' "$RANGE_DIFF_CAP"
     printf 'summary; a ! marks a commit whose content changed. Read those with\n'
     printf 'git range-diff %s.)\n' "$spec"
@@ -164,7 +163,7 @@ if [ -n "${spec:-}" ]; then
   printf 'unchanged. ! means its content moved, which is expected where a\n'
   printf 'conflict was resolved and suspicious everywhere else. A < or > line\n'
   printf 'means a commit appeared or vanished.\n'
-  if printf '%s\n' "$rd" | grep -qE '^ *[0-9]+: +[0-9a-f]+ <'; then
+  if printf '%s\n' "$rd" | LC_ALL=C grep -qE '^ *[0-9]+: +[0-9a-f]+ <'; then
     printf '\nA commit from the old branch has no counterpart here. Either the rebase\n'
     printf 'dropped it, or a resolution changed it past recognition. Read the two\n'
     printf 'ranges and say which before going on.\n'
@@ -181,7 +180,7 @@ while IFS= read -r path; do
   [ -n "$path" ] && candidates+=("$path")
 done <<EOF
 $(git grep -l -E '^(<<<<<<<|>>>>>>>|\|\|\|\|\|\|\|)( |$)' HEAD -- 2>/dev/null |
-  sed 's/^HEAD://' || true)
+  LC_ALL=C sed 's/^HEAD://' || true)
 EOF
 markers=""
 if [ "${#candidates[@]}" -gt 0 ]; then
@@ -211,7 +210,7 @@ if [ -n "$before" ]; then
   if [ -n "$moved" ]; then
     declared=$(printf '%s\n' "$moved" |
       git check-attr --stdin rebase-resolve |
-      awk -F': ' '$NF == "regenerate" { print $1 }')
+      LC_ALL=C awk -F': ' '$NF == "regenerate" { print $1 }')
   fi
 fi
 if [ -z "$declared" ]; then

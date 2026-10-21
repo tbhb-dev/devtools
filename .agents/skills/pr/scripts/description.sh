@@ -11,10 +11,6 @@
 # Sourced, never run. Written for bash 3.2. It runs git for nothing it
 # parses, so it needs neither gitr nor lib.sh.
 
-# Every caller sets this already; it stays here too so the hygiene gate
-# can see it in the file that calls git.
-export LC_ALL=C
-
 # pr_scalar <raw>: a frontmatter scalar as this workflow reads it. A
 # matched pair of quotes comes off. YAML's unquoted null spellings, null
 # and ~, read as absent, the same as an empty value, so `milestone: null`
@@ -39,7 +35,7 @@ pr_scalar() {
 # pr_fm_end <draft>: the line of the frontmatter's closing ---, or
 # nothing when the draft opens without frontmatter.
 pr_fm_end() {
-  awk 'NR == 1 && $0 != "---" { exit } NR > 1 && $0 == "---" { print NR; exit }' "$1"
+  LC_ALL=C awk 'NR == 1 && $0 != "---" { exit } NR > 1 && $0 == "---" { print NR; exit }' "$1"
 }
 
 # pr_field <draft> <key>: the value of one frontmatter key, through
@@ -48,7 +44,7 @@ pr_field() {
   local end raw
   end=$(pr_fm_end "$1")
   [ -n "$end" ] || return 0
-  raw=$(awk -v key="$2" -v last="$end" '
+  raw=$(LC_ALL=C awk -v key="$2" -v last="$end" '
     NR >= last { exit }
     index($0, key ":") == 1 { print substr($0, length(key) + 2); exit }
   ' "$1")
@@ -59,9 +55,9 @@ pr_field() {
 # pr_sequence <flow-sequence>: one entry per line from a YAML flow
 # sequence such as [a, "b c"].
 pr_sequence() {
-  printf '%s' "$1" | sed 's/^\[//; s/\]$//' | tr ',' '\n' |
-    sed 's/^[[:space:]]*//; s/[[:space:]]*$//; s/^"//; s/"$//; s/^'"'"'//; s/'"'"'$//' |
-    grep -v '^$' || true
+  printf '%s' "$1" | LC_ALL=C sed 's/^\[//; s/\]$//' | LC_ALL=C tr ',' '\n' |
+    LC_ALL=C sed 's/^[[:space:]]*//; s/[[:space:]]*$//; s/^"//; s/"$//; s/^'"'"'//; s/'"'"'$//' |
+    LC_ALL=C grep -v '^$' || true
 }
 
 # pr_title <draft>: the first level 1 heading after the frontmatter.
@@ -69,7 +65,7 @@ pr_title() {
   local end
   end=$(pr_fm_end "$1")
   [ -n "$end" ] || return 0
-  awk -v end="$end" 'NR > end && /^# / { print substr($0, 3); exit }' "$1"
+  LC_ALL=C awk -v end="$end" 'NR > end && /^# / { print substr($0, 3); exit }' "$1"
 }
 
 # pr_body <draft>: everything after the title line. GitHub renders the
@@ -79,7 +75,7 @@ pr_body() {
   local end
   end=$(pr_fm_end "$1")
   [ -n "$end" ] || return 0
-  awk -v end="$end" '
+  LC_ALL=C awk -v end="$end" '
     NR <= end { next }
     !titled && /^# / { titled = 1; next }
     titled && (NF || started) { started = 1; print }

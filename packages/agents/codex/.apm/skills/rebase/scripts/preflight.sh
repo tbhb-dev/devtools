@@ -17,11 +17,10 @@ set -euo pipefail
 
 # --- environment hardening -------------------------------------------
 # The agent reads this output, so the operator's preferences must not
-# change its shape. LC_ALL pins collation, which matters more here than
-# in most of these scripts: the sorted-union classification downstream
+# change its shape. Text commands pin collation: the sorted-union
+# classification downstream
 # rests on sort order, and a UTF-8 locale orders these files differently
 # from the C locale the files were written under.
-export LC_ALL=C
 export GH_PAGER=cat
 export PYTHONUTF8=1
 unset CDPATH GH_REPO GH_HOST GREP_OPTIONS
@@ -76,7 +75,7 @@ ahead_behind() {
     return
   fi
   counts=$(git rev-list --left-right --count "$right...$left")
-  printf 'ahead %s, behind %s\n' "${counts##*[[:space:]]}" "${counts%%[[:space:]]*}"
+  printf 'ahead %s, behind %s\n' "${counts##*$'\t'}" "${counts%%$'\t'*}"
 }
 
 # behind_count prints just the behind count of $1 relative to $2, for the
@@ -87,7 +86,7 @@ behind_count() {
     printf '0\n'
     return
   }
-  printf '%s\n' "${counts%%[[:space:]]*}"
+  printf '%s\n' "${counts%%$'\t'*}"
 }
 
 root=$(git rev-parse --show-toplevel)
@@ -129,12 +128,12 @@ state_note=""
 if [ -d "$git_dir/rebase-merge" ]; then
   rm -f "$completed_file"
   rebase_state="$git_dir/rebase-merge"
-  active_before=$(tr -d '\n' <"$rebase_state/orig-head" 2>/dev/null || true)
-  active_base=$(tr -d '\n' <"$rebase_state/onto" 2>/dev/null || true)
-  active_branch=$(tr -d '\n' <"$rebase_state/head-name" 2>/dev/null || true)
+  active_before=$(LC_ALL=C tr -d '\n' <"$rebase_state/orig-head" 2>/dev/null || true)
+  active_base=$(LC_ALL=C tr -d '\n' <"$rebase_state/onto" 2>/dev/null || true)
+  active_branch=$(LC_ALL=C tr -d '\n' <"$rebase_state/head-name" 2>/dev/null || true)
   active_branch=${active_branch##refs/heads/}
-  saved_before=$(awk -F= '$1 == "before" { print $2 }' "$state_file" 2>/dev/null || true)
-  saved_base=$(awk -F= '$1 == "base_sha" { print $2 }' "$state_file" 2>/dev/null || true)
+  saved_before=$(LC_ALL=C awk -F= '$1 == "before" { print $2 }' "$state_file" 2>/dev/null || true)
+  saved_base=$(LC_ALL=C awk -F= '$1 == "base_sha" { print $2 }' "$state_file" 2>/dev/null || true)
   if [ -n "$active_before" ] && [ -n "$active_base" ] &&
     { [ "$saved_before" != "$active_before" ] || [ "$saved_base" != "$active_base" ]; }; then
     state_tmp="$state_file.$$"
@@ -215,7 +214,7 @@ if [ -n "$base" ]; then
   if [ -z "$replay" ]; then
     printf '(none — the branch carries nothing %s does not already have)\n' "$base"
   else
-    count=$(printf '%s\n' "$replay" | wc -l | tr -d ' ')
+    count=$(printf '%s\n' "$replay" | wc -l | LC_ALL=C tr -d ' ')
     printf 'count: %s\n' "$count"
     printf '%s\n' "$replay" | head -n "$COMMIT_CAP"
     if [ "$count" -gt "$COMMIT_CAP" ]; then
@@ -266,7 +265,7 @@ if [ -n "$base" ]; then
     # First line is the tree oid; the conflicted paths follow, and an
     # informational block follows those after a blank line.
     printf 'merge-tree reports conflicts on:\n'
-    printf '%s\n' "$predicted" | awk 'NR > 1 { if ($0 == "") exit; print }'
+    printf '%s\n' "$predicted" | LC_ALL=C awk 'NR > 1 { if ($0 == "") exit; print }'
     printf '\nclassify each one with the resolve-rebase-conflicts skill once the\n'
     printf 'rebase actually stops. These names are the preview, not the stop.\n'
   fi
@@ -327,7 +326,7 @@ if [ -n "$base" ]; then
   if [ -n "$merge_base" ]; then
     ours=$(gitr diff --no-ext-diff --name-only "$merge_base" "$base")
     theirs=$(gitr diff --no-ext-diff --name-only "$merge_base" HEAD)
-    both=$(printf '%s\n%s\n' "$ours" "$theirs" | sed '/^$/d' | sort | uniq -d)
+    both=$(printf '%s\n%s\n' "$ours" "$theirs" | LC_ALL=C sed '/^$/d' | LC_ALL=C sort | uniq -d)
     if [ -n "$both" ]; then
       printf '%s\n' "$both"
       printf '\nEvery path above changed on the base and on the branch. Not all of\n'

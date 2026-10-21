@@ -657,3 +657,17 @@ STUB
   [[ "$output" == *prompt*'VERDICT: PASS'* ]]
   [ "$(printf '%s\n' "$output" | grep -c unbounded)" -eq 1 ]
 }
+
+@test "worktree readiness leaves Vale in the caller locale (#379)" {
+  export LC_ALL=C.UTF-8 LANG=C.UTF-8
+  export LOCALE_LOG="$BATS_TEST_TMPDIR/locale.log"
+  touch .vale.ini
+  cat >"$BATS_TEST_TMPDIR/bin/vale" <<'STUB'
+#!/usr/bin/env bash
+printf '%s|%s\n' "${LC_ALL-unset}" "${LANG-unset}" >"$LOCALE_LOG"
+STUB
+  chmod +x "$BATS_TEST_TMPDIR/bin/vale"
+  run bash "$WORKTREE_READY"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$LOCALE_LOG")" = 'C.UTF-8|C.UTF-8' ]
+}

@@ -260,3 +260,26 @@ STUB
   [ "$status" -eq 9 ]
   [ ! -d .claude/retros ]
 }
+
+@test "analyze entry points preserve the report process locale (#379)" {
+  export LC_ALL=C.UTF-8 LANG=C.UTF-8
+  export LOCALE_LOG="$BATS_TEST_TMPDIR/locale.log"
+  export REAL_UV
+  REAL_UV=$(command -v uv)
+  mkdir -p "$BATS_TEST_TMPDIR/bin"
+  cat >"$BATS_TEST_TMPDIR/bin/uv" <<'STUB'
+#!/usr/bin/env bash
+printf '%s|%s\n' "${LC_ALL-unset}" "${LANG-unset}" >>"$LOCALE_LOG"
+exec "$REAL_UV" "$@"
+STUB
+  chmod +x "$BATS_TEST_TMPDIR/bin/uv"
+  export PATH="$BATS_TEST_TMPDIR/bin:$PATH"
+  cd "$REPO"
+  for entry in new-retro preflight; do
+    : >"$LOCALE_LOG"
+    run bash "$CLAUDE_SCRIPTS/$entry.sh" "$CLAUDE_T"
+    [ "$status" -eq 0 ]
+    [ -s "$LOCALE_LOG" ]
+    [ "$(sort -u "$LOCALE_LOG")" = 'C.UTF-8|C.UTF-8' ]
+  done
+}

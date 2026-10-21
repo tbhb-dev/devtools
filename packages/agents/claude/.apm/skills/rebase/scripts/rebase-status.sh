@@ -17,7 +17,6 @@ set -euo pipefail
 # --- environment hardening -------------------------------------------
 # The agent reads this output, so the operator's preferences must not
 # change its shape.
-export LC_ALL=C
 export PYTHONUTF8=1
 unset CDPATH GREP_OPTIONS
 IFS=$' \t\n'
@@ -52,7 +51,7 @@ if [ ! -d "$git_dir/rebase-merge" ]; then
 fi
 
 state="$git_dir/rebase-merge"
-read_state() { [ -f "$state/$1" ] && tr -d '\n' <"$state/$1" || printf '%s' "$2"; }
+read_state() { [ -f "$state/$1" ] && LC_ALL=C tr -d '\n' <"$state/$1" || printf '%s' "$2"; }
 
 section "where"
 head_name=$(read_state head-name unknown)
@@ -72,7 +71,7 @@ if [ -n "$stopped" ]; then
   printf '\nstopped applying:\n'
   gitr log -1 --format='  %h %s%n  author: %an' "$stopped" 2>/dev/null || printf '  %s\n' "$stopped"
   printf '\nwhat that commit changes, against its own parent:\n'
-  gitr show --no-ext-diff --stat --format= "$stopped" 2>/dev/null | sed 's/^/  /' || true
+  gitr show --no-ext-diff --stat --format= "$stopped" 2>/dev/null | LC_ALL=C sed 's/^/  /' || true
 else
   printf '\nNo stopped commit recorded. The rebase paused for an edit or break\n'
   printf 'instruction rather than a conflict; there may be nothing to resolve.\n'
@@ -92,7 +91,7 @@ else
   # from a plain content conflict.
   while IFS= read -r path; do
     [ -n "$path" ] || continue
-    stages=$(git ls-files -u -- "$path" | awk '{ printf "%s", $3 }')
+    stages=$(git ls-files -u -- "$path" | LC_ALL=C awk '{ printf "%s", $3 }')
     kind="content"
     case $stages in
     23) kind="add/add (no common ancestor for this path)" ;;
@@ -110,7 +109,7 @@ fi
 # from an earlier rebase, and nothing has read it since.
 section "staged without stopping"
 staged=$(gitr diff --no-ext-diff --cached --name-only)
-settled=$(printf '%s\n%s\n%s\n' "$staged" "$unmerged" "$unmerged" | sed '/^$/d' | sort | uniq -u)
+settled=$(printf '%s\n%s\n%s\n' "$staged" "$unmerged" "$unmerged" | LC_ALL=C sed '/^$/d' | LC_ALL=C sort | uniq -u)
 if [ -z "$settled" ]; then
   none
 else
@@ -134,7 +133,7 @@ candidates=()
 while IFS= read -r path; do
   [ -n "$path" ] && candidates+=("$path")
 done <<EOF
-$(printf '%s\n%s\n' "$unmerged" "$staged" | sed '/^$/d' | sort -u)
+$(printf '%s\n%s\n' "$unmerged" "$staged" | LC_ALL=C sed '/^$/d' | LC_ALL=C sort -u)
 EOF
 markers=""
 if [ "${#candidates[@]}" -gt 0 ]; then
@@ -144,7 +143,7 @@ if [ -n "$markers" ]; then printf '%s\n' "$markers"; else none; fi
 
 section "remaining after this commit"
 if [ -f "$state/git-rebase-todo" ]; then
-  todo=$(grep -vE '^(#|$)' "$state/git-rebase-todo" || true)
+  todo=$(LC_ALL=C grep -vE '^(#|$)' "$state/git-rebase-todo" || true)
   if [ -n "$todo" ]; then printf '%s\n' "$todo"; else printf '(this is the last commit)\n'; fi
 fi
 

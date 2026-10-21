@@ -38,7 +38,6 @@ set -euo pipefail
 # --- environment hardening -------------------------------------------
 # lib.sh repeats this block; it stays here too so the hygiene gate can
 # see it in the file that calls git and gh.
-export LC_ALL=C
 export GH_PAGER=cat
 export GH_PROMPT_DISABLED=1
 export PYTHONUTF8=1
@@ -104,7 +103,7 @@ step "checking ${SQUASH_DRAFT}"
 [ -s "$SQUASH_DRAFT" ] || die "no squash message drafted. Run squash-message.sh first."
 
 subject=$(head -1 "$SQUASH_DRAFT")
-drafted_for=$(printf '%s' "$subject" | sed -n 's/.*(#\([0-9][0-9]*\))[[:space:]]*$/\1/p')
+drafted_for=$(printf '%s' "$subject" | LC_ALL=C sed -n 's/.*(#\([0-9][0-9]*\))[[:space:]]*$/\1/p')
 [ "$drafted_for" = "$number" ] ||
   die "${SQUASH_DRAFT} was drafted for #${drafted_for:-unknown}, not #${number}."
 printf 'drafted for #%s\n' "$number"
@@ -203,11 +202,11 @@ judged=$(mp_judge_checks "$view") || status=$?
 case $status in
 0) ;;
 1)
-  printf '%s\n' "$judged" | awk -F'\t' '$1 == "fail" { printf "%-14s %s\n", $2, $3 }' >&2
+  printf '%s\n' "$judged" | LC_ALL=C awk -F'\t' '$1 == "fail" { printf "%-14s %s\n", $2, $3 }' >&2
   die "#${number} has a failing check, judged by its latest run. Hand it to the fix-pr skill."
   ;;
 2)
-  printf '%s\n' "$judged" | awk -F'\t' '$1 == "pending" { printf "%-14s %s\n", $2, $3 }' >&2
+  printf '%s\n' "$judged" | LC_ALL=C awk -F'\t' '$1 == "pending" { printf "%-14s %s\n", $2, $3 }' >&2
   die "#${number} has a check still running. Wait through the watch-pr skill."
   ;;
 *) die "the checks of #${number} could not be read." ;;
@@ -283,7 +282,7 @@ reviewed_digest=$(dt_stamp_value squash draft) || exit $?
   die "${SQUASH_DRAFT} changed while it was being copied. Review it again."
 subject=$(head -1 "$message")
 body=$state/merge.body
-awk 'NR > 1' "$message" | awk 'NF { seen = 1 } seen' >"$body"
+LC_ALL=C awk 'NR > 1' "$message" | LC_ALL=C awk 'NF { seen = 1 } seen' >"$body"
 [ -s "$body" ] || die "the message has a subject and no body; a squash message says why."
 
 step "squashing #${number} into ${base_ref}"
@@ -347,7 +346,7 @@ printf 'removed %s and %s\n' "$SQUASH_DRAFT" "$DESC_DRAFT"
 if [ "$cross_repo" = false ] && git ls-remote --exit-code --heads origin "$head_ref" >/dev/null 2>&1; then
   if deleted=$(git push --force-with-lease="refs/heads/$head_ref:$reviewed_head" origin ":refs/heads/$head_ref" 2>&1); then
     printf 'deleted origin/%s\n' "$head_ref"
-  elif printf '%s\n' "$deleted" | grep -Fq 'remote ref does not exist'; then
+  elif printf '%s\n' "$deleted" | LC_ALL=C grep -Fq 'remote ref does not exist'; then
     printf 'origin/%s was already deleted\n' "$head_ref"
   else
     printf 'could not delete origin/%s; a ruleset may protect it\n' "$head_ref"

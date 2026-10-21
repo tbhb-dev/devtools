@@ -29,7 +29,6 @@ set -euo pipefail
 # --- environment hardening -------------------------------------------
 # lib.sh repeats this block; it stays here too so the hygiene gate can
 # see it in the file that calls git and gh.
-export LC_ALL=C
 export GH_PAGER=cat
 export GH_PROMPT_DISABLED=1
 export PYTHONUTF8=1
@@ -83,7 +82,7 @@ ahead_behind() {
     return
   fi
   counts=$(git rev-list --left-right --count "$2...$1")
-  printf 'ahead %s, behind %s\n' "${counts##*[[:space:]]}" "${counts%%[[:space:]]*}"
+  printf 'ahead %s, behind %s\n' "${counts##*$'\t'}" "${counts%%$'\t'*}"
 }
 
 root=$(git rev-parse --show-toplevel)
@@ -164,7 +163,7 @@ fi
 section "commit types on the branch"
 if [ "$landing" != "0" ]; then
   gitr log --format='%s' "$base_ref..HEAD" |
-    sed -n 's/^\([a-z][a-z]*\)[(!:].*/\1/p' | sort | uniq -c | sort -rn
+    LC_ALL=C sed -n 's/^\([a-z][a-z]*\)[(!:].*/\1/p' | LC_ALL=C sort | uniq -c | LC_ALL=C sort -rn
   printf '\nThe pull request title takes one of these types. A squash merge\n'
   printf 'turns that title into the commit subject on the default branch.\n'
 else
@@ -263,7 +262,7 @@ section "template sections"
 template=$(pr_template)
 if [ -f "$template" ]; then
   printf 'from %s, in this order:\n' "$template"
-  grep '^## ' "$template" || printf '(the template declares no level 2 headings)\n'
+  LC_ALL=C grep '^## ' "$template" || printf '(the template declares no level 2 headings)\n'
 else
   printf 'NO TEMPLATE at %s — stop and tell the operator\n' "$template"
 fi
@@ -355,7 +354,7 @@ if [ ! -s "$DRAFT" ]; then
 elif [ "$gh_state" != ok ]; then
   # shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
   printf '%s: present, %s line(s). Cannot tell whether it is stale because\n' \
-    "$DRAFT" "$(wc -l <"$DRAFT" | tr -d ' ')"
+    "$DRAFT" "$(wc -l <"$DRAFT" | LC_ALL=C tr -d ' ')"
   printf 'the pull request lookup did not run. Read it before overwriting.\n'
 elif [ -z "$open_number" ] && [ "${DT_UNATTENDED:-0}" = 1 ]; then
   printf '%s: present, unpublished draft preserved with its review bound\n' "$DRAFT"
@@ -368,10 +367,10 @@ else
   printf '%s: present, the working copy for #%s\n' "$DRAFT" "$open_number"
   # Whether the draft still matches what is published decides the next
   # step, and finding out otherwise costs the agent two more calls.
-  fm_end=$(awk 'NR > 1 && $0 == "---" { print NR; exit }' "$DRAFT" || true)
-  title_line=$(awk -v last="${fm_end:-0}" 'NR > last && /^# / { print NR; exit }' "$DRAFT" || true)
+  fm_end=$(LC_ALL=C awk 'NR > 1 && $0 == "---" { print NR; exit }' "$DRAFT" || true)
+  title_line=$(LC_ALL=C awk -v last="${fm_end:-0}" 'NR > last && /^# / { print NR; exit }' "$DRAFT" || true)
   if [ -n "$title_line" ]; then
-    drafted=$(awk -v start="$title_line" 'NR > start' "$DRAFT" | awk 'NF { seen = 1 } seen')
+    drafted=$(LC_ALL=C awk -v start="$title_line" 'NR > start' "$DRAFT" | LC_ALL=C awk 'NF { seen = 1 } seen')
     published=$(dt_gh pr view "$open_number" --json body --jq '.body') || exit $?
     if [ "$(printf '%s' "$drafted")" = "$(printf '%s' "$published")" ]; then
       printf 'It matches the published description, so nothing needs republishing.\n'

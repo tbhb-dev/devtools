@@ -250,3 +250,11 @@ esac'
 		[ "$status" -eq 23 ]
 	done
 }
+
+@test "hygiene accepts command-scoped locales without a global export (#379)" {
+	stub git 'pwd'
+	stub ast-grep 'exit 0'
+	printf '#!/bin/bash\ngit rev-parse HEAD | LC_ALL=C sort\n' >example.sh
+	run bash "$ROOT/tools/check-script-hygiene.sh" example.sh
+	[ "$status" -eq 0 ]
+}

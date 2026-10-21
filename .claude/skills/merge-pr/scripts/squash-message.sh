@@ -34,11 +34,9 @@ set -euo pipefail
 
 # --- environment hardening -------------------------------------------
 # The agent reads this output, so the operator's preferences must not
-# change its shape. LC_ALL pins collation, because sort and the [a-z]
-# ranges below mean different things under a UTF-8 locale. The unsets
+# change its shape. Text commands pin their own locale. The unsets
 # cover variables that silently retarget a command: GH_REPO sends gh at
 # another repository, CDPATH makes a relative cd print somewhere else.
-export LC_ALL=C
 export GH_PAGER=cat
 export GH_PROMPT_DISABLED=1
 export PYTHONUTF8=1
@@ -90,7 +88,7 @@ commits=$(printf '%s\n' "$briefing" | jq -r '.commits[] | "--- " + .oid[0:7] + "
         + "\n" + .messageHeadline
         + (if (.messageBody // "") == "" then "" else "\n\n" + .messageBody end)
         + "\n"') || exit $?
-count=$(printf '%s\n' "$commits" | grep -c '^--- ' || true)
+count=$(printf '%s\n' "$commits" | LC_ALL=C grep -c '^--- ' || true)
 
 files=$(printf '%s\n' "$briefing" | jq -r '.files[]? | [.additions, .deletions, .path] | @tsv') || exit $?
 
@@ -111,7 +109,7 @@ files=$(printf '%s\n' "$briefing" | jq -r '.files[]? | [.additions, .deletions, 
 # Stopping short of line 1 covers a commit with no body: its subject
 # reads as `type: description`, which is trailer-shaped, and every
 # one-line commit would otherwise contribute its own subject.
-trailers=$(printf '%s\n' "$commits" | awk '
+trailers=$(printf '%s\n' "$commits" | LC_ALL=C awk '
   function flush(   i, p, hits) {
     p = n
     hits = 0
@@ -127,7 +125,7 @@ trailers=$(printf '%s\n' "$commits" | awk '
   /^--- / { flush(); next }
   { buf[++n] = $0 }
   END { flush() }
-' | awk '!seen[$0]++')
+' | LC_ALL=C awk '!seen[$0]++')
 
 # Validate carried sign-offs through the same repository identity rules.
 filtered=""
@@ -149,14 +147,14 @@ while IFS= read -r trailer; do
   filtered="${filtered}${trailer}"$'\n'
 done <<<"$trailers"
 trailers=$filtered
-if ! grep -Fqx -- "Signed-off-by: $signoff_identity" <<<"$trailers"; then
+if ! LC_ALL=C grep -Fqx -- "Signed-off-by: $signoff_identity" <<<"$trailers"; then
   trailers="${trailers}Signed-off-by: ${signoff_identity}"$'\n'
 fi
 
 # Order follows the shared trailer rule: attribution first, sign-off
 # last. Anything else this repository's rule permits sits between them,
 # where neither constraint reaches it.
-ordered=$(printf '%s\n' "$trailers" | awk '
+ordered=$(printf '%s\n' "$trailers" | LC_ALL=C awk '
   NF == 0 { next }
   /^Assisted-by:/ { a[++na] = $0; next }
   /^Signed-off-by:/ { s[++ns] = $0; next }
@@ -173,7 +171,7 @@ ordered=$(printf '%s\n' "$trailers" | awk '
 # Taken by section name rather than by position, so a description that
 # grew an extra heading still yields its Related block.
 section_of() {
-  printf '%s\n' "$body" | awk -v want="$1" '
+  printf '%s\n' "$body" | LC_ALL=C awk -v want="$1" '
     /^##[ \t]/ { inside = (tolower($0) ~ tolower("^## " want "[ \t]*$")); next }
     inside { print }
   '
@@ -184,8 +182,8 @@ section_of() {
 # unrelated issue holds that number here, and a closing keyword acts on
 # merge without asking.
 related=$(section_of related |
-  grep -oE '(^|[^[:alnum:]_/])#[0-9]+' | grep -oE '[0-9]+' |
-  sort -u -n | awk -v self="$number" '$0 != self' || true)
+  LC_ALL=C grep -oE '(^|[^[:alnum:]_/])#[0-9]+' | LC_ALL=C grep -oE '[0-9]+' |
+  LC_ALL=C sort -u -n | LC_ALL=C awk -v self="$number" '$0 != self' || true)
 
 # Related lists whatever the author put there: the base of a stack, a
 # companion pull request, an issue that closed long ago. A closing
@@ -238,11 +236,11 @@ if [ -n "$commits" ]; then printf '%s\n' "$commits"; else none; fi
 
 section "diffstat"
 if [ -n "$files" ]; then
-  printf '%s\n' "$files" | awk -F'\t' 'NF { printf "%7s+ %7s-  %s\n", $1, $2, $3 }'
+  printf '%s\n' "$files" | LC_ALL=C awk -F'\t' 'NF { printf "%7s+ %7s-  %s\n", $1, $2, $3 }'
   # The files list arrives paginated, so a wide branch can report fewer
   # rows than it changed. Say so rather than letting the listing read as
   # the whole diff.
-  listed=$(printf '%s\n' "$files" | grep -c . || true)
+  listed=$(printf '%s\n' "$files" | LC_ALL=C grep -c . || true)
   if [ "$listed" != "$changed" ]; then
     printf '\n%s of %s files listed; gh truncated the rest.\n' "$listed" "$changed"
   fi

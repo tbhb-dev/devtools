@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC2034,SC2154 # state is shared with the sourcing publisher
-export LC_ALL=C
 export GH_PAGER=cat
 export GH_PROMPT_DISABLED=1
 export PYTHONUTF8=1
@@ -37,7 +36,7 @@ dt_gh_login >/dev/null || exit $?
 known_labels=$(dt_gh label list --limit 200 --json name --jq '.[].name') || exit $?
 while IFS= read -r want; do
   [ -n "$want" ] || continue
-  printf '%s\n' "$known_labels" | grep -qxF -- "$want" ||
+  printf '%s\n' "$known_labels" | LC_ALL=C grep -qxF -- "$want" ||
     die "no label named \"${want}\" in this repository. Preflight printed the label set."
 done <<EOF
 $labels
@@ -45,14 +44,14 @@ EOF
 
 if [ -n "$milestone" ]; then
   known_milestones=$(dt_gh_repo "query(\$owner:String!,\$name:String!){repository(owner:\$owner,name:\$name){milestones(first:100,states:OPEN){nodes{title} pageInfo{hasNextPage}}}}" --jq '.data.repository.milestones | if .pageInfo.hasNextPage then error("more than 100 open milestones") else .nodes[].title end') || exit $?
-  printf '%s\n' "$known_milestones" | grep -qxF -- "$milestone" ||
+  printf '%s\n' "$known_milestones" | LC_ALL=C grep -qxF -- "$milestone" ||
     die "no milestone named \"${milestone}\" in this repository."
 fi
 
 # Every issue or pull request the description points at has to exist. A
 # reference to a number nobody opened is the cheapest kind of invented
 # claim, and it is the one a machine can settle.
-refs=$(grep -o '#[0-9][0-9]*' "$body_file" | sort -u | head -20 || true)
+refs=$(LC_ALL=C grep -o '#[0-9][0-9]*' "$body_file" | LC_ALL=C sort -u | head -20 || true)
 for ref in $refs; do
   number=${ref#\#}
   dt_gh_repo "query(\$owner:String!,\$name:String!,\$number:Int!){repository(owner:\$owner,name:\$name){issueOrPullRequest(number:\$number){__typename}}}" -F "number=$number" --jq '.data.repository.issueOrPullRequest | if . == null then error("reference does not exist") else .__typename end' >/dev/null || {
