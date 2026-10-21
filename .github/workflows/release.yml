@@ -28,7 +28,7 @@ name: release
 # so a Verified tag has to be signed by a key the runner holds,
 # under the tagger identity that key's account verifies. The key is
 # CI-only and revocable on its own. A release therefore ends with a
-# commit GitHub signed and a tag Tony Burns signed, both verified
+# commit GitHub signed and a tag tbhb-agent signed, both verified
 # and each by the only party that could have.
 
 on:
@@ -271,7 +271,7 @@ jobs:
         env:
           TAG: ${{ steps.commit.outputs.tag }}
         run: |
-          GIT_COMMITTER_NAME="Tony Burns" \
-          GIT_COMMITTER_EMAIL="tony@tonyburns.net" \
+          GIT_COMMITTER_NAME="tbhb.dev Agent" \
+          GIT_COMMITTER_EMAIL="334376894+tbhb-agent@users.noreply.github.com" \
             git tag -s "$TAG" -m "$TAG"
           git push origin "refs/tags/$TAG"
