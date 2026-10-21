@@ -64,13 +64,39 @@ ma_lint() {
 
 ma_policy() { uv run --quiet --script "$DT_LIB_DIR/merge-policy.py" "$@"; }
 
+# gh pr view omits author.__typename; read all review pages explicitly.
+ma_reviews() {
+  local number=$1 view=$2 head
+  head=$(mp_field "$view" headRefOid) || return $?
+  dt_gh_repo "query(\$owner:String!,\$name:String!,\$number:Int!,\$endCursor:String){repository(owner:\$owner,name:\$name){pullRequest(number:\$number){headRefOid reviews(first:100,after:\$endCursor){nodes{author{__typename login} state submittedAt commit{oid}} pageInfo{hasNextPage endCursor}}}}}" \
+    -F "number=$number" --paginate --slurp >"$view.reviews" || return $?
+  jq -e --arg head "$head" --slurpfile pages "$view.reviews" '
+    if ($pages[0] | length > 0 and all(.[]; .data.repository.pullRequest.headRefOid == $head)) then
+      .reviews = [$pages[0][].data.repository.pullRequest.reviews.nodes[]]
+    else error("PR head changed while reading review authors") end
+  ' "$view" >"$view.next" || return $?
+  mv "$view.next" "$view" || return $?
+  rm -f -- "$view.reviews"
+}
+
+# Machine authorities use GraphQL logins, not the REST Bot suffix.
+ma_login() {
+  local key=$1 login
+  login=$(dt_conf "$key") || return $?
+  case $login in
+  *'[bot]') dt_die "$key must use the GraphQL login ${login%\[bot\]}, without [bot]" ;;
+  esac
+  printf '%s\n' "$login"
+}
+
 # Latest decisive review, on the exact head, from machine-selected authority.
 ma_approved() {
   [ -n "$2" ] || return 1
-  jq -e --arg login "$2" --arg head "$3" '
+  jq -e --arg login "$2" --arg head "$3" --arg type "${4:-}" '
     [.reviews[] | select(.author.login == $login) |
       select(.state == "APPROVED" or .state == "CHANGES_REQUESTED" or .state == "DISMISSED")]
     | sort_by(.submittedAt) | last | .state == "APPROVED" and .commit.oid == $head
+      and ($type == "" or .author.__typename == $type)
   ' "$1" >/dev/null
 }
 
@@ -85,7 +111,7 @@ ma_identity() {
 # Reused before review and again immediately before every merge write.
 ma_gates() {
   [ "${DT_UNATTENDED:-0}" = 1 ] || return 0
-  local view=$1 pr=$2 base_oid=$3 final=${4:-false} head base reviewer label ready config key value required default dir st root encoded
+  local view=$1 pr=$2 base_oid=$3 final=${4:-false} head base reviewer reviewer_type label ready config key value required default dir st root encoded
   ma_context || return $?
   st=$(dt_state_dir) || return $?
   root=$(dt_root) || return $?
@@ -93,9 +119,14 @@ ma_gates() {
   base=$(mp_field "$view" baseRefName) || return $?
   jq -e ' .state == "OPEN" and .isDraft == false and .mergeable == "MERGEABLE" and .mergeStateStatus == "CLEAN"' "$view" >/dev/null || dt_die "PR is not open, ready, MERGEABLE, and CLEAN"
   ma_identity || return $?
-  reviewer=$(dt_conf required_reviewer) || return $?
+  reviewer=$(ma_login required_reviewer) || return $?
   [ -n "$reviewer" ] || dt_die "required_reviewer must be configured on the machine"
-  ma_approved "$view" "$reviewer" "$head" || dt_die "WAITING_REVIEW: $reviewer must approve the current head"
+  reviewer_type=$(dt_conf required_reviewer_type) || return $?
+  case $reviewer_type in
+  '' | Bot | User) ;;
+  *) dt_die "required_reviewer_type must be Bot or User when set" ;;
+  esac
+  ma_approved "$view" "$reviewer" "$head" "$reviewer_type" || dt_die "WAITING_REVIEW: $reviewer must approve the current head"
   label=$(dt_repo_conf owner_review_label owner-review) || return $?
   [ -n "$label" ] || dt_die "owner_review_label must not be empty"
   if jq -e --arg label "$label" '.labels | any(.name == $label)' "$view" >/dev/null; then
@@ -114,7 +145,7 @@ ma_gates() {
   MA_OWNER_OVERRIDE=''
   if jq -e '.findings | length > 0' <<<"$MA_POLICY" >/dev/null; then
     jq -r '.findings[] | @json' <<<"$MA_POLICY" >&2
-    value=$(dt_conf merge_owner) || return $?
+    value=$(ma_login merge_owner) || return $?
     ma_approved "$view" "$value" "$head" || dt_die "needs-owner: golden files or loosened gates require merge_owner approval on the current head"
     MA_OWNER_OVERRIDE=$value
     printf 'owner override: %s approved %s\n' "$value" "$head"
