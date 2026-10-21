@@ -55,11 +55,11 @@ Publication records the PR number, URL, full head, base, draft state, and push k
 
 ## Unattended merges
 
-Run `agent-merge-pr` for unattended squash merges. Its generated entry points use the shared merge scripts, independent review, gates, stamps, and confirmation chain. Machine `gh_login` and `required_reviewer` are mandatory. The required reviewer must approve the exact current head. Only session pre-approval or machine delegation grants `merge`. The skill refuses `--confirmed`.
+Run `agent-merge-pr` for unattended squash merges. Its generated entry points use the shared merge scripts, independent review, gates, stamps, and confirmation chain. Machine `gh_login` and `required_reviewer` are mandatory. The required reviewer must approve the exact current head. Configure its GraphQL login without the REST `[bot]` suffix. Optional machine `required_reviewer_type` (`Bot` or `User`) checks the review author type. Leaving it unset preserves login-only matching. A GitHub App installation needs Contents read and write permission for its approval to count, as [#300](https://github.com/tbhb-dev/devtools/issues/300) documents. Only session pre-approval or machine delegation grants `merge`. The skill refuses `--confirmed`.
 
 Repository configuration supplies squash lint, readiness, ruleset location, owner-review label, protected paths, suppression patterns, and disposable ignored paths. Check judgement calls `agentrepo checks evaluate`. Required checks come from applied GitHub rules and ruleset files at the pinned base. No checks or known requirements means no unattended merge. The YAML policy reader requires `uv`.
 
-Golden files and detected gate loosening require an exact-head APPROVED review by machine `merge_owner`, also available as `DEVTOOLS_MERGE_OWNER`. Repositories can't choose this authority, and pushing invalidates approval.
+Golden files and detected gate loosening require an exact-head APPROVED review by machine `merge_owner`, also available as `DEVTOOLS_MERGE_OWNER`. Use the GraphQL login without `[bot]` for `merge_owner` too. Keep this authority a person: an App owner override can approve its own golden-file waivers. Repositories can't choose this authority, and pushing invalidates approval.
 
 When using an override, the merge report specifies the approving login. It doesn't waive the owner-review label, required checks, independent review, or write authority.
 

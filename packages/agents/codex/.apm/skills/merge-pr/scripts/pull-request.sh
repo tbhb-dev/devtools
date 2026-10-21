@@ -4,8 +4,8 @@
 # squash-merge.sh.
 #
 # Sourced, never run, after lib.sh. Written for bash 3.2. Every reader
-# here works from one `gh pr view --json` response saved to a file, so
-# the facts a script judges together all come from the same moment.
+# here starts with one `gh pr view --json` response saved to a file.
+# Unattended review authors need a separate GraphQL read pinned to that head.
 
 # --- environment hardening -------------------------------------------
 # lib.sh and the sourcing script repeat this block; it stays here too so
@@ -26,7 +26,12 @@ mp_need_tools() {
 # mp_view <number> <file> <field,...>: save one response naming every
 # field the caller reads.
 mp_view() {
-  dt_gh pr view "$1" --json "$3" >"$2"
+  dt_gh pr view "$1" --json "$3" >"$2" || return $?
+  if [ "${DT_UNATTENDED:-0}" = 1 ]; then
+    case ,$3, in
+    *,reviews,*) ma_reviews "$1" "$2" || return $? ;;
+    esac
+  fi
 }
 
 # mp_field <file> <field>: one top-level field of a saved response, a

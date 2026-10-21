@@ -5,6 +5,83 @@ setup() {
   agent_setup
 }
 
+@test "App review uses GraphQL author type and login" {
+  export DEVTOOLS_REQUIRED_REVIEWER=review-app DEVTOOLS_REQUIRED_REVIEWER_TYPE=Bot
+  pr '.reviews[0].author={__typename:"Bot",login:"review-app"}'
+  run bash "$AGENT/review.sh" 7
+  [ "$status" -eq 0 ]
+  grep -q 'author{__typename login}' "$GH_FIXTURES/gh.log"
+}
+
+@test "User review cannot satisfy required Bot reviewer" {
+  export DEVTOOLS_REQUIRED_REVIEWER_TYPE=Bot
+  pr '.reviews[0].author.__typename="User"'
+  run bash "$AGENT/review.sh" 7
+  [ "$status" -ne 0 ]
+  [[ "$output" == *WAITING_REVIEW* ]]
+}
+
+@test "Bot review cannot satisfy required User reviewer" {
+  export DEVTOOLS_REQUIRED_REVIEWER_TYPE=User
+  pr '.reviews[0].author.__typename="Bot"'
+  run bash "$AGENT/review.sh" 7
+  [ "$status" -ne 0 ]
+  [[ "$output" == *WAITING_REVIEW* ]]
+}
+
+@test "User reviewer passes when its configured type matches" {
+  export DEVTOOLS_REQUIRED_REVIEWER_TYPE=User
+  pr '.reviews[0].author.__typename="User"'
+  run bash "$AGENT/review.sh" 7
+  [ "$status" -eq 0 ]
+}
+
+@test "typed reviewer fails closed when its author type is missing" {
+  export DEVTOOLS_REQUIRED_REVIEWER_TYPE=Bot
+  run bash "$AGENT/review.sh" 7
+  [ "$status" -ne 0 ]
+  [[ "$output" == *WAITING_REVIEW* ]]
+}
+
+@test "review author snapshot refuses a changed head" {
+  pr '.reviewHead="4444444444444444444444444444444444444444"'
+  run bash "$AGENT/review.sh" 7
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"PR head changed while reading review authors"* ]]
+}
+
+@test "invalid reviewer type is rejected" {
+  export DEVTOOLS_REQUIRED_REVIEWER_TYPE=App
+  run bash "$AGENT/review.sh" 7
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"required_reviewer_type must be Bot or User"* ]]
+}
+
+@test "REST bot reviewer login names the GraphQL form" {
+  export DEVTOOLS_REQUIRED_REVIEWER='review-app[bot]'
+  run bash "$AGENT/review.sh" 7
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"required_reviewer must use the GraphQL login review-app"* ]]
+}
+
+@test "REST bot owner login names the GraphQL form" {
+  change golden/result.txt baseline
+  approve_owner
+  export DEVTOOLS_MERGE_OWNER='owner-app[bot]'
+  run bash "$AGENT/review.sh" 7
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"merge_owner must use the GraphQL login owner-app"* ]]
+}
+
+@test "owner approval uses its own login independently of required reviewer type" {
+  change golden/result.txt baseline
+  approve_owner
+  export DEVTOOLS_REQUIRED_REVIEWER_TYPE=Bot
+  pr '.reviews[0].author.__typename="Bot" | .reviews[1].author.__typename="User"'
+  run bash "$AGENT/review.sh" 7
+  [ "$status" -eq 0 ]
+}
+
 @test "golden file needs current machine owner approval and reports override" {
   change golden/result.txt baseline
   run bash "$AGENT/review.sh" 7

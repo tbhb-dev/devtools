@@ -8,7 +8,7 @@ agent_setup() {
   fi
   export PATH="$BATS_SUITE_TMPDIR:$PATH"
   export DEVTOOLS_GH_LOGIN=agent DEVTOOLS_REQUIRED_REVIEWER=reviewer
-  unset DEVTOOLS_MERGE_OWNER
+  unset DEVTOOLS_MERGE_OWNER DEVTOOLS_REQUIRED_REVIEWER_TYPE
   AGENT="$ROOT/packages/agents/claude/.apm/skills/agent-merge-pr/scripts"
   POLICY="$SCRIPTS/merge-policy.py"
   git checkout --quiet main

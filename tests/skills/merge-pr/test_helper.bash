@@ -87,7 +87,7 @@ case "${args[0]} ${args[1]:-}" in
     [ "$n" = always ] || echo $((n - 1)) >"$F/unknown"
     jq '.mergeable = "UNKNOWN" | .mergeStateStatus = "UNKNOWN"' "$F/pr.json" | view_fields | out
   else
-    view_fields <"$F/pr.json" | out
+    jq '(.reviews[]?.author) |= del(.__typename)' "$F/pr.json" | view_fields | out
   fi
   ;;
 "pr list") if [ -f "$F/children.json" ]; then out <"$F/children.json"; else echo '[]' | out; fi ;;
@@ -106,6 +106,8 @@ case "${args[0]} ${args[1]:-}" in
   fi
   case "${args[*]}" in
   *viewer*) jq '{data:{viewer:.}}' "$F/user.json" | out ;;
+  *'author{__typename login}'*)
+    jq '[{data:{repository:{pullRequest:{headRefOid:(.reviewHead // .headRefOid),reviews:{nodes:.reviews,pageInfo:{hasNextPage:false,endCursor:null}}}}}}]' "$F/pr.json" | out ;;
   *qualifiedName*)
     if [ -f "$F/base-error" ]; then cat "$F/base-error" >&2; exit 1; fi
     jq '{data:{repository:{ref:{target:{oid:.object.sha}}}}}' "$F/api/repos_{owner}_{repo}_git_ref_heads_main.json" | out ;;
