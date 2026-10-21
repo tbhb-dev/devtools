@@ -5,7 +5,7 @@
 # repo root manifest depends on it by local path. The cog pre-bump hook
 # keeps `version` in lockstep with the root (see cog.toml).
 name: devtools-agents-common
-version: 0.14.1
+version: 0.14.2
 description: Harness-neutral agent primitives for tbhb repositories
 author: tbhb
 license: Apache-2.0

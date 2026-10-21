@@ -6,7 +6,7 @@
 # lands here.
 [project]
 name = "devtools"
-version = "0.14.1"
+version = "0.14.2"
 description = "Python support library for tbhb agent tooling"
 authors = [{ name = "Tony Burns" }]
 license = "Apache-2.0"
