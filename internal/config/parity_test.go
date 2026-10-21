@@ -72,10 +72,27 @@ func assertParity(t *testing.T, f fixture, binary, legacy, kind, key, fallback s
 		oldFunc = "dt_repo_conf"
 	}
 	env := isolatedEnv(f)
+	path, ok := f.env["PATH"]
+	if !ok {
+		path = os.Getenv("PATH")
+	}
 	old := runCommand(t, f.root, env, "bash", legacy, oldFunc, key, fallback)
 	got := runCommand(t, f.root, env, binary, "config", kind, "--", key, fallback)
 	if got != old {
 		t.Fatalf("old: %+v\nnew: %+v", old, got)
+	}
+	for _, harness := range []string{"claude", "codex"} {
+		lib, err := filepath.Abs("../../packages/agents/" + harness + "/.apm/skills/commit/scripts/lib.sh")
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, bin := range []string{filepath.Dir(binary), filepath.Join(filepath.Dir(binary), "no-config")} {
+			got = runCommand(t, f.root, append(env, "PATH="+bin+string(os.PathListSeparator)+path),
+				"bash", "-c", `. "$1"; "$2" "$3" "$4"`, "parity", lib, oldFunc, key, fallback)
+			if got != old {
+				t.Fatalf("%s with %s: old: %+v\nwrapper: %+v", harness, bin, old, got)
+			}
+		}
 	}
 	if _, err := os.Stat(filepath.Join(f.root, "PWNED")); !os.IsNotExist(err) {
 		t.Fatal("configuration was evaluated")
@@ -97,6 +114,16 @@ func TestConfigParity(t *testing.T) {
 	if data, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("build: %v: %s", err, data)
 	}
+	oldBin := filepath.Join(filepath.Dir(binary), "no-config")
+	if err := os.Mkdir(oldBin, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	stub := filepath.Join(oldBin, "agentrepo")
+	writeFile(t, stub, "#!/bin/sh\nprintf 'unknown command config\\n' >&2\nexit 5\n")
+	//nolint:gosec // This fixture models an installed agentrepo without config.
+	if err := os.Chmod(stub, 0o700); err != nil {
+		t.Fatal(err)
+	}
 	legacy, err := filepath.Abs("testdata/legacy-config.sh")
 	if err != nil {
 		t.Fatal(err)
@@ -107,6 +134,12 @@ func TestConfigParity(t *testing.T) {
 			f := newFixture(t, tc)
 			gitFixture(t, f, "init", "--quiet", "--initial-branch=main")
 			assertParity(t, f, binary, legacy, tc.kind, tc.key, tc.fallback)
+		})
+	}
+	for _, support := range []string{"true", "false"} {
+		t.Run("config support is cached: "+support, func(t *testing.T) {
+			t.Parallel()
+			parityProbe(t, binary, support)
 		})
 	}
 	t.Run("linked worktree uses main name and worktree behavior", func(t *testing.T) {
@@ -222,4 +255,51 @@ func parityFailedGit(t *testing.T, binary, legacy string) {
 	}
 	f.env["DEVTOOLS_REVIEW_CMD"] = ""
 	assertParity(t, f, binary, legacy, "machine", "review_cmd", "fallback")
+}
+
+func parityProbe(t *testing.T, binary, support string) {
+	t.Helper()
+	f := newFixture(t, configCase{machine: "review_cmd = machine\n", repository: "hook_marker = repository\n"})
+	gitFixture(t, f, "init", "--quiet", "--initial-branch=main")
+	bin := t.TempDir()
+	stub := filepath.Join(bin, "agentrepo")
+	writeFile(t, stub, `#!/bin/sh
+printf '%s\n' "$*" >>"$CONFIG_LOG"
+[ "$CONFIG_SUPPORT" = true ] || exit 5
+exec "$CONFIG_BINARY" "$@"
+`)
+	//nolint:gosec // Executable shim records probes and forwards to the real binary.
+	if err := os.Chmod(stub, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	log := filepath.Join(bin, "calls")
+	env := append(isolatedEnv(f), "PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"),
+		"CONFIG_SUPPORT="+support, "CONFIG_BINARY="+binary, "CONFIG_LOG="+log)
+	lib, err := filepath.Abs("../../packages/agents/codex/.apm/skills/commit/scripts/lib.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := runCommand(t, f.root, env, "bash", "-c", `. "$1"
+machine=$(dt_conf review_cmd fallback)
+repository=$(dt_repo_conf hook_marker fallback)
+printf '%s\n' "$machine" "$repository"
+dt_conf review_cmd fallback
+dt_repo_conf hook_marker fallback
+`, "probe", lib)
+	if got != (result{out: "machine\nrepository\nmachine\nrepository\n"}) {
+		t.Fatal(got)
+	}
+	calls, err := os.ReadFile(log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "config --help\n"
+	if support == "true" {
+		want += strings.Repeat(
+			"config machine -- review_cmd fallback\nconfig repository -- hook_marker fallback\n", 2,
+		)
+	}
+	if string(calls) != want {
+		t.Fatalf("calls: %q; want %q", calls, want)
+	}
 }

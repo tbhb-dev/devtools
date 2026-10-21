@@ -134,9 +134,58 @@ dt_session_id() {
 
 # --- configuration -----------------------------------------------------
 
-# Machine authority is resolved by agentrepo, never by repository settings.
+# Probe in the sourcing shell so command substitutions share the cached answer.
+if [ -z "${_DT_AGENTREPO_CONFIG+set}" ]; then
+  _DT_AGENTREPO_CONFIG=false
+  if agentrepo config --help >/dev/null 2>&1; then
+    _DT_AGENTREPO_CONFIG=true
+  fi
+fi
+
+# Remove the shell fallback under #321 once the minimum agentrepo version
+# on every host and in every consumer supports config.
+# _dt_conf_file <file> <key>: print the key's value, or fail when the
+# file or the key is absent.
+_dt_conf_file() {
+  [ -f "$1" ] || return 1
+  awk -v key="$2" '
+    /^[ \t]*#/ || !/=/ { next }
+    {
+      k = $0
+      sub(/=.*/, "", k)
+      gsub(/^[ \t]+|[ \t]+$/, "", k)
+      if (k != key) next
+      v = $0
+      sub(/^[^=]*=/, "", v)
+      gsub(/^[ \t]+|[ \t]+$/, "", v)
+      print v
+      found = 1
+      exit
+    }
+    END { exit found ? 0 : 1 }
+  ' "$1"
+}
+
+# dt_conf <key> [default]: the configured value, or the default.
 dt_conf() {
-  agentrepo config machine -- "$@"
+  if [ "$_DT_AGENTREPO_CONFIG" = true ]; then
+    agentrepo config machine -- "$@"
+    return $?
+  fi
+  local key=$1 default=${2:-} env_name value dir repo
+  env_name=DEVTOOLS_$(printf '%s' "$key" | tr '[:lower:]' '[:upper:]')
+  if [ -n "${!env_name+set}" ]; then
+    printf '%s\n' "${!env_name}"
+    return 0
+  fi
+  dir=${XDG_CONFIG_HOME:-$HOME/.config}/devtools
+  repo=$(dt_repo_name) || return $?
+  if value=$(_dt_conf_file "$dir/$repo.conf" "$key") ||
+    value=$(_dt_conf_file "$dir/devtools.conf" "$key"); then
+    printf '%s\n' "$value"
+    return 0
+  fi
+  printf '%s\n' "$default"
 }
 
 # dt_signoff_identity prints the configured responsible person, falling
