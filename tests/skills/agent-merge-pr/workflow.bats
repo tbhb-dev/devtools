@@ -9,9 +9,11 @@ setup() {
   [ "$status" -eq 0 ]
 }
 
-@test "unattended merge rejects an agentrepo shim that cannot run" {
+@test "unattended merge rejects an unusable check runner" {
+  export REAL_AGENTREPO
+  REAL_AGENTREPO=$(command -v agentrepo)
   mkdir -p "$BATS_TEST_TMPDIR/broken-bin"
-  printf '#!/usr/bin/env bash\nexit 1\n' >"$BATS_TEST_TMPDIR/broken-bin/agentrepo"
+  printf '#!/usr/bin/env bash\nif [ "$1" = config ]; then exec "$REAL_AGENTREPO" "$@"; fi\nexit 1\n' >"$BATS_TEST_TMPDIR/broken-bin/agentrepo"
   chmod +x "$BATS_TEST_TMPDIR/broken-bin/agentrepo"
 
   PATH="$BATS_TEST_TMPDIR/broken-bin:$PATH" run bash "$AGENT/preflight.sh" 7

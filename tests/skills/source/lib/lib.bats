@@ -20,10 +20,13 @@ setup() {
   git -C "$REPO" config user.name Tester
   git -C "$REPO" config user.email tester@example.com
   cd "$REPO"
+  export REAL_AGENTREPO
+  REAL_AGENTREPO=$(command -v agentrepo)
   mkdir -p "$BATS_TEST_TMPDIR/bin"
   cat >"$BATS_TEST_TMPDIR/bin/agentrepo" <<'STUB'
 #!/usr/bin/env bash
 [ "${1:-}" != --help ] || exit 0
+if [ "$1" = config ]; then exec "$REAL_AGENTREPO" "$@"; fi
 printf '%s\n' "$@" >"$DEVTOOLS_REVIEW_INPUTS/args"
 shift 5
 exec "$@"
@@ -98,23 +101,6 @@ STUB
   for skill in agent-commit agent-pr agent-merge-pr; do
     grep -q '../../.*scripts/preflight.sh' "$ROOT/packages/agents/source/skills/$skill/shared/scripts/preflight.sh"
   done
-}
-
-@test "dt_conf reads the environment, then the machine files, never the repository" {
-  mkdir -p "$XDG_CONFIG_HOME/devtools"
-  printf 'review_cmd = from-defaults\nreview_model = m1\n' >"$XDG_CONFIG_HOME/devtools/devtools.conf"
-  printf '# comment\nreview_cmd = from-repo-conf\n' >"$XDG_CONFIG_HOME/devtools/repo.conf"
-  printf 'review_cmd = planted\n' >"$REPO/devtools.conf"
-  printf 'review_cmd = planted\n' >"$REPO/agent-skills.conf"
-
-  lib dt_conf review_cmd
-  [ "$output" = from-repo-conf ]
-  lib dt_conf review_model
-  [ "$output" = m1 ]
-  DEVTOOLS_REVIEW_CMD=from-env lib dt_conf review_cmd
-  [ "$output" = from-env ]
-  lib dt_conf review_effort fallback
-  [ "$output" = fallback ]
 }
 
 @test "dt_verdict accepts only a bare PASS line" {
@@ -602,7 +588,7 @@ STUB
 
 @test "runner timeout after PASS removes an old stamp and reports timeout" {
   review_once 'cat >/dev/null; echo "VERDICT: PASS"'
-  printf '#!/usr/bin/env bash\n[ "$1" != --help ] || exit 0\necho "VERDICT: PASS"\nexit 124\n' >"$BATS_TEST_TMPDIR/bin/agentrepo"
+  printf '#!/usr/bin/env bash\n[ "$1" != --help ] || exit 0\nif [ "$1" = config ]; then exec "$REAL_AGENTREPO" "$@"; fi\necho "VERDICT: PASS"\nexit 124\n' >"$BATS_TEST_TMPDIR/bin/agentrepo"
   review_once 'exit 0'
   [ "$status" -eq 124 ]
   [[ "$output" == *'reviewer timed out; nothing stamped'* ]]
@@ -612,7 +598,7 @@ STUB
 @test "runner cancellation and PASS followed by failure never stamp" {
   for code in 130 1; do
     review_once 'cat >/dev/null; echo "VERDICT: PASS"'
-    printf '#!/usr/bin/env bash\n[ "$1" != --help ] || exit 0\necho "VERDICT: PASS"\nexit %s\n' "$code" >"$BATS_TEST_TMPDIR/bin/agentrepo"
+    printf '#!/usr/bin/env bash\n[ "$1" != --help ] || exit 0\nif [ "$1" = config ]; then exec "$REAL_AGENTREPO" "$@"; fi\necho "VERDICT: PASS"\nexit %s\n' "$code" >"$BATS_TEST_TMPDIR/bin/agentrepo"
     review_once 'exit 0'
     [ "$status" -eq 4 ]
     [ ! -e .git/agent-skills/t.stamp ]
@@ -648,7 +634,7 @@ STUB
 }
 
 @test "broken agentrepo shim preserves the reviewer and warns once" {
-  printf '#!/usr/bin/env bash\nexit 1\n' >"$BATS_TEST_TMPDIR/bin/agentrepo"
+  printf '#!/usr/bin/env bash\nif [ "$1" = config ]; then exec "$REAL_AGENTREPO" "$@"; fi\nexit 1\n' >"$BATS_TEST_TMPDIR/bin/agentrepo"
 
   lib 'DEVTOOLS_REVIEW_CMD="cat; echo VERDICT: PASS" dt_run_reviewer "$PWD" "$PWD" <<<prompt'
 

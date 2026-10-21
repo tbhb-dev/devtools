@@ -3,31 +3,7 @@
 
 # Only repository behavior belongs here. Authorities still use dt_conf.
 dt_repo_conf() {
-  local root file value
-  root=$(dt_root) || return $?
-  file=$root/.agents/agent-skills.conf
-  if [ -e "$file" ]; then
-    [ -f "$file" ] && [ ! -L "$file" ] || dt_die "Repository configuration must be a regular file: $file"
-    awk '
-      /^[ \t]*(#|$)/ { next }
-      {
-        key = $0
-        sub(/=.*/, "", key)
-        gsub(/^[ \t]+|[ \t]+$/, "", key)
-        if (!index($0, "=") || seen[key]++ ||
-            key !~ /^(lint_commit_cmd|required_hooks|hook_marker|review_max_rounds|pr_template|lint_pr_cmd|pr_log_entry|pr_related_pattern|pr_title_check_cmd|owner_paths|mail_cmd|mail_to|mail_from|lint_squash_cmd|owner_review_label|ruleset_dir|golden_paths|loosening_markers|gate_config_paths|disposable_ignored|merge_ready_cmd)$/) {
-          print "Invalid or duplicate repository setting: " key > "/dev/stderr"
-          bad = 1
-        }
-      }
-      END { exit bad ? 1 : 0 }
-    ' "$file" || return 1
-    if value=$(_dt_conf_file "$file" "$1"); then
-      printf '%s\n' "$value"
-      return 0
-    fi
-  fi
-  printf '%s\n' "${2:-}"
+  agentrepo config repository -- "$@"
 }
 
 dt_agent_context() {

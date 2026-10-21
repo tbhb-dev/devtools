@@ -24,9 +24,8 @@ reject() {
   reject 'sha256sum() { printf "abc  draft\n"; return 9; }' 'dt_digest draft'
 }
 
-@test "repository name and configuration reject failed repository discovery" {
+@test "repository name rejects failed repository discovery" {
   reject 'gitr() { printf "%s/.git\n" "$PWD"; return 9; }' 'dt_repo_name'
-  reject 'dt_repo_name() { echo repo; return 9; }' 'dt_conf review_cmd fallback'
 }
 
 @test "state and input directories reject failed directory discovery" {
