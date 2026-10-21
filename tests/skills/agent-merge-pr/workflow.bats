@@ -9,6 +9,17 @@ setup() {
   [ "$status" -eq 0 ]
 }
 
+@test "unattended merge rejects an agentrepo shim that cannot run" {
+  mkdir -p "$BATS_TEST_TMPDIR/broken-bin"
+  printf '#!/usr/bin/env bash\nexit 1\n' >"$BATS_TEST_TMPDIR/broken-bin/agentrepo"
+  chmod +x "$BATS_TEST_TMPDIR/broken-bin/agentrepo"
+
+  PATH="$BATS_TEST_TMPDIR/broken-bin:$PATH" run bash "$AGENT/preflight.sh" 7
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"a working agentrepo is required for check judgement"* ]]
+}
+
 @test "unattended merger rejects confirmed even with session grant" {
   grant merge
   run bash "$AGENT/merge.sh" --confirmed 7

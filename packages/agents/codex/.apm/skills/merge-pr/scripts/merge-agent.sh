@@ -20,6 +20,7 @@ ma_context() {
   [ -n "$login" ] || dt_die "gh_login must be configured on the machine"
   command -v uv >/dev/null || dt_die "uv is required for the YAML policy reader"
   command -v agentrepo >/dev/null || dt_die "agentrepo is required for check judgement"
+  agentrepo --help >/dev/null 2>&1 || dt_die "a working agentrepo is required for check judgement"
 }
 
 ma_lint() {
