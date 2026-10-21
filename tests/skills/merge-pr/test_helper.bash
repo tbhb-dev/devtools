@@ -25,7 +25,7 @@ merge_setup() {
   git -C "$REPO" config user.name Tester
   git -C "$REPO" config user.email tester@example.com
   cd "$REPO"
-  printf 'SQUASH_AGENTMSG\n' >.gitignore
+  printf 'SQUASH_AGENTMSG\nPR_AGENTDESC.md\n' >.gitignore
   cat >.cspell.jsonc <<'JSON'
 {"dictionaryDefinitions":[{"name":"project","path":"./.cspell-words.txt","addWords":true}],"dictionaries":["project"]}
 JSON

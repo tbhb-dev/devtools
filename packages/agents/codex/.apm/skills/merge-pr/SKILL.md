@@ -183,6 +183,8 @@ The merge script settles who confirmed the merge, in this order, and prints whic
 2. a merge pre-approval for this session, which the operator granted through `mise run preapprove merge` and preflight reported as `merge: GRANTED`
 3. the machine's delegation check, when preflight reported one configured: it answers for the repository and the action `merge`, and a refusal stops the merge
 
+Without `--confirmed`, execution requires the same approval, owner, policy, and required-check gates as `agent-merge-pr`. An empty check rollup refuses every merge as inconclusive.
+
 A bare `mise run preapprove` grants commit and pr and never merge, because a merge is the one action here no later step can undo. With none of them the script exits 75 and merges nothing. Ask the operator, then run it again with `--confirmed`.
 
 A grant or a delegation answers one question, merge under this message. Ask the operator anyway where any of these holds:

@@ -135,15 +135,15 @@ review_once() {
 
 review_subject() {
   export REVIEW_SUBJECT=$1 REVIEW_DRAFT=$2
-  export DEVTOOLS_REVIEW_CMD=$3 DT_TEST_UNATTENDED=${4:-0}
+  export DEVTOOLS_REVIEW_CMD=$3 DEVTOOLS_TEST_UNATTENDED=${4:-0}
   lib '
     printf "%s\n" "$REVIEW_DRAFT" >draft
     inputs=$(dt_new_inputs t)
     cp draft "$inputs/draft"
     printf "criteria\n" >criteria.md
     ok() { return 0; }
-    if [ "$DT_TEST_UNATTENDED" = 1 ]; then
-      DT_UNATTENDED=1
+    if [ "${DEVTOOLS_TEST_UNATTENDED-${DT_TEST_UNATTENDED:-0}}" = 1 ]; then
+      DEVTOOLS_UNATTENDED=1
       dt_agent_context() { return 0; }
       dt_repo_digest() { printf "repo\n"; }
       dt_repo_conf() { printf "3\n"; }
