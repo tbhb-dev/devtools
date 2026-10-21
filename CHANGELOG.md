@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file. See [conven
 - - -
 <!-- release -->
 
+## [v0.14.1](https://github.com/tbhb-dev/devtools/compare/22297a767ffbc638cece440c732812ba9208d6f8..v0.14.1) - 2026-10-21
+
+### Bug Fixes
+
+- (**merge**) allow squash lint without a cspell config (#398) - ([dffc712](https://github.com/tbhb-dev/devtools/commit/dffc712d7e5d2825d4e03f7e0dc4cf6ebbead6f0)) - tbhb.dev Agent
+
+### Continuous Integration
+
+- (**release**) sign release tags as tbhb-agent (#391) - ([22297a7](https://github.com/tbhb-dev/devtools/commit/22297a767ffbc638cece440c732812ba9208d6f8)) - tbhb.dev Agent
+
+- - -
+
+<!-- release -->
+
 ## [v0.14.0](https://github.com/tbhb-dev/devtools/compare/bf62c87f41a5a426b98fe0f3700479ade2fddc84..v0.14.0) - 2026-10-21
 
 ### Features
