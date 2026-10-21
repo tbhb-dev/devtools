@@ -47,7 +47,7 @@ func TestRun(t *testing.T) {
 			require.Less(t, time.Since(started), 5*time.Second)
 			if tt.want == review.Timeout {
 				require.Contains(t, stderr.String(), "timed out")
-				assertGone(t, pidFile)
+				assertGone(t, waitForPID(t, pidFile))
 			}
 			if tt.name == "normal" {
 				require.Equal(t, "VERDICT: PASS\n", out.String())
@@ -56,12 +56,27 @@ func TestRun(t *testing.T) {
 	}
 }
 
-func assertGone(t *testing.T, pidFile string) {
+func waitForPID(t *testing.T, pidFile string) int {
 	t.Helper()
-	data, err := os.ReadFile(pidFile)
-	require.NoError(t, err)
-	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
-	require.NoError(t, err)
+	var pid int
+	require.Eventually(
+		t,
+		func() bool {
+			data, err := os.ReadFile(pidFile)
+			if err != nil {
+				return false
+			}
+			pid, err = strconv.Atoi(strings.TrimSpace(string(data)))
+			return err == nil
+		},
+		3*time.Second,
+		10*time.Millisecond,
+	)
+	return pid
+}
+
+func assertGone(t *testing.T, pid int) {
+	t.Helper()
 	require.Eventually(
 		t,
 		func() bool { return errors.Is(syscall.Kill(pid, 0), syscall.ESRCH) },
@@ -82,12 +97,7 @@ func TestCancel(t *testing.T) {
 			[]string{"sh", "-c", `sh -c 'echo $$ > "$1"; exec sleep 60' _ "$1" & wait`, "_", pidFile},
 			nil, &out, &stderr)
 	}()
-	require.Eventually(
-		t,
-		func() bool { _, err := os.Stat(pidFile); return err == nil },
-		3*time.Second,
-		10*time.Millisecond,
-	)
+	pid := waitForPID(t, pidFile)
 	cancel()
 	select {
 	case got := <-done:
@@ -95,7 +105,7 @@ func TestCancel(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("cancellation did not finish")
 	}
-	assertGone(t, pidFile)
+	assertGone(t, pid)
 }
 
 func TestInvalid(t *testing.T) {
@@ -121,5 +131,5 @@ func TestFileOutput(t *testing.T) {
 	got := review.Run(t.Context(), time.Second,
 		[]string{"sh", "-c", `sh -c 'echo $$ > "$1"; exec sleep 60' _ "$1" & exit 0`, "_", pidFile}, nil, out, &stderr)
 	require.Equal(t, review.Timeout, got, stderr.String())
-	assertGone(t, pidFile)
+	assertGone(t, waitForPID(t, pidFile))
 }
