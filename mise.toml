@@ -576,6 +576,11 @@ description = "Run the bats suites for the shell scripts under scripts/ and tool
 usage = 'arg "<path>" default="tests"'
 run = "bats --recursive $usage_path"
 
+[tasks.test-hooks-shard]
+description = "Validate the Bats partition and run one runtime-balanced shard"
+usage = 'arg "<shard>"'
+run = 'bash tools/test-bats-shard.sh "$usage_shard"'
+
 # Serial by default so a failing run prints a clean, ordered trace; pass
 # `mise run test-py -n auto` to fan the suite across xdist workers.
 [tasks.test-py]
