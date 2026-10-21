@@ -20,8 +20,9 @@ import (
 
 // Agent uses a clock supplied by the caller so renewal has no background state.
 type Agent struct {
-	Config Config
-	Now    func() time.Time
+	Config       Config
+	Now          func() time.Time
+	agentStarted func(string)
 }
 
 // Environment replaces only the child process's signing socket.
@@ -62,7 +63,15 @@ func (a Agent) start(ctx context.Context) error {
 	if err = os.Remove(socket); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("remove stale socket: %w", err)
 	}
-	return commandResult(a.command(ctx, "ssh-agent", "-a", socket).Run())
+	cmd = a.command(ctx, "ssh-agent", "-a", socket)
+	if a.agentStarted == nil {
+		return commandResult(cmd.Run())
+	}
+	output, err := cmd.Output()
+	if err == nil {
+		a.agentStarted(string(output))
+	}
+	return commandResult(err)
 }
 
 func (a Agent) load(ctx context.Context) error {
