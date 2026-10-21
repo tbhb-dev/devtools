@@ -118,7 +118,7 @@ criteria=$DT_LIB_DIR/../../review-commit-message/SKILL.md
 status=0
 dt_review commit "$draft" "$snapshot" "$criteria" "$root$arguments_suffix" "$inputs" still_as_gathered \
   "tree:$tree" \
-  tree "$tree" head "$head" mode "$mode" note "$note_digest" || status=$?
+  tree "$tree" head "$head" mode "$mode" note "$note_digest" note_path "$note" || status=$?
 case $status in
 0) ;;
 2) printf '\nFix every finding in COMMIT_AGENTMSG, then run review.sh again.\n' ;;
