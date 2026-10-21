@@ -23,6 +23,7 @@ setup() {
   mkdir -p "$BATS_TEST_TMPDIR/bin"
   cat >"$BATS_TEST_TMPDIR/bin/agentrepo" <<'STUB'
 #!/usr/bin/env bash
+[ "${1:-}" != --help ] || exit 0
 printf '%s\n' "$@" >"$DEVTOOLS_REVIEW_INPUTS/args"
 shift 5
 exec "$@"
@@ -601,7 +602,7 @@ STUB
 
 @test "runner timeout after PASS removes an old stamp and reports timeout" {
   review_once 'cat >/dev/null; echo "VERDICT: PASS"'
-  printf '#!/usr/bin/env bash\necho "VERDICT: PASS"\nexit 124\n' >"$BATS_TEST_TMPDIR/bin/agentrepo"
+  printf '#!/usr/bin/env bash\n[ "$1" != --help ] || exit 0\necho "VERDICT: PASS"\nexit 124\n' >"$BATS_TEST_TMPDIR/bin/agentrepo"
   review_once 'exit 0'
   [ "$status" -eq 124 ]
   [[ "$output" == *'reviewer timed out; nothing stamped'* ]]
@@ -611,7 +612,7 @@ STUB
 @test "runner cancellation and PASS followed by failure never stamp" {
   for code in 130 1; do
     review_once 'cat >/dev/null; echo "VERDICT: PASS"'
-    printf '#!/usr/bin/env bash\necho "VERDICT: PASS"\nexit %s\n' "$code" >"$BATS_TEST_TMPDIR/bin/agentrepo"
+    printf '#!/usr/bin/env bash\n[ "$1" != --help ] || exit 0\necho "VERDICT: PASS"\nexit %s\n' "$code" >"$BATS_TEST_TMPDIR/bin/agentrepo"
     review_once 'exit 0'
     [ "$status" -eq 4 ]
     [ ! -e .git/agent-skills/t.stamp ]
@@ -628,7 +629,7 @@ STUB
     DEVTOOLS_REVIEW_CMD="cat; echo VERDICT: PASS" dt_run_reviewer "$PWD" "$PWD" <<<prompt
   '
   [ "$status" -eq 0 ]
-  [[ "$output" == *'unbounded because agentrepo is missing'* ]]
+  [[ "$output" == *'unbounded because agentrepo is missing or unusable'* ]]
   [[ "$output" == *prompt*'VERDICT: PASS'* ]]
   [ "$(printf '%s\n' "$output" | grep -c unbounded)" -eq 1 ]
 }
@@ -642,6 +643,17 @@ STUB
     DEVTOOLS_REVIEW_CMD="echo VERDICT: PASS; exit 7" dt_run_reviewer "$PWD" "$PWD" </dev/null
   '
   [ "$status" -eq 7 ]
-  [[ "$output" == *'unbounded because agentrepo is missing'* ]]
+  [[ "$output" == *'unbounded because agentrepo is missing or unusable'* ]]
   [ ! -e .git/agent-skills/t.stamp ]
+}
+
+@test "broken agentrepo shim preserves the reviewer and warns once" {
+  printf '#!/usr/bin/env bash\nexit 1\n' >"$BATS_TEST_TMPDIR/bin/agentrepo"
+
+  lib 'DEVTOOLS_REVIEW_CMD="cat; echo VERDICT: PASS" dt_run_reviewer "$PWD" "$PWD" <<<prompt'
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'unbounded because agentrepo is missing or unusable'* ]]
+  [[ "$output" == *prompt*'VERDICT: PASS'* ]]
+  [ "$(printf '%s\n' "$output" | grep -c unbounded)" -eq 1 ]
 }

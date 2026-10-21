@@ -75,7 +75,7 @@ mise run build
 
 ## Development
 
-[mise](https://mise.jdx.dev) pins the toolchain and runs the workflow: `mise run bootstrap` sets up a fresh clone, `mise run lint` runs the full lint suite, `mise run test` runs the tests, and `mise run build` compiles the binaries into `bin/`. On a machine with no mise, the committed shim at `tools/mise-bootstrap` runs in place of `mise` and installs the pinned release on first use. The pins live in [mise.toml](mise.toml) and the drop-ins under `.config/mise/conf.d/`, locked by digest in the committed `mise.lock` files. See [AGENTS.md](AGENTS.md) for the agent-facing contributor guide.
+[mise](https://mise.jdx.dev) pins the toolchain and runs the workflow: `mise run bootstrap` sets up a fresh clone and builds the commands into the ignored `bin/` directory, `mise run lint` runs the full lint suite, and `mise run test` runs the tests. Run `mise run install` explicitly to put the commands on `PATH` in the mise-managed Go installation's bin directory. On a machine with no mise, the committed shim at `tools/mise-bootstrap` runs in place of `mise` and installs the pinned release on first use. The pins live in [mise.toml](mise.toml) and the drop-ins under `.config/mise/conf.d/`, locked by digest in the committed `mise.lock` files. See [AGENTS.md](AGENTS.md) for the agent-facing contributor guide.
 
 After creating a linked worktree, inspect its configuration and run `mise trust`, then run `mise run devtools:worktree-setup`. The setup task refuses an untrusted configuration. Once trusted, it prepares the worktree-local Vale styles with `vale sync` and the Python environment with `uv sync`. Skill setup checks stop with these commands when the configuration is untrusted or the ignored Vale styles are absent.
 

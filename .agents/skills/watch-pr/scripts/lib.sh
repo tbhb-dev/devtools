@@ -387,10 +387,10 @@ dt_run_reviewer() {
   local root=$1 inputs=$2 custom model effort timeout
   local runner=(env)
   timeout=$(dt_conf review_timeout 900)
-  if command -v agentrepo >/dev/null 2>&1; then
+  if command -v agentrepo >/dev/null 2>&1 && agentrepo --help >/dev/null 2>&1; then
     runner=(agentrepo review run --timeout "${timeout}s" --)
   else
-    printf 'review: unbounded because agentrepo is missing\n' >&2
+    printf 'review: unbounded because agentrepo is missing or unusable\n' >&2
   fi
   custom=$(dt_conf review_cmd)
   model=$(dt_conf review_model)
