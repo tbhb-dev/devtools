@@ -47,7 +47,7 @@ cd "$root"
 # The identity release.yml tags under, and the identity GitHub verifies
 # the signing key against. Changing it in one place alone produces a tag
 # that signs correctly and still shows as unverified.
-readonly TAGGER='Tony Burns <tony@tonyburns.net>'
+readonly TAGGER='tbhb.dev Agent <334376894+tbhb-agent@users.noreply.github.com>'
 
 # The identity createCommitOnBranch commits under, which is the release
 # App's bot user rather than anything the runner chooses. The local part

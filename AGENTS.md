@@ -303,7 +303,7 @@ The `[tool.pyrefly.errors]` table pins every diagnostic kind pyrefly knows. That
 
 ## Releases
 
-The release happens in CI and nowhere else. `.github/workflows/release.yml` runs on dispatch. It generates an app token and runs `cog bump`, replays that commit through `createCommitOnBranch` so GitHub writes and signs the one that main receives, then SSH-signs the tag with a repository secret under the tagger identity GitHub verifies that key against.
+The release happens in CI and nowhere else. `.github/workflows/release.yml` runs on dispatch. It generates an app token and runs `cog bump`, replays that commit through `createCommitOnBranch` so GitHub writes and signs the one that main receives, then SSH-signs the tag with the organization secret `TAG_SIGNING_KEY` under the tagger identity `tbhb.dev Agent <334376894+tbhb-agent@users.noreply.github.com>` that GitHub verifies the key against.
 
 Two signers, because neither one can do the other's job. Signing a commit on the runner takes a key the runner has, and a GitHub App has no such key, so only GitHub can produce a commit under the App's identity. It signs with its own key, and the result names `tbhb-dev-releases[bot]` as author and GitHub as committer. The tag runs the other way. No API creates a signed tag, so the runner's key is the only thing that can sign one. cog's commit never leaves the runner. The workflow reads the message and the changed paths off it, and the API writes the commit main ends up with. A tree comparison checks those two against each other before the tag goes on. Every release CI cut, v0.3.0 through v0.5.0, signed the tag alone, so none of those version bumps has a signature. A person cut the releases before them by hand, and signed those.
 
