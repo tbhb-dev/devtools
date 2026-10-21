@@ -232,6 +232,58 @@ setup() {
   [ ! -e "$GH_FIXTURES/merged" ]
 }
 
+# Exercise both command branches without the surrounding merge policy gates.
+squash_lint_head() {
+  cat >"${BATS_TEST_TMPDIR}/bin/mise" <<'STUB'
+#!/usr/bin/env bash
+printf '%s\n' "${DEVTOOLS_CSPELL_CONFIG-unset}" >"$GH_FIXTURES/lint-config"
+exit 42
+STUB
+  bash -c '
+    source "$1/merge-agent.sh"
+    mp_fetch_commit() { return 0; }
+    dt_die() { echo "$*" >&2; return 1; }
+    dt_repo_conf() { echo "mise run lint-squash-msg"; }
+    DT_UNATTENDED=$3
+    unreadable=$4
+    gitr() {
+      if [ "$unreadable" = unreadable ] && [ "$1" = show ]; then return 1; fi
+      git "$@"
+    }
+    ma_lint "$2"
+  ' _ "$SCRIPTS" "$HEAD_OID" "$1" "${2:-readable}"
+}
+
+@test "attended squash lint reaches the command without a head config (#393)" {
+  git rm --quiet .cspell.jsonc
+  git commit --quiet -m 'test: remove the config'
+  HEAD_OID=$(git rev-parse HEAD)
+
+  run squash_lint_head 0
+
+  [ "$status" -eq 42 ]
+  [ "$(cat "$GH_FIXTURES/lint-config")" = unset ]
+}
+
+@test "unattended squash lint reaches the command without a head config (#393)" {
+  git rm --quiet .cspell.jsonc
+  git commit --quiet -m 'test: remove the config'
+  HEAD_OID=$(git rev-parse HEAD)
+
+  run squash_lint_head 1
+
+  [ "$status" -eq 42 ]
+  [ "$(cat "$GH_FIXTURES/lint-config")" = unset ]
+}
+
+@test "squash lint refuses an existing head config that cannot be read (#393)" {
+  run squash_lint_head 0 unreadable
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Could not read .cspell.jsonc from the pull request head."* ]]
+  [ ! -e "$GH_FIXTURES/lint-config" ]
+}
+
 @test "squash lint reads words from the pull request head, not the checkout (#274)" {
   cat >.cspell.jsonc <<'JSON'
 {"dictionaryDefinitions":[{"name":"project","path":"./.cspell-words.txt","addWords":true}],"dictionaries":["project"]}
