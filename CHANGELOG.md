@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file. See [conven
 - - -
 <!-- release -->
 
+## [v0.14.0](https://github.com/tbhb-dev/devtools/compare/bf62c87f41a5a426b98fe0f3700479ade2fddc84..v0.14.0) - 2026-10-21
+
+### Features
+
+- (**reviewer**) authenticate reviews with a GitHub App (#303) - ([fa138cc](https://github.com/tbhb-dev/devtools/commit/fa138cccad8f7de9ca628405ce4c2e99c849d2d0)) - tbhb.dev Agent
+
+### Bug Fixes
+
+- (**bootstrap**) keep development binaries repository-local (#362) - ([aadc44a](https://github.com/tbhb-dev/devtools/commit/aadc44adb50d69fb7840ad606dc85c0c6afb88dd)) - tbhb.dev Agent
+- (**deps**) bump the Go toolchain to 1.27.3 (#372) - ([8a23cd0](https://github.com/tbhb-dev/devtools/commit/8a23cd02c89a1fbe66546ad23aa2324e508d7d18)) - tbhb.dev Agent
+- (**go**) fail closed on incomplete dependency scans (#317) - ([5b4eb04](https://github.com/tbhb-dev/devtools/commit/5b4eb04dfbbd977bbe96bb87ce4f7e26420c2d7a)) - tbhb.dev Agent
+- (**hooks**) recognize legacy pre-push wrappers (#355) - ([92c4717](https://github.com/tbhb-dev/devtools/commit/92c4717a50b64c7c9318c802710f2a1140b20f24)) - tbhb.dev Agent
+- (**hooks**) allow warning checks in review worktrees (#344) - ([f769f90](https://github.com/tbhb-dev/devtools/commit/f769f900e632fc7213434c0fcd7b48bc6da3d74e)) - tbhb.dev Agent
+- (**merge**) share unattended gate fields (#357) - ([5d84f30](https://github.com/tbhb-dev/devtools/commit/5d84f30730a703684801dfbf9ebe27fdd96a4d54)) - tbhb.dev Agent
+- (**merge**) lint squash words from PR head (#314) - ([7cf3526](https://github.com/tbhb-dev/devtools/commit/7cf352697c974368c394c2f7aff8a26b5130f771)) - tbhb.dev Agent
+- (**mutate**) forward declared gremlins arguments (#319) - ([0459ffd](https://github.com/tbhb-dev/devtools/commit/0459ffd7c36623ef3581b1c2f1c13be3d43c2771)) - tbhb.dev Agent
+- (**mutate**) bound nightly gremlins concurrency (#298) - ([bf62c87](https://github.com/tbhb-dev/devtools/commit/bf62c87f41a5a426b98fe0f3700479ade2fddc84)) - tbhb.dev Agent
+- (**pins**) report stale devtools versions in prose (#345) - ([428f058](https://github.com/tbhb-dev/devtools/commit/428f0580426a5322ad0999f05b101fd7e685ce56)) - tbhb.dev Agent
+- (**prose**) diagnose drafts outside the repository (#316) - ([3a40907](https://github.com/tbhb-dev/devtools/commit/3a40907f15af25f648030d597bf5a28f25be1d16)) - tbhb.dev Agent
+- (**security**) accept histories without patch content (#369) - ([1179d47](https://github.com/tbhb-dev/devtools/commit/1179d47bff2be433b76f755739c33f11d9401bd1)) - tbhb.dev Agent
+- (**security**) describe gitleaks history coverage (#318) - ([b167677](https://github.com/tbhb-dev/devtools/commit/b167677158f133147b4957b7f5e71b26aae4c48b)) - tbhb.dev Agent
+- (**signing**) manage test agents throughout their lifecycle (#361) - ([dae27b7](https://github.com/tbhb-dev/devtools/commit/dae27b70a33cbb9fb6a2fbc032f84670ba99976c)) - tbhb.dev Agent
+- (**skills**) check worktree setup before gates (#347) - ([c9d1a94](https://github.com/tbhb-dev/devtools/commit/c9d1a9482ece7fa4314489ce1c643ae528814c6b)) - tbhb.dev Agent
+- (**skills**) bind review retries to subjects (#304) - ([c245417](https://github.com/tbhb-dev/devtools/commit/c2454179a695105dfc68c2c9e65f9834029a642e)) - tbhb.dev Agent
+
+### Documentation
+
+- (**skills**) explain reviewer permissions (#311) - ([b762733](https://github.com/tbhb-dev/devtools/commit/b762733084ecfb3eea1531957d5f1bbe4816f4ba)) - tbhb.dev Agent
+
+- - -
+
+<!-- release -->
+
 ## [v0.13.0](https://github.com/tbhb-dev/devtools/compare/e6b8b816ad43d3ce6539f7febe47ba1e12ced6a4..v0.13.0) - 2026-10-20
 
 ### Features
