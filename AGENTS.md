@@ -279,7 +279,7 @@ The consumer's `devtools:check-vendored` syncs the payload again and compares it
 
 [Reusable consumer workflows](docs/consumer-workflows.md) require caller task contracts and stable `lint` and `test` job IDs. They don't replace publisher-specific CI. [Starter policy](README.md#starter-policy) links to consumer starter vocabularies and gitleaks policy. Copy and adapt them outside the vendored tree. Security exceptions require review.
 
-The baseline drop-in pins Go 1.27.2. Scratch Git repositories in the shell suites use `tests/test_helper.bash` to clear inherited Git configuration and identity variables and turn off global and system configuration. Keep new fixtures isolated the same way.
+The baseline drop-in pins Go 1.27.3. Scratch Git repositories in the shell suites use `tests/test_helper.bash` to clear inherited Git configuration and identity variables and turn off global and system configuration. Keep new fixtures isolated the same way.
 
 The repository dropped its Justfile. The last recipes to leave were the Go test and coverage family, held back because the CI matrix runs them on Windows and nobody had checked mise there. A probe on windows-2025 found it running a bash-shebang body under Git Bash and resolving its own go pin, which retired both the recipes and the `actions/setup-go` step feeding them. The delegation recipes went with them once the published skills learned to spell their gates `mise run <task>`. The committed `tools/mise-bootstrap` shim still runs in place of mise wherever PATH has none, and the prek hooks run through it.
 
