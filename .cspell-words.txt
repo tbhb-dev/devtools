@@ -134,6 +134,7 @@ ghapp
 ghassignees
 ghlabels
 ghmilestones
+ghpost
 ghprojects
 ghsa
 gitpython
