@@ -25,13 +25,17 @@ ma_context() {
 
 ma_lint() {
   local head=$1 cmd config tmp status
+  local -a lint_env=(env -u DEVTOOLS_CSPELL_CONFIG)
   mp_fetch_commit "$head" || return $?
   tmp=$(mktemp -d "${TMPDIR:-/tmp}/devtools-squash-cspell.XXXXXX") || return $?
   config=$tmp/.cspell.jsonc
-  if ! gitr show "$head:.cspell.jsonc" >"$config"; then
-    rm -rf -- "$tmp"
-    dt_die "Could not read .cspell.jsonc from the pull request head."
-    return 1
+  if gitr cat-file -e "$head:.cspell.jsonc" 2>/dev/null; then
+    if ! gitr show "$head:.cspell.jsonc" >"$config"; then
+      rm -rf -- "$tmp"
+      dt_die "Could not read .cspell.jsonc from the pull request head."
+      return 1
+    fi
+    lint_env=(env DEVTOOLS_CSPELL_CONFIG="$config")
   fi
   if gitr cat-file -e "$head:.cspell-words.txt" 2>/dev/null; then
     if ! gitr show "$head:.cspell-words.txt" >"$tmp/.cspell-words.txt"; then
@@ -49,10 +53,10 @@ ma_lint() {
       return 1
     fi
     if [ "$status" -eq 0 ]; then
-      DEVTOOLS_CSPELL_CONFIG="$config" bash -c "$cmd" || status=$?
+      "${lint_env[@]}" bash -c "$cmd" || status=$?
     fi
   else
-    DEVTOOLS_CSPELL_CONFIG="$config" mise run lint-squash-msg || status=$?
+    "${lint_env[@]}" mise run lint-squash-msg || status=$?
   fi
   rm -rf -- "$tmp"
   return "$status"
