@@ -6,6 +6,10 @@ unset CDPATH GH_REPO GH_HOST GREP_OPTIONS
 IFS=$' \t\n'
 set -o pipefail
 
+# Every snapshot passed to ma_gates must request this complete set. The gate
+# reads some fields directly and the rest through ma_approved and agentrepo.
+readonly MA_GATE_FIELDS=state,isDraft,mergeable,mergeStateStatus,headRefOid,baseRefName,labels,reviews,statusCheckRollup
+
 ma_context() {
   [ "${DT_UNATTENDED:-0}" = 1 ] || return 0
   dt_agent_context || return $?

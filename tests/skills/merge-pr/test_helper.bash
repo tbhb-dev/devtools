@@ -56,15 +56,23 @@ write_stubs() {
 F=$GH_FIXTURES
 printf '%s\n' "$*" >>"$F/gh.log"
 filter=""
+json_fields=""
 args=()
 while [ $# -gt 0 ]; do
   case $1 in
   --jq | -q) filter=$2; shift 2 ;;
-  --json) shift 2 ;;
+  --json) json_fields=$2; shift 2 ;;
   *) args+=("$1"); shift ;;
   esac
 done
 out() { if [ -n "$filter" ]; then jq -r "$filter"; else cat; fi; }
+view_fields() {
+  if [ -n "$json_fields" ]; then
+    jq --arg fields "$json_fields" '($fields | split(",")) as $fields | with_entries(select(.key as $key | $fields | index($key)))'
+  else
+    cat
+  fi
+}
 case "${args[0]} ${args[1]:-}" in
 "auth status") exit 0 ;;
 "pr view")
@@ -77,9 +85,9 @@ case "${args[0]} ${args[1]:-}" in
   n=$(cat "$F/unknown" 2>/dev/null || echo 0)
   if [ "$n" = always ] || [ "$n" -gt 0 ]; then
     [ "$n" = always ] || echo $((n - 1)) >"$F/unknown"
-    jq '.mergeable = "UNKNOWN" | .mergeStateStatus = "UNKNOWN"' "$F/pr.json" | out
+    jq '.mergeable = "UNKNOWN" | .mergeStateStatus = "UNKNOWN"' "$F/pr.json" | view_fields | out
   else
-    out <"$F/pr.json"
+    view_fields <"$F/pr.json" | out
   fi
   ;;
 "pr list") if [ -f "$F/children.json" ]; then out <"$F/children.json"; else echo '[]' | out; fi ;;
