@@ -12,6 +12,10 @@ hooks:
 
 # Merge unattended
 
+Use `gh-post` for issue and PR content, comments, reviews, comment edits, and release notes. Supply body text through `--body-file` or stdin.
+
+If `gh-post` is missing, stop and report the missing command. Never fall back to a direct GitHub content write.
+
 Never prompt, use `AskUserQuestion`, pass `--confirmed`, or create a pre-approval record. Missing authority holds the merge.
 
 Install sibling `merge-pr` and `review-squash-message` from the same package. The policy reader requires `uv` and `agentrepo checks evaluate`.

@@ -27,7 +27,7 @@ mp_need_tools() {
 # field the caller reads.
 mp_view() {
   dt_gh pr view "$1" --json "$3" >"$2" || return $?
-  if [ "${DT_UNATTENDED:-0}" = 1 ]; then
+  if ma_require_gates; then
     case ,$3, in
     *,reviews,*) ma_reviews "$1" "$2" || return $? ;;
     esac
@@ -62,7 +62,7 @@ mp_base_oid() {
 # run history of the same shape, so each one is judged as it stands.
 #
 #   0  every check ok      1  a check failed      2  a check pending
-#   3  the rollup could not be read
+#   3  the rollup could not be read      4  no checks reported
 mp_judge_checks() {
   local out
   out=$(jq -r '
@@ -91,7 +91,8 @@ mp_judge_checks() {
     | [($s | verdict), $s, check_name]
     | @tsv
   ' "$1" 2>/dev/null) || return 3
-  [ -z "$out" ] || printf '%s\n' "$out"
+  [ -n "$out" ] || return 4
+  printf '%s\n' "$out"
   printf '%s\n' "$out" | awk -F'\t' '
     $1 == "fail" { failed = 1 }
     $1 == "pending" { pending = 1 }

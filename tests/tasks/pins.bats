@@ -113,6 +113,7 @@ YAML
   grep -Fq 'codex#v0.11.0'\' apm.yml
   grep -Fq 'guard-markdown" = "v0.11.0"' mise.toml
   grep -Fq 'commit-lint" = "v0.11.0"' mise.toml
+  grep -Fq 'gh-post" = "v0.11.0"' mise.toml
 }
 
 @test "check rejects guard version drift" {
@@ -218,4 +219,26 @@ YAML
   [ "$status" -eq 1 ]
   grep -Fxq '# adapted from tbhb-dev/devtools v0.10.0' tombi.toml
   [[ "$output" == *'tombi.toml:1'*'pinned v0.11.0'* ]]
+}
+
+@test "check and update require a managed gh-post pin" {
+  sed '/cmd\/gh-post/d' mise.toml >changed
+  mv changed mise.toml
+  run bash "$CHECK_SCRIPT"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *'"go:github.com/tbhb-dev/devtools/cmd/gh-post" = "v0.10.0"'* ]]
+  run env usage_version=v0.11.0 bash "${BATS_TEST_TMPDIR}/update.sh"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *'"go:github.com/tbhb-dev/devtools/cmd/gh-post" = "v0.10.0"'* ]]
+}
+
+@test "gh-post drift is checked and moves with the published pins" {
+  sed '/cmd\/gh-post/s/v0.10.0/v0.9.0/' mise.toml >changed
+  mv changed mise.toml
+  run bash "$CHECK_SCRIPT"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *'pins disagree on the version'* ]]
+  run env usage_version=v0.11.0 bash "${BATS_TEST_TMPDIR}/update.sh"
+  [ "$status" -eq 0 ]
+  grep -Fq 'gh-post" = "v0.11.0"' mise.toml
 }

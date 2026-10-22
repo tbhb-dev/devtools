@@ -57,13 +57,25 @@ Publication records the PR number, URL, full head, base, draft state, and push k
 
 Run `agent-merge-pr` for unattended squash merges. Its generated entry points use the shared merge scripts, independent review, gates, stamps, and confirmation chain. Machine `gh_login` and `required_reviewer` are mandatory. The required reviewer must approve the exact current head. Configure its GraphQL login without the REST `[bot]` suffix. Optional machine `required_reviewer_type` (`Bot` or `User`) checks the review author type. Leaving it unset preserves login-only matching. A GitHub App installation needs Contents read and write permission for its approval to count, as [#300](https://github.com/tbhb-dev/devtools/issues/300) documents. Only session pre-approval or machine delegation grants `merge`. The skill refuses `--confirmed`.
 
+A `merge-pr` execution without an explicit `--confirmed` runs the same approval, owner, policy, and required-check gates, including when confirmation comes from session pre-approval or machine delegation. Only an operator answer represented by `--confirmed` keeps the attended gate behavior. An empty check rollup is inconclusive and refuses every merge.
+
+Generated unattended entry points use `DEVTOOLS_UNATTENDED` with `DT_UNATTENDED` as a deprecated alias for one release, and `DEVTOOLS_UNATTENDED` takes precedence when set.
+
 Repository configuration supplies squash lint, readiness, ruleset location, owner-review label, protected paths, suppression patterns, and disposable ignored paths. Check judgement calls `agentrepo checks evaluate`. Required checks come from applied GitHub rules and ruleset files at the pinned base. No checks or known requirements means no unattended merge. The YAML policy reader requires `uv`.
+
+devtools keeps its merge patterns in `.agents/agent-skills.conf`. They protect the published payload, workflows, rule sets, gate definitions, and skill guards. Cleanup permits build and cache output and preserves local settings and agent worktrees. Policy errors include the refusal reason and specify any empty pattern.
 
 Golden files and detected gate loosening require an exact-head APPROVED review by machine `merge_owner`, also available as `DEVTOOLS_MERGE_OWNER`. Use the GraphQL login without `[bot]` for `merge_owner` too. Keep this authority a person: an App owner override can approve its own golden-file waivers. Repositories can't choose this authority, and pushing invalidates approval.
 
 When using an override, the merge report specifies the approving login. It doesn't waive the owner-review label, required checks, independent review, or write authority.
 
 From the base commit's lockfile, the scan reads non-local APM deployments and preserves local overrides. It skips comments and quoted marker text and matches exclusion keys. Policy configuration changes require owner approval. After delegation and changing dependent pull requests' base branches, the merger checks live approvals. It pins the merge to the reviewed head and verifies the remote message before cleanup. Cleanup preserves fork branches, newer work, current worktrees, and valuable ignored files. The migration note for consumers defines settings and remaining commit work.
+
+## GitHub content posts
+
+Use `gh-post` for issue and PR content, comments, reviews, comment edits, and release notes. Supply body text through `--body-file` or stdin. The command refuses inline bodies and unknown flags. If the command is missing, report `gh-post` as missing and stop before posting. Never fall back to a direct content write.
+
+Machine configuration supplies allowed posting identities and private strings for the target repository. Findings print category and line only, and successful posts record a body hash in the local audit log. See [the posting guide](docs/gh-post.md) for installation, configuration, and exit codes.
 
 ## Pull requests
 

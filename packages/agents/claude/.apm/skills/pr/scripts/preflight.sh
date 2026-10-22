@@ -291,7 +291,7 @@ if grant=$(dt_preapproval pr); then
   # shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
   printf 'pr:    GRANTED, %s — the confirmation step is skipped once every gate and the review pass\n' "$(how "$grant")"
 else
-  if [ "${DT_UNATTENDED:-0}" = 1 ]; then
+  if [ "${DEVTOOLS_UNATTENDED:-0}" = 1 ]; then
     printf 'pr: not granted — delegation must authorize publication; otherwise report the hold without prompting\n'
   else
     printf 'pr:    not granted — the confirmation step asks the operator as written\n'
@@ -329,12 +329,13 @@ else
 fi
 
 section "preconditions"
+dt_require_gh_post || exit $?
 if git check-ignore --quiet "$DRAFT" 2>/dev/null; then
   printf '%s gitignored: yes\n' "$DRAFT"
 else
   printf '%s gitignored: NO — add it to .gitignore before drafting\n' "$DRAFT"
 fi
-if [ "${DT_UNATTENDED:-0}" = 1 ]; then
+if [ "${DEVTOOLS_UNATTENDED:-0}" = 1 ]; then
   lint_cmd=$(dt_repo_conf lint_pr_cmd 'mise run lint-pr-description')
   [ -n "$lint_cmd" ] || dt_die "lint_pr_cmd must not be empty"
   printf 'description lint: %s\n' "$lint_cmd"
@@ -357,7 +358,7 @@ elif [ "$gh_state" != ok ]; then
   printf '%s: present, %s line(s). Cannot tell whether it is stale because\n' \
     "$DRAFT" "$(wc -l <"$DRAFT" | tr -d ' ')"
   printf 'the pull request lookup did not run. Read it before overwriting.\n'
-elif [ -z "$open_number" ] && [ "${DT_UNATTENDED:-0}" = 1 ]; then
+elif [ -z "$open_number" ] && [ "${DEVTOOLS_UNATTENDED:-0}" = 1 ]; then
   printf '%s: present, unpublished draft preserved with its review bound\n' "$DRAFT"
 elif [ -z "$open_number" ]; then
   rm -f "$DRAFT"

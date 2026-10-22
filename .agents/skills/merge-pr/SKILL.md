@@ -6,6 +6,8 @@ description: >-
 
 # Merge a pull request
 
+Use `gh-post` for issue and PR content, comments, reviews, comment edits, and release notes. Supply body text through `--body-file` or stdin. If `gh-post` is missing, stop and report the missing command. Never fall back to a direct GitHub content write.
+
 Work the steps in order. Scripts enforce every gate here. Step 5's review script stamps what an independent reviewer cleared, bound to the pull request's head and base. Step 7's merge script refuses a message the stamp doesn't cover, a pull request that moved or isn't ready, and a merge nobody confirmed, then merges pinned to the reviewed head. Codex doesn't provide a skill-scoped command hook, so those scripts are the whole enforcement. Never run `gh pr merge` yourself.
 
 Left alone, GitHub writes the squash message by concatenating every commit on the branch. That text has never passed a commit-msg hook, and it arrives on the default branch where the rest of the toolchain assumes those hooks ran. The toolchain never lints it after the merge, either. This workflow writes the message itself and puts it through the same checks a commit must pass.
@@ -182,6 +184,8 @@ The merge script settles who confirmed the merge, in this order, and prints whic
 1. `--confirmed`, which you pass only after the operator answered yes to this message in this session
 2. a merge pre-approval for this session, which the operator granted through `mise run preapprove merge` and preflight reported as `merge: GRANTED`
 3. the machine's delegation check, when preflight reported one configured: it answers for the repository and the action `merge`, and a refusal stops the merge
+
+Without `--confirmed`, execution requires the same approval, owner, policy, and required-check gates as `agent-merge-pr`. An empty check rollup refuses every merge as inconclusive.
 
 A bare `mise run preapprove` grants commit and pr and never merge, because a merge is the one action here no later step can undo. With none of them the script exits 75 and merges nothing. Ask the operator, then run it again with `--confirmed`.
 

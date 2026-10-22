@@ -6,6 +6,8 @@ description: >-
 
 # Merge a pull request
 
+Use `gh-post` for issue and PR content, comments, reviews, comment edits, and release notes. Supply body text through `--body-file` or stdin. If `gh-post` is missing, stop and report the missing command. Never fall back to a direct GitHub content write.
+
 Work the steps in order. Scripts enforce every gate here. Step 5's review script stamps what an independent reviewer cleared, bound to the pull request's head and base. Step 7's merge script refuses a message the stamp doesn't cover, a pull request that moved or isn't ready, and a merge nobody confirmed, then merges pinned to the reviewed head. Codex doesn't provide a skill-scoped command hook, so those scripts are the whole enforcement. Never run `gh pr merge` yourself.
 
 @include parts/why.md
