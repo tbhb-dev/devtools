@@ -216,7 +216,9 @@ jobs:
         run: mise run cover-go-binary
 
       - name: Check agy hook subprocess latency
-        run: mise exec -- go test -run TestHookLatency ./cmd/agy-otel/...
+        env:
+          MISE_TASK_RUN_AUTO_INSTALL: "0"
+        run: mise run test-agy-otel-latency
 
       - name: Run tests with race detector
         env:
