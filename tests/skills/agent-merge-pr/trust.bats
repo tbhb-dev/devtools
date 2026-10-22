@@ -89,6 +89,18 @@ integrity_change() {
   integrity_change .claude/skills/merge-pr/scripts/merge-policy.py
 }
 
+@test "preflight refuses a verifier that accepts every checkout before sourcing helpers" {
+  sed -i '/^def integrity(base: str, scripts: str) -> None:/a\    return' "$POLICY"
+  printf '\nprintf "untrusted helper sourced\\n" >"$GH_FIXTURES/untrusted"\n' >>"$SCRIPTS/signing.sh"
+  git add -- .claude/skills/merge-pr/scripts/merge-policy.py .claude/skills/merge-pr/scripts/signing.sh
+  git commit --quiet -m 'test: bypass verifier'
+  run bash "$AGENT/preflight.sh" 7
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"merge integrity:"* ]]
+  [[ "$output" != *"requires a clean tree"* ]]
+  [ ! -f "$GH_FIXTURES/untrusted" ]
+}
+
 @test "remote integrity refuses a committed pull-request helper edit" {
   remote_base
   integrity_change .claude/skills/merge-pr/scripts/pull-request.sh
@@ -122,15 +134,16 @@ integrity_change() {
   [ "$status" -eq 0 ]
 }
 
-@test "final check refuses a committed helper swap after preflight" {
+@test "final check refuses a verifier bypass and helper swap after message review" {
   run bash "$AGENT/preflight.sh" 7
   [ "$status" -eq 0 ]
   run bash "$AGENT/review.sh" 7
   [ "$status" -eq 0 ]
   cat >"$BATS_TEST_TMPDIR/checker" <<'CHECK'
 #!/usr/bin/env bash
+sed -i '/^def integrity(base: str, scripts: str) -> None:/a\    return' .claude/skills/merge-pr/scripts/merge-policy.py
 printf '\n# swapped after preflight\n' >>.claude/skills/merge-pr/scripts/signing.sh
-git add -- .claude/skills/merge-pr/scripts/signing.sh
+git add -- .claude/skills/merge-pr/scripts/merge-policy.py .claude/skills/merge-pr/scripts/signing.sh
 git commit --quiet -m 'test: swap helper'
 exit 0
 CHECK

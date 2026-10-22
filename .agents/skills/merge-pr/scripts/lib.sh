@@ -845,6 +845,64 @@ dt_gate() {
   python3 "$DT_LIB_DIR/gates.py" "$@"
 }
 
+# Execute the verifier from the pinned base, never from the directory it checks.
+dt_merge_integrity() {
+  local base=$1 relative verifier status=0
+  relative=$(gitr -C "$DT_LIB_DIR" rev-parse --show-prefix) || return $?
+  relative=${relative}merge-policy.py
+  verifier=$(mktemp "${TMPDIR:-/tmp}/devtools-merge-integrity.XXXXXX") || return $?
+  gitr show "$base:$relative" >"$verifier" &&
+    uv run --quiet --script "$verifier" integrity "$base" "$DT_LIB_DIR" || status=$?
+  rm -f -- "$verifier"
+  return "$status"
+}
+
+# Merge helpers must pass integrity before any of their code is loaded.
+dt_merge_bootstrap() {
+  local number='' arg base branch repository enabled=${DEVTOOLS_UNATTENDED:-0}
+  case ${BASH_SOURCE[2]:-} in
+  */squash-merge.sh)
+    enabled=1
+    for arg in "$@"; do
+      if [ "$arg" = --confirmed ] && [ "${DEVTOOLS_UNATTENDED:-0}" != 1 ]; then enabled=0; fi
+    done
+    ;;
+  esac
+  [ "$enabled" = 1 ] || return 0
+  dt_merge_conf gh_login >/dev/null || return $?
+  while [ "$#" -gt 0 ]; do
+    case $1 in
+    --note) shift ;;
+    '' | *[!0-9]*) ;;
+    *) number=$1 ;;
+    esac
+    shift
+  done
+  case ${BASH_SOURCE[2]:-} in
+  */review.sh)
+    if [ -z "$number" ] && [ -s SQUASH_AGENTMSG ]; then
+      number=$(sed -n '1s/.*(#\([0-9][0-9]*\))[[:space:]]*$/\1/p' SQUASH_AGENTMSG) || return $?
+    fi
+    ;;
+  esac
+  if [ -z "$number" ]; then
+    branch=$(gitr rev-parse --abbrev-ref HEAD) || return $?
+    number=$(dt_gh pr list --head "$branch" --state open --json number --jq '.[0].number // empty') || return $?
+  fi
+  [ -n "$number" ] || dt_die "No pull request found for merge integrity verification"
+  base=$(dt_gh pr view "$number" --json baseRefName --jq .baseRefName) || return $?
+  base=$(dt_gh_repo "query(\$owner:String!,\$name:String!,\$ref:String!){repository(owner:\$owner,name:\$name){ref(qualifiedName:\$ref){target{oid}}}}" -f "ref=refs/heads/$base" --jq '.data.repository.ref.target.oid // error("base ref not found")') || return $?
+  if ! gitr cat-file -e "$base^{commit}" 2>/dev/null; then
+    repository=$(dt_gh repo view --json url --jq .url) || return $?
+    gitr -c credential.helper= -c 'credential.helper=!gh auth git-credential' fetch --no-tags --no-write-fetch-head "$repository" "$base" || return $?
+  fi
+  dt_merge_integrity "$base"
+}
+
+case $DT_LIB_DIR in
+*/merge-pr/scripts) dt_merge_bootstrap "$@" || exit $? ;;
+esac
+
 # Shared workflow behavior, generated beside this library.
 # shellcheck disable=SC1091 # generator deploys these files together
 . "$DT_LIB_DIR/agent.sh"

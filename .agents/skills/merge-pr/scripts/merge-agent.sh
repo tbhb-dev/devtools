@@ -60,7 +60,7 @@ ma_trust() {
   MA_PINNED_BASE=$1
   dt_merge_conf gh_login >/dev/null || return $?
   mp_fetch_commit "$MA_PINNED_BASE" || return $?
-  ma_policy integrity "$MA_PINNED_BASE" "$DT_LIB_DIR" || return $?
+  dt_merge_integrity "$MA_PINNED_BASE" || return $?
   ma_repo_conf golden_paths >/dev/null || return $?
 }
 

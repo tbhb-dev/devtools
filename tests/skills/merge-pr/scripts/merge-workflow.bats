@@ -243,7 +243,7 @@ STUB
     source "$1/merge-agent.sh"
     mp_fetch_commit() { return 0; }
     dt_die() { echo "$*" >&2; return 1; }
-    dt_repo_conf() { echo "mise run lint-squash-msg"; }
+    ma_repo_conf() { echo "mise run lint-squash-msg"; }
     DEVTOOLS_UNATTENDED=$3
     unreadable=$4
     gitr() {
