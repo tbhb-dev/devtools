@@ -109,6 +109,69 @@ assert_merge() {
   done
 }
 
+@test "review includes edits outside the conflict paths" {
+  resolve_merge
+  printf 'manual base edit\n' >unrelated
+  git add -- unrelated
+  bash "$SCRIPTS/review.sh"
+  grep -Fx -- '-unrelated base change' "$REVIEW_DIFF"
+  grep -Fx -- '+manual base edit' "$REVIEW_DIFF"
+}
+
+@test "review includes additions outside the conflict paths" {
+  resolve_merge
+  printf 'manual addition\n' >extra
+  git add -- extra
+  bash "$SCRIPTS/review.sh"
+  grep -F 'diff --git a/extra b/extra' "$REVIEW_DIFF"
+  grep -Fx -- '+manual addition' "$REVIEW_DIFF"
+}
+
+@test "review includes deletions outside the conflict paths" {
+  resolve_merge
+  rm unrelated
+  git add -- unrelated
+  bash "$SCRIPTS/review.sh"
+  grep -F 'diff --git a/unrelated b/unrelated' "$REVIEW_DIFF"
+  grep -Fx -- '-unrelated base change' "$REVIEW_DIFF"
+  grep -Fx -- '+++ /dev/null' "$REVIEW_DIFF"
+}
+
+@test "review criteria permit an empty diff only for a clean base merge" {
+  git checkout -qb clean-topic "$ROOT_COMMIT"
+  printf 'branch addition\n' >branch-file
+  git add -- branch-file
+  git commit -qm 'test: clean branch change'
+  OURS=$(git rev-parse HEAD)
+  cat >"$BATS_TEST_TMPDIR/reviewer" <<'STUB'
+#!/usr/bin/env bash
+prompt=$(cat)
+if [ ! -s "$DEVTOOLS_REVIEW_INPUTS/staged.diff" ]; then
+  if ! grep -Fq 'An empty staged diff is valid only for a clean base merge:' <<<"$prompt" ||
+    ! grep -Fxq "Base merge: first parent $OURS; second parent $BASE." "$DEVTOOLS_REVIEW_INPUTS/merge-context.txt" ||
+    ! grep -Fxq 'Clean base merge: staged tree matches the automatic merge tree; the conflict diff is empty.' "$DEVTOOLS_REVIEW_INPUTS/merge-context.txt"; then
+    echo 'VERDICT: CHANGES REQUIRED'
+    exit 0
+  fi
+fi
+echo 'VERDICT: PASS'
+STUB
+  export OURS BASE
+  export DEVTOOLS_REVIEW_CMD='bash "$BATS_TEST_TMPDIR/reviewer"'
+  for scripts in "$SCRIPTS" "$ATTENDED"; do
+    git merge --no-commit origin/main
+    run bash "$scripts/review.sh"
+    [ "$status" -eq 0 ]
+    grep -Fx 'mode merge' .git/agent-skills/commit.stamp
+    git merge --abort
+    rm .git/agent-skills/commit.stamp
+    # The same criterion must still reject an ordinary empty commit.
+    run bash "$scripts/review.sh"
+    [ "$status" -eq 2 ]
+    [ ! -e .git/agent-skills/commit.stamp ]
+  done
+}
+
 @test "other branch, older base and octopus merges hold" {
   for target in other older octopus; do
     case $target in

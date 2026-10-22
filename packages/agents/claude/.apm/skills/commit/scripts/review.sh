@@ -103,7 +103,7 @@ if [ "$mode" = merge ]; then
   : >"$inputs/staged-paths.txt"
   : >"$inputs/staged.diff"
   {
-    IFS= read -r -d '' _automatic_tree
+    IFS= read -r -d '' automatic_tree
     while IFS= read -r -d '' path && [ -n "$path" ]; do
       printf '%s\n' "$path" >>"$inputs/staged-paths.txt"
       for parent in "$head" "$merge_head"; do
@@ -112,8 +112,16 @@ if [ "$mode" = merge ]; then
       done
     done
   } <"$inputs/merge-tree"
+  gitr diff --no-ext-diff --no-textconv --no-renames --name-status "$automatic_tree" "$tree" >>"$inputs/staged-paths.txt"
+  if [ "$automatic_tree" != "$tree" ]; then
+    printf '\nChanges from automatic merge tree %s\n' "$automatic_tree" >>"$inputs/staged.diff"
+    gitr diff --no-ext-diff --text --no-textconv --no-renames "$automatic_tree" "$tree" >>"$inputs/staged.diff"
+  fi
   rm "$inputs/merge-tree"
-  printf 'Base merge: first parent %s; second parent %s.\nReview conflict resolutions against both parents; clean base changes are omitted.\n' "$head" "$merge_head" >"$inputs/merge-context.txt"
+  printf 'Base merge: first parent %s; second parent %s.\nReview conflict resolutions against both parents and changes from the automatic merge tree; clean base changes are omitted.\n' "$head" "$merge_head" >"$inputs/merge-context.txt"
+  if [ "$status" -eq 0 ] && [ "$automatic_tree" = "$tree" ]; then
+    printf 'Clean base merge: staged tree matches the automatic merge tree; the conflict diff is empty.\n' >>"$inputs/merge-context.txt"
+  fi
 else
   gitr diff --no-ext-diff --no-textconv --no-renames --name-status "$against" "$tree" >"$inputs/staged-paths.txt"
   gitr diff --no-ext-diff --text --no-textconv --no-renames "$against" "$tree" >"$inputs/staged.diff"
