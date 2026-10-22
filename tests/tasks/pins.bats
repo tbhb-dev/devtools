@@ -243,6 +243,36 @@ YAML
   [[ "$output" == *'tombi.toml:1: prose v0.10.0 -> v0.11.0'* ]]
 }
 
+@test "update rewrites prose in a tracked Unicode filename" {
+  file=$'r\303\251sum\303\251.md'
+  printf '# adapted from tbhb-dev/devtools v0.10.0\n' > "$file"
+  git add -- "$file"
+  run env usage_version=v0.11.0 bash "${BATS_TEST_TMPDIR}/update.sh"
+  [ "$status" -eq 0 ]
+  grep -Fxq '# adapted from tbhb-dev/devtools v0.11.0' "$file"
+}
+
+@test "update rewrites prose in a tracked filename with a space" {
+  file='consumer notes.md'
+  printf '# adapted from tbhb-dev/devtools v0.10.0\n' > "$file"
+  git add -- "$file"
+  run env usage_version=v0.11.0 bash "${BATS_TEST_TMPDIR}/update.sh"
+  [ "$status" -eq 0 ]
+  grep -Fxq '# adapted from tbhb-dev/devtools v0.11.0' "$file"
+}
+
+@test "update rewrites prose in tracked filenames with quotes and newlines" {
+  for file in 'consumer "notes".md' $'consumer\nnotes.md'; do
+    printf '# adapted from tbhb-dev/devtools v0.10.0\n' > "$file"
+    git add -- "$file"
+  done
+  run env usage_version=v0.11.0 bash "${BATS_TEST_TMPDIR}/update.sh"
+  [ "$status" -eq 0 ]
+  for file in 'consumer "notes".md' $'consumer\nnotes.md'; do
+    grep -Fxq '# adapted from tbhb-dev/devtools v0.11.0' "$file"
+  done
+}
+
 @test "update preserves other releases for manual edits even beside the previous pin" {
   printf '# tbhb-dev/devtools v0.8.0; tbhb-dev/devtools v0.10.00; tbhb-dev/devtools v0.10.0; tbhb-dev/devtools\tv0.10.0.\n' > tombi.toml
   git add -- tombi.toml

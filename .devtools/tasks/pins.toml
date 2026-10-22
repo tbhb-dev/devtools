@@ -162,19 +162,17 @@ fi
 
 # Match the tracked text that check-pins checks, but rewrite only the
 # previous pin. Other releases remain for its manual-edit diagnostic.
-mentions=$(git grep -nI -o -E 'tbhb-dev/devtools[[:space:]]+v[0-9]+\.[0-9]+\.[0-9]+' --) || {
-  status=$?
-  [ "$status" -eq 1 ] || exit "$status"
-}
-while IFS= read -r record; do
-  mention=${record##*:}
+# NUL separates filenames and line numbers without Git display quoting.
+{
+  git grep -znI -o -E 'tbhb-dev/devtools[[:space:]]+v[0-9]+\.[0-9]+\.[0-9]+' -- || {
+    status=$?
+    [ "$status" -eq 1 ] || exit "$status"
+  }
+} | while IFS= read -r -d '' file && IFS= read -r -d '' line && IFS= read -r mention; do
   [ "${mention##*[[:space:]]}" = "$guard_version" ] || continue
-  site=${record%:*}
-  file=${site%:*}
-  line=${site##*:}
   edit "$file" sed -E "${line}s@(tbhb-dev/devtools[[:space:]]+)${guard_version//./\\.}([^0-9]|$)@\\1$version\\2@g"
-  printf '%s: prose %s -> %s\n' "$site" "$guard_version" "$version"
-done <<< "$mentions"
+  printf '%s:%s: prose %s -> %s\n' "$file" "$line" "$guard_version" "$version"
+done
 
 # The payload arrives first: the lock and the install below have to see
 # the tool pins this sync delivers, not the ones it replaced.
