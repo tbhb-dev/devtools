@@ -218,6 +218,11 @@ func (r *request) command(body []byte) ([]string, []byte, error) {
 	}
 	args = append(args, "--repo", r.repo)
 	args = append(args, r.flags...)
+	// Metadata-only PR edits must preserve the existing description. An
+	// explicit body file still allows callers to clear it deliberately.
+	if r.operation == "pr edit" && r.bodyFile == "" && len(body) == 0 {
+		return args, nil, nil
+	}
 	bodyFlag := bodyFileFlag
 	if strings.HasPrefix(r.operation, "release ") {
 		bodyFlag = "--notes-file"

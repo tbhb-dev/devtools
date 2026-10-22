@@ -16,6 +16,8 @@ def posts_content(words: list[str]) -> bool:
     if len(words) < 3 or Path(words[0]).name not in {"gh", "dt_gh"}:
         return False
     family, operation = words[1:3]
+    if family == "pr" and operation == "edit":
+        return True
     if family in {"issue", "pr", "release"}:
         if operation in {"create", "comment", "review"}:
             return True
@@ -80,6 +82,8 @@ def violations(source: str) -> list[int]:
         "gh issue edit 1 -F" + "body",
         'gh pr create "$@"',
         "dt_gh pr edit 1 --body-file body",
+        "dt_gh pr edit 1 --base main",
+        'dt_gh pr edit 1 "$flag" "$item"',
         "gh pr comment 1 -F body",
         "command gh pr review 1 --body-file body --approve",
         "result=$(gh pr review 1 \\\n --body-file body --approve)",
@@ -101,7 +105,7 @@ def test_detects_content_posts(command: str) -> None:
         "gh-post pr create --title title --body-file body",
         'dt_gh_post pr create "$@"',
         "gh pr view 1 --json body",
-        "gh pr edit 1 --base main",
+        "gh-post pr edit 1 --base main",
         "gh api repos/o/r/issues/comments",
         "# gh pr comment 1 --body-file body",
         'printf "%s" "gh pr review 1 --body-file body"',

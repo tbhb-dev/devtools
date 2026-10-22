@@ -20,6 +20,39 @@ setup() {
   merge_setup
 }
 
+@test "dependent PR retargeting uses gh-post and stops when it refuses" {
+  printf '[{"number":7},{"number":8},{"number":9}]\n' >"$GH_FIXTURES/children.json"
+  export DEVTOOLS_GH_LOGIN=agent
+  cat >"$BATS_TEST_TMPDIR/bin/gh-post" <<'STUB'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >>"$GH_FIXTURES/post.log"
+[ -z "$(cat)" ] || exit 1
+exit "${DEVTOOLS_POST_STATUS:-0}"
+STUB
+  chmod +x "$BATS_TEST_TMPDIR/bin/gh-post"
+
+  run bash -c '
+    source "$1/lib.sh"
+    source "$1/merge-agent.sh"
+    cross_repo=false number=7 head_ref=topic base_ref=main
+    DEVTOOLS_UNATTENDED=1 ma_prepare_children
+  ' bash "$SCRIPTS"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$GH_FIXTURES/post.log")" = $'pr edit 8 --base main\npr edit 9 --base main' ]
+  ! grep -q '^pr edit ' "$GH_FIXTURES/gh.log"
+
+  : >"$GH_FIXTURES/post.log"
+  export DEVTOOLS_POST_STATUS=2
+  run bash -c '
+    source "$1/lib.sh"
+    source "$1/merge-agent.sh"
+    cross_repo=false number=7 head_ref=topic base_ref=main
+    DEVTOOLS_UNATTENDED=1 ma_prepare_children
+  ' bash "$SCRIPTS"
+  [ "$status" -eq 2 ]
+  [ "$(cat "$GH_FIXTURES/post.log")" = 'pr edit 8 --base main' ]
+}
+
 @test "squash-message writes Closes only for an open issue under Related (#134)" {
   pr '.body = "## Summary\n\nThe thing.\n\n## Related\n\n- #10 the bug\n- #11 the base of this stack\n- #12 an old report\n- tbhb/other#99\n- #7 itself\n"'
   printf '{"number": 10, "state": "open"}\n' >"$GH_FIXTURES/api/repos_{owner}_{repo}_issues_10.json"

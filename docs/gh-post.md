@@ -41,6 +41,10 @@ The identity guard reads `gh api user`. When `GH_TOKEN` holds an App installatio
 
 Pass body text through `--body-file PATH`, `--body-file -`, or stdin when the flag is absent. The command refuses inline `-b` and `--body`. The wrapper constructs the GitHub CLI arguments from an allowlist. It rejects other flags such as automatic body generation or templates. It reads the body once and sends those scanned bytes through stdin. It also scans titles, release tags, and other flag values.
 
+For a PR edit with empty stdin and no `--body-file`, the existing description is unchanged. This lets skills scan metadata edits such as a new base for a dependent PR.
+
+Use an explicit empty body file to clear a description.
+
 ```bash
 gh-post pr create -R owner/project --head topic --base main \
   --title 'feat: add the example' --body-file description.md

@@ -97,6 +97,35 @@ func TestPostAndAudit(t *testing.T) {
 	}
 }
 
+func TestPREditBody(t *testing.T) {
+	for _, tt := range []struct {
+		name, body string
+		explicit   bool
+		wantBody   bool
+	}{
+		{"metadata only", "", false, false},
+		{"stdin body", "replacement\n", false, true},
+		{"explicit empty body", "", true, true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := setup(t)
+			args := []string{"pr", "edit", "12", "-R", "owner/repo", "--base", "main"}
+			if tt.explicit {
+				args = append(args, "--body-file", "-")
+			}
+			code, _, errOut := run(t, tt.body, args...)
+			require.Equal(t, 0, code, errOut)
+			calls, err := os.ReadFile(filepath.Join(dir, "calls"))
+			require.NoError(t, err)
+			require.Contains(t, string(calls), "pr edit 12 --repo owner/repo --base main")
+			require.Equal(t, tt.wantBody, strings.Contains(string(calls), "--body-file -"))
+			payload, err := os.ReadFile(filepath.Join(dir, "payload"))
+			require.NoError(t, err)
+			require.Equal(t, tt.body, string(payload))
+		})
+	}
+}
+
 func TestRefusalDoesNotSend(t *testing.T) {
 	dir := setup(t)
 	cases := []struct {

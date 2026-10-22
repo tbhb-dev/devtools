@@ -188,7 +188,7 @@ ma_prepare_children() {
   children=$(printf '%s' "$children" | jq -r '.[].number') || return $?
   for child in $children; do
     ma_identity || return $?
-    [ "$child" = "$number" ] || dt_gh pr edit "$child" --base "$base_ref" || return $?
+    [ "$child" = "$number" ] || dt_gh_post pr edit "$child" --base "$base_ref" </dev/null || return $?
   done
 }
 

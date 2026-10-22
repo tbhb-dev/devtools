@@ -144,14 +144,14 @@ if [ -n "$open_number" ]; then
     while IFS= read -r item; do
       [ -n "$item" ] || continue
       printf '%s\n' "$3" | grep -qxF -- "$item" ||
-        dt_gh pr edit "$open_number" "$2" "$item" >/dev/null
+        dt_gh_post pr edit "$open_number" "$2" "$item" </dev/null >/dev/null
     done <<EOF
 $4
 EOF
     while IFS= read -r item; do
       [ -n "$item" ] || continue
       printf '%s\n' "$4" | grep -qxF -- "$item" ||
-        dt_gh pr edit "$open_number" "$1" "$item" >/dev/null
+        dt_gh_post pr edit "$open_number" "$1" "$item" </dev/null >/dev/null
     done <<EOF
 $3
 EOF
@@ -166,9 +166,9 @@ EOF
 
   current_milestone=$(printf '%s' "$current" | jq -r '.milestone.title // empty') || exit $?
   if [ -n "$milestone" ]; then
-    dt_gh pr edit "$open_number" --milestone "$milestone" >/dev/null
+    dt_gh_post pr edit "$open_number" --milestone "$milestone" </dev/null >/dev/null
   elif [ -n "$current_milestone" ]; then
-    dt_gh pr edit "$open_number" --remove-milestone >/dev/null
+    dt_gh_post pr edit "$open_number" --remove-milestone </dev/null >/dev/null
   fi
   current_draft=$(printf '%s' "$current" | jq -r '.isDraft')
   if [ "$is_draft" = true ] && [ "$current_draft" = false ]; then
