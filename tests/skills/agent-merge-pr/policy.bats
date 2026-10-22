@@ -5,6 +5,83 @@ setup() {
   agent_setup
 }
 
+@test "App review uses GraphQL author type and login" {
+  export DEVTOOLS_REQUIRED_REVIEWER=review-app DEVTOOLS_REQUIRED_REVIEWER_TYPE=Bot
+  pr '.reviews[0].author={__typename:"Bot",login:"review-app"}'
+  run bash "$AGENT/review.sh" 7
+  [ "$status" -eq 0 ]
+  grep -q 'author{__typename login}' "$GH_FIXTURES/gh.log"
+}
+
+@test "User review cannot satisfy required Bot reviewer" {
+  export DEVTOOLS_REQUIRED_REVIEWER_TYPE=Bot
+  pr '.reviews[0].author.__typename="User"'
+  run bash "$AGENT/review.sh" 7
+  [ "$status" -ne 0 ]
+  [[ "$output" == *WAITING_REVIEW* ]]
+}
+
+@test "Bot review cannot satisfy required User reviewer" {
+  export DEVTOOLS_REQUIRED_REVIEWER_TYPE=User
+  pr '.reviews[0].author.__typename="Bot"'
+  run bash "$AGENT/review.sh" 7
+  [ "$status" -ne 0 ]
+  [[ "$output" == *WAITING_REVIEW* ]]
+}
+
+@test "User reviewer passes when its configured type matches" {
+  export DEVTOOLS_REQUIRED_REVIEWER_TYPE=User
+  pr '.reviews[0].author.__typename="User"'
+  run bash "$AGENT/review.sh" 7
+  [ "$status" -eq 0 ]
+}
+
+@test "typed reviewer fails closed when its author type is missing" {
+  export DEVTOOLS_REQUIRED_REVIEWER_TYPE=Bot
+  run bash "$AGENT/review.sh" 7
+  [ "$status" -ne 0 ]
+  [[ "$output" == *WAITING_REVIEW* ]]
+}
+
+@test "review author snapshot refuses a changed head" {
+  pr '.reviewHead="4444444444444444444444444444444444444444"'
+  run bash "$AGENT/review.sh" 7
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"PR head changed while reading review authors"* ]]
+}
+
+@test "invalid reviewer type is rejected" {
+  export DEVTOOLS_REQUIRED_REVIEWER_TYPE=App
+  run bash "$AGENT/review.sh" 7
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"required_reviewer_type must be Bot or User"* ]]
+}
+
+@test "REST bot reviewer login names the GraphQL form" {
+  export DEVTOOLS_REQUIRED_REVIEWER='review-app[bot]'
+  run bash "$AGENT/review.sh" 7
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"required_reviewer must use the GraphQL login review-app"* ]]
+}
+
+@test "REST bot owner login names the GraphQL form" {
+  change golden/result.txt baseline
+  approve_owner
+  export DEVTOOLS_MERGE_OWNER='owner-app[bot]'
+  run bash "$AGENT/review.sh" 7
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"merge_owner must use the GraphQL login owner-app"* ]]
+}
+
+@test "owner approval uses its own login independently of required reviewer type" {
+  change golden/result.txt baseline
+  approve_owner
+  export DEVTOOLS_REQUIRED_REVIEWER_TYPE=Bot
+  pr '.reviews[0].author.__typename="Bot" | .reviews[1].author.__typename="User"'
+  run bash "$AGENT/review.sh" 7
+  [ "$status" -eq 0 ]
+}
+
 @test "golden file needs current machine owner approval and reports override" {
   change golden/result.txt baseline
   run bash "$AGENT/review.sh" 7
@@ -173,4 +250,97 @@ LOCK
   run inspect_policy
   [ "$status" -eq 0 ]
   [ "$(printf '%s' "$output" | jq '.findings|length')" -eq 1 ]
+}
+
+@test "empty policy patterns report the key and refusal reason" {
+  local key config
+  for key in golden_paths loosening_markers gate_config_paths owner_paths disposable_ignored; do
+    config=$(policy_config | jq --arg key "$key" '.[$key] = ""')
+    run uv run --quiet --script "$POLICY" inspect "$BASE_OID" "$HEAD_OID" <<<"$config"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"merge policy unreadable: Policy pattern $key must not be empty"* ]]
+  done
+}
+
+@test "missing policy pattern reports its key" {
+  run uv run --quiet --script "$POLICY" inspect "$BASE_OID" "$HEAD_OID" <<<'{}'
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Policy pattern golden_paths must not be empty"* ]]
+}
+
+@test "top-level policy refusals include the exception message" {
+  run uv run --quiet --script "$POLICY" unknown
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"merge policy unreadable: Unknown policy operation or arguments"* ]]
+}
+
+@test "devtools repository policy protects skill guards" {
+  cp "$ROOT/.agents/agent-skills.conf" .agents/agent-skills.conf
+  git add -- .agents/agent-skills.conf
+  change packages/agents/source/skills/merge-pr/claude/scripts/guard-merge.sh '# guard'
+  run bash "$AGENT/review.sh" 7
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"packages/agents/source/skills/merge-pr/claude/scripts/guard-merge.sh"*"changes a golden file"* ]]
+  [[ "$output" == *"needs-owner"* ]]
+  [[ "$output" != *"merge policy unreadable"* ]]
+}
+
+@test "devtools golden and owner patterns cover only merge enforcement" {
+  cp "$ROOT/.agents/agent-skills.conf" .agents/agent-skills.conf
+  local key pattern path prefix harness skill script
+  local protected=(
+    .agents/agent-skills.conf
+    .agents/review-instructions.md
+    .github/rulesets/main.json
+    .claude/settings.json
+    packages/agents/source/lib/lib.sh
+    packages/agents/source/lib/agent.sh
+  )
+  for harness in shared claude codex; do
+    protected+=("packages/agents/source/skills/commit/$harness/scripts/guard-git.sh")
+    for script in guard-merge.sh merge-agent.sh merge-policy.py; do
+      protected+=("packages/agents/source/skills/merge-pr/$harness/scripts/$script")
+    done
+  done
+  for prefix in packages/agents/{claude,codex}/.apm/skills .{claude,agents}/skills; do
+    for skill in commit merge-pr agent-merge-pr; do
+      for script in guard-git.sh lib.sh agent.sh; do
+        protected+=("$prefix/$skill/scripts/$script")
+      done
+    done
+    for skill in merge-pr agent-merge-pr; do
+      for script in merge-agent.sh merge-policy.py; do
+        protected+=("$prefix/$skill/scripts/$script")
+      done
+    done
+  done
+  local unprotected=(
+    packages/agents/source/skills/pr/shared/scripts/create-pr.sh
+    packages/agents/source/skills/merge-pr/shared/scripts/squash-merge.sh
+    packages/agents/source/lib/other.sh
+    .devtools/tasks/lint.toml
+    .config/mise/conf.d/tools.toml
+    .pre-commit-hooks.yaml
+    mise.toml
+    .github/workflows/ci.yml
+    .claude/settings.json.backup
+    .agents/agent-skills.conf.backup
+    .agents/review-instructions.md.backup
+  )
+  for prefix in packages/agents/{claude,codex}/.apm/skills .{claude,agents}/skills; do
+    unprotected+=("$prefix/pr/scripts/create-pr.sh" "$prefix/pr/scripts/merge-agent.sh"
+      "$prefix/pr/scripts/merge-policy.py" "$prefix/merge-pr/SKILL.md"
+      "$prefix/merge-pr/scripts/merge-agent.sh.backup" "$prefix/commit/scripts/guard-git.sh.backup")
+  done
+  for key in golden_paths owner_paths; do
+    run bash -c 'source "$1/lib.sh"; dt_repo_conf "$2"' _ "$SCRIPTS" "$key"
+    [ "$status" -eq 0 ]
+    pattern=$output
+    for path in "${protected[@]}"; do
+      [[ "$path" =~ $pattern ]] || { echo "$key missed $path"; return 1; }
+    done
+    for path in "${unprotected[@]}"; do
+      [[ ! "$path" =~ $pattern ]] || { echo "$key matched $path"; return 1; }
+    done
+  done
 }

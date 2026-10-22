@@ -18,11 +18,14 @@ setup() {
   git config user.name Test
   git config user.email test@example.com
   git config commit.gpgSign false
-  mkdir -p .devtools/tasks vendor
+  mkdir -p .devtools/tasks .devtools/scripts vendor
+  cp "$ROOT/.devtools/scripts/gomodscan.sh" .devtools/scripts/
+  printf "tracked\n" >vendor/modules.txt
   cp "$ROOT/.devtools/tasks/go.toml" .devtools/tasks/
   cat > mise.toml <<'TOML'
 # Keep the stub ahead of tool paths rebuilt by nested mise invocations.
 [env]
+DEVTOOLS_DIR = "{{config_root}}/.devtools"
 _.path = ["{{config_root}}/bin"]
 
 [task_config]
@@ -43,8 +46,8 @@ set -eu
 [ "$2" = gomodscan ]
 printf 'scan\n' >> "$SCAN_LOG"
 case "$SCAN_RESULT" in
-  pass) exit 0 ;;
-  fail) echo 'dependency finding' >&2; exit 1 ;;
+  pass) echo 'gomodscan: scanned 1 module(s), no findings' >&2; exit 0 ;;
+  fail) echo 'dependency finding'; echo 'gomodscan: 1 finding(s) across 1 module(s)' >&2; exit 1 ;;
   unreachable) echo 'connection refused' >&2; exit 2 ;;
 esac
 SH
@@ -52,8 +55,9 @@ SH
   export MISE_TRUSTED_CONFIG_PATHS="$PWD"
   export SCAN_LOG="$BATS_TEST_TMPDIR/scans" SCAN_RESULT=pass
   prek install
-  git add -- mise.toml .pre-commit-config.yaml .devtools/tasks/go.toml bin/go
+  git add -- mise.toml .pre-commit-config.yaml .devtools/tasks/go.toml .devtools/scripts/gomodscan.sh bin/go vendor/modules.txt
   git commit -qm setup
+  rm -f "$SCAN_LOG"
 }
 
 @test "dependency commits require a passing scan for each dependency path" {

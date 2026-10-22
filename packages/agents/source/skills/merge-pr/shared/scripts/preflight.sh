@@ -39,6 +39,7 @@ none() { printf '(none)\n'; }
 
 root=$(dt_root)
 cd "$root"
+bash "$(dirname "${BASH_SOURCE[0]}")/worktree-ready.sh"
 ma_context
 
 section "gh"
@@ -76,7 +77,7 @@ printf 'pull request: #%s\n' "$number"
 
 view=$(dt_state_dir)/merge-preflight.json
 mp_view "$number" "$view" \
-  number,title,state,isDraft,author,baseRefName,headRefName,headRefOid,isCrossRepository,mergeable,mergeStateStatus,reviewDecision,url,statusCheckRollup,commits,body,files,labels,reviews || exit $?
+  "$MA_GATE_FIELDS,number,title,author,headRefName,isCrossRepository,reviewDecision,url,commits,body,files" || exit $?
 
 section "state"
 jq -r '
@@ -91,7 +92,7 @@ jq -r '
 ' "$view"
 
 mp_require_reviews "$view" "$number"
-if [ "${DT_UNATTENDED:-0}" = 1 ]; then
+if [ "${DEVTOOLS_UNATTENDED:-0}" = 1 ]; then
   pinned_base=$(mp_field "$view" baseRefName)
   pinned_base=$(mp_base_oid "$pinned_base")
   ma_gates "$view" "$number" "$pinned_base"
@@ -189,7 +190,7 @@ if git check-ignore --quiet "$DRAFT" 2>/dev/null; then
 else
   printf '%s gitignored: NO — add it to .gitignore before drafting\n' "$DRAFT"
 fi
-if [ "${DT_UNATTENDED:-0}" = 1 ]; then
+if [ "${DEVTOOLS_UNATTENDED:-0}" = 1 ]; then
   configured_lint=$(dt_repo_conf lint_squash_cmd 'mise run lint-squash-msg')
   [ -n "$configured_lint" ] || dt_die "lint_squash_cmd must not be empty"
   printf 'configured squash lint: %s\n' "$configured_lint"

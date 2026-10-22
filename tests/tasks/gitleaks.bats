@@ -13,6 +13,22 @@ setup() {
   export NO_COLOR=1
 }
 
+@test "the task description matches its Git history scan" {
+  run uv run python - "${BATS_TEST_DIRNAME}/../../.devtools/tasks/security.toml" <<'PY'
+import pathlib
+import sys
+import tomllib
+
+source = pathlib.Path(sys.argv[1]).read_text()
+task = tomllib.loads(source)["devtools:gitleaks"]
+assert "gitleaks git --verbose --redact ." in task["run"]
+assert task["description"] == "Scan Git history for committed secrets"
+assert "it reads git history rather than the\n# working tree" in source
+PY
+
+  [ "$status" -eq 0 ]
+}
+
 @test "a committed fake token reports its rule and location without the secret" {
   git init -q
   local fake_token
@@ -37,6 +53,59 @@ setup() {
 }
 
 @test "an unresolvable repository fails the zero-commits guard" {
+  run bash "$SCRIPT"
+
+  [ "$status" -eq 1 ]
+  [[ $output == *"gitleaks walked 0 commits"* ]]
+}
+
+@test "an empty README root commit has no content to scan" {
+  git init -q
+  touch README.md
+  git add -- README.md
+  git -c core.hooksPath=/dev/null -c commit.gpgSign=false \
+    -c user.name=Test -c user.email=test@example.com commit -qm fixture
+
+  run bash "$SCRIPT"
+
+  [ "$status" -eq 0 ]
+  [[ $output == *"no content to scan"* ]]
+}
+
+@test "a content commit is scanned" {
+  git init -q
+  printf 'Public documentation\n' > README.md
+  git add -- README.md
+  git -c core.hooksPath=/dev/null -c commit.gpgSign=false \
+    -c user.name=Test -c user.email=test@example.com commit -qm fixture
+
+  run bash "$SCRIPT"
+
+  [ "$status" -eq 0 ]
+  [[ $output == *"1 commits scanned"* ]]
+  [[ $output == *"no leaks found"* ]]
+}
+
+@test "a repository without HEAD fails the zero-commits guard" {
+  git init -q
+
+  run bash "$SCRIPT"
+
+  [ "$status" -eq 1 ]
+  [[ $output == *"gitleaks walked 0 commits"* ]]
+}
+
+@test "a history with content still fails when the scanner walks zero commits" {
+  git init -q
+  printf 'Public documentation\n' > README.md
+  git add -- README.md
+  git -c core.hooksPath=/dev/null -c commit.gpgSign=false \
+    -c user.name=Test -c user.email=test@example.com commit -qm fixture
+  mkdir "${BATS_TEST_TMPDIR}/bin"
+  printf '#!/usr/bin/env bash\necho "0 commits scanned"\n' > "${BATS_TEST_TMPDIR}/bin/gitleaks"
+  chmod +x "${BATS_TEST_TMPDIR}/bin/gitleaks"
+  export PATH="${BATS_TEST_TMPDIR}/bin:$PATH"
+
   run bash "$SCRIPT"
 
   [ "$status" -eq 1 ]

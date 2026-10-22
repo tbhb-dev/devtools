@@ -148,7 +148,7 @@ description = "Set up the dev environment, build commands, refresh Vale styles, 
 run = [
   "mise run install-toolchain",
   "mise run install-tools",
-  "mise run install",
+  "mise run build",
   "mise run devtools:prek-install",
   "mise run devtools:install-pre-push-hook",
 ]
@@ -180,6 +180,7 @@ run = ["vale sync", "uv sync"]
 run = "mise run devtools:build"
 
 [tasks.install]
+description = "Install every binary to the mise-managed Go installation's bin directory"
 run = "mise run devtools:install"
 
 # The first argument names the ./cmd/<bin> package; the rest pass
@@ -574,7 +575,11 @@ run = "bats .devtools/scripts/check-leaks.bats"
 [tasks.test-hooks]
 description = "Run the bats suites for the shell scripts under scripts/ and tools/"
 usage = 'arg "<path>" default="tests"'
-run = "bats --recursive $usage_path"
+# Exercise the binary from this tree, not the released toolchain pin.
+run = [
+  "go build -o bin/agentrepo ./cmd/agentrepo",
+  'env PATH="$PWD/bin:$PATH" bats --recursive $usage_path',
+]
 
 # Serial by default so a failing run prints a clean, ordered trace; pass
 # `mise run test-py -n auto` to fan the suite across xdist workers.

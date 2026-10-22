@@ -4,8 +4,8 @@
 # squash-merge.sh.
 #
 # Sourced, never run, after lib.sh. Written for bash 3.2. Every reader
-# here works from one `gh pr view --json` response saved to a file, so
-# the facts a script judges together all come from the same moment.
+# here starts with one `gh pr view --json` response saved to a file.
+# Unattended review authors need a separate GraphQL read pinned to that head.
 
 # --- environment hardening -------------------------------------------
 # lib.sh and the sourcing script repeat this block; it stays here too so
@@ -26,7 +26,12 @@ mp_need_tools() {
 # mp_view <number> <file> <field,...>: save one response naming every
 # field the caller reads.
 mp_view() {
-  dt_gh pr view "$1" --json "$3" >"$2"
+  dt_gh pr view "$1" --json "$3" >"$2" || return $?
+  if ma_require_gates; then
+    case ,$3, in
+    *,reviews,*) ma_reviews "$1" "$2" || return $? ;;
+    esac
+  fi
 }
 
 # mp_field <file> <field>: one top-level field of a saved response, a
@@ -57,7 +62,7 @@ mp_base_oid() {
 # run history of the same shape, so each one is judged as it stands.
 #
 #   0  every check ok      1  a check failed      2  a check pending
-#   3  the rollup could not be read
+#   3  the rollup could not be read      4  no checks reported
 mp_judge_checks() {
   local out
   out=$(jq -r '
@@ -86,7 +91,8 @@ mp_judge_checks() {
     | [($s | verdict), $s, check_name]
     | @tsv
   ' "$1" 2>/dev/null) || return 3
-  [ -z "$out" ] || printf '%s\n' "$out"
+  [ -n "$out" ] || return 4
+  printf '%s\n' "$out"
   printf '%s\n' "$out" | awk -F'\t' '
     $1 == "fail" { failed = 1 }
     $1 == "pending" { pending = 1 }
@@ -141,6 +147,18 @@ mp_local_diff() {
     dt_die "Could not build the complete pinned diff."
   gitr diff --no-ext-diff --no-textconv --no-color --name-status "$1...$2" -- >"$3/files.txt" ||
     dt_die "Could not list the pinned diff files."
+}
+
+# mp_fetch_commit <oid>: make one pinned pull request commit available
+# without moving a branch, the index, or FETCH_HEAD.
+mp_fetch_commit() {
+  gitr cat-file -e "$1^{commit}" 2>/dev/null && return 0
+  local repository
+  repository=$(dt_gh repo view --json url --jq .url) || return $?
+  [ -n "$repository" ] || dt_die "Could not locate the pull request repository."
+  gitr -c credential.helper= -c 'credential.helper=!gh auth git-credential' \
+    fetch --no-tags --no-write-fetch-head "$repository" "$1" ||
+    dt_die "Could not fetch the pinned pull request head."
 }
 
 # shellcheck disable=SC1091 # generated beside this reader

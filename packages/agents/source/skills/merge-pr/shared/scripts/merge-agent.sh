@@ -6,8 +6,18 @@ unset CDPATH GH_REPO GH_HOST GREP_OPTIONS
 IFS=$' \t\n'
 set -o pipefail
 
+# Every snapshot passed to ma_gates must request this complete set. The gate
+# reads some fields directly and the rest through ma_approved and agentrepo.
+readonly MA_GATE_FIELDS=state,isDraft,mergeable,mergeStateStatus,headRefOid,baseRefName,labels,reviews,statusCheckRollup
+
+# Only an explicit operator confirmation may bypass the unattended gates.
+# Preflight and review retain their attended behavior until execution selects it.
+ma_require_gates() {
+  [ "${DEVTOOLS_UNATTENDED:-0}" = 1 ] || [ "${MA_REQUIRE_GATES:-false}" = true ]
+}
+
 ma_context() {
-  [ "${DT_UNATTENDED:-0}" = 1 ] || return 0
+  ma_require_gates || return 0
   dt_agent_context || return $?
   local dirty login
   dirty=$(gitr status --porcelain --untracked-files=all) || return $?
@@ -16,28 +26,83 @@ ma_context() {
   [ -n "$login" ] || dt_die "gh_login must be configured on the machine"
   command -v uv >/dev/null || dt_die "uv is required for the YAML policy reader"
   command -v agentrepo >/dev/null || dt_die "agentrepo is required for check judgement"
+  agentrepo --help >/dev/null 2>&1 || dt_die "a working agentrepo is required for check judgement"
 }
 
 ma_lint() {
-  local cmd
-  if [ "${DT_UNATTENDED:-0}" = 1 ]; then
-    cmd=$(dt_repo_conf lint_squash_cmd 'mise run lint-squash-msg') || return $?
-    [ -n "$cmd" ] || dt_die "lint_squash_cmd must not be empty"
-    bash -c "$cmd"
-  else
-    mise run lint-squash-msg
+  local head=$1 cmd config tmp status
+  local -a lint_env=(env -u DEVTOOLS_CSPELL_CONFIG)
+  mp_fetch_commit "$head" || return $?
+  tmp=$(mktemp -d "${TMPDIR:-/tmp}/devtools-squash-cspell.XXXXXX") || return $?
+  config=$tmp/.cspell.jsonc
+  if gitr cat-file -e "$head:.cspell.jsonc" 2>/dev/null; then
+    if ! gitr show "$head:.cspell.jsonc" >"$config"; then
+      rm -rf -- "$tmp"
+      dt_die "Could not read .cspell.jsonc from the pull request head."
+      return 1
+    fi
+    lint_env=(env DEVTOOLS_CSPELL_CONFIG="$config")
   fi
+  if gitr cat-file -e "$head:.cspell-words.txt" 2>/dev/null; then
+    if ! gitr show "$head:.cspell-words.txt" >"$tmp/.cspell-words.txt"; then
+      rm -rf -- "$tmp"
+      dt_die "Could not read .cspell-words.txt from the pull request head."
+      return 1
+    fi
+  fi
+  status=0
+  if [ "${DEVTOOLS_UNATTENDED:-0}" = 1 ]; then
+    cmd=$(dt_repo_conf lint_squash_cmd 'mise run lint-squash-msg') || status=$?
+    if [ "$status" -eq 0 ] && [ -z "$cmd" ]; then
+      rm -rf -- "$tmp"
+      dt_die "lint_squash_cmd must not be empty"
+      return 1
+    fi
+    if [ "$status" -eq 0 ]; then
+      "${lint_env[@]}" bash -c "$cmd" || status=$?
+    fi
+  else
+    "${lint_env[@]}" mise run lint-squash-msg || status=$?
+  fi
+  rm -rf -- "$tmp"
+  return "$status"
 }
 
 ma_policy() { uv run --quiet --script "$DT_LIB_DIR/merge-policy.py" "$@"; }
 
+# gh pr view omits author.__typename; read all review pages explicitly.
+ma_reviews() {
+  local number=$1 view=$2 head
+  head=$(mp_field "$view" headRefOid) || return $?
+  dt_gh_repo "query(\$owner:String!,\$name:String!,\$number:Int!,\$endCursor:String){repository(owner:\$owner,name:\$name){pullRequest(number:\$number){headRefOid reviews(first:100,after:\$endCursor){nodes{author{__typename login} state submittedAt commit{oid}} pageInfo{hasNextPage endCursor}}}}}" \
+    -F "number=$number" --paginate --slurp >"$view.reviews" || return $?
+  jq -e --arg head "$head" --slurpfile pages "$view.reviews" '
+    if ($pages[0] | length > 0 and all(.[]; .data.repository.pullRequest.headRefOid == $head)) then
+      .reviews = [$pages[0][].data.repository.pullRequest.reviews.nodes[]]
+    else error("PR head changed while reading review authors") end
+  ' "$view" >"$view.next" || return $?
+  mv "$view.next" "$view" || return $?
+  rm -f -- "$view.reviews"
+}
+
+# Machine authorities use GraphQL logins, not the REST Bot suffix.
+ma_login() {
+  local key=$1 login
+  login=$(dt_conf "$key") || return $?
+  case $login in
+  *'[bot]') dt_die "$key must use the GraphQL login ${login%\[bot\]}, without [bot]" ;;
+  esac
+  printf '%s\n' "$login"
+}
+
 # Latest decisive review, on the exact head, from machine-selected authority.
 ma_approved() {
   [ -n "$2" ] || return 1
-  jq -e --arg login "$2" --arg head "$3" '
+  jq -e --arg login "$2" --arg head "$3" --arg type "${4:-}" '
     [.reviews[] | select(.author.login == $login) |
       select(.state == "APPROVED" or .state == "CHANGES_REQUESTED" or .state == "DISMISSED")]
     | sort_by(.submittedAt) | last | .state == "APPROVED" and .commit.oid == $head
+      and ($type == "" or .author.__typename == $type)
   ' "$1" >/dev/null
 }
 
@@ -51,8 +116,8 @@ ma_identity() {
 
 # Reused before review and again immediately before every merge write.
 ma_gates() {
-  [ "${DT_UNATTENDED:-0}" = 1 ] || return 0
-  local view=$1 pr=$2 base_oid=$3 final=${4:-false} head base reviewer label ready config key value required default dir st root encoded
+  ma_require_gates || return 0
+  local view=$1 pr=$2 base_oid=$3 final=${4:-false} head base reviewer reviewer_type label ready config key value required default dir st root encoded
   ma_context || return $?
   st=$(dt_state_dir) || return $?
   root=$(dt_root) || return $?
@@ -60,9 +125,14 @@ ma_gates() {
   base=$(mp_field "$view" baseRefName) || return $?
   jq -e ' .state == "OPEN" and .isDraft == false and .mergeable == "MERGEABLE" and .mergeStateStatus == "CLEAN"' "$view" >/dev/null || dt_die "PR is not open, ready, MERGEABLE, and CLEAN"
   ma_identity || return $?
-  reviewer=$(dt_conf required_reviewer) || return $?
+  reviewer=$(ma_login required_reviewer) || return $?
   [ -n "$reviewer" ] || dt_die "required_reviewer must be configured on the machine"
-  ma_approved "$view" "$reviewer" "$head" || dt_die "WAITING_REVIEW: $reviewer must approve the current head"
+  reviewer_type=$(dt_conf required_reviewer_type) || return $?
+  case $reviewer_type in
+  '' | Bot | User) ;;
+  *) dt_die "required_reviewer_type must be Bot or User when set" ;;
+  esac
+  ma_approved "$view" "$reviewer" "$head" "$reviewer_type" || dt_die "WAITING_REVIEW: $reviewer must approve the current head"
   label=$(dt_repo_conf owner_review_label owner-review) || return $?
   [ -n "$label" ] || dt_die "owner_review_label must not be empty"
   if jq -e --arg label "$label" '.labels | any(.name == $label)' "$view" >/dev/null; then
@@ -81,7 +151,7 @@ ma_gates() {
   MA_OWNER_OVERRIDE=''
   if jq -e '.findings | length > 0' <<<"$MA_POLICY" >/dev/null; then
     jq -r '.findings[] | @json' <<<"$MA_POLICY" >&2
-    value=$(dt_conf merge_owner) || return $?
+    value=$(ma_login merge_owner) || return $?
     ma_approved "$view" "$value" "$head" || dt_die "needs-owner: golden files or loosened gates require merge_owner approval on the current head"
     MA_OWNER_OVERRIDE=$value
     printf 'owner override: %s approved %s\n' "$value" "$head"
@@ -109,7 +179,7 @@ ma_gates() {
 }
 
 ma_prepare_children() {
-  [ "${DT_UNATTENDED:-0}" = 1 ] || return 0
+  [ "${DEVTOOLS_UNATTENDED:-0}" = 1 ] || return 0
   [ "$cross_repo" = false ] || return 0
   local children child count
   children=$(dt_gh pr list --base "$head_ref" --state open --limit 500 --json number) || return $?
@@ -118,13 +188,13 @@ ma_prepare_children() {
   children=$(printf '%s' "$children" | jq -r '.[].number') || return $?
   for child in $children; do
     ma_identity || return $?
-    [ "$child" = "$number" ] || dt_gh pr edit "$child" --base "$base_ref" || return $?
+    [ "$child" = "$number" ] || dt_gh_post pr edit "$child" --base "$base_ref" </dev/null || return $?
   done
 }
 
 # Verify the remote message before deleting any evidence or branch.
 ma_verify() {
-  [ "${DT_UNATTENDED:-0}" = 1 ] || return 0
+  [ "${DEVTOOLS_UNATTENDED:-0}" = 1 ] || return 0
   local repository wanted actual live_base
   repository=$(dt_gh repo view --json url --jq .url) || return $?
   live_base=$(mp_base_oid "$base_ref") || return $?
@@ -136,7 +206,7 @@ ma_verify() {
 }
 
 ma_report() {
-  [ "${DT_UNATTENDED:-0}" = 1 ] || return 0
+  [ "${DEVTOOLS_UNATTENDED:-0}" = 1 ] || return 0
   local text owners
   owners=$(jq -c '.owner_paths' <<<"$MA_POLICY") || return $?
   text="Merged #$number as $merge_commit. Owner override: ${MA_OWNER_OVERRIDE:-none}. Owner paths: $owners."
@@ -157,4 +227,4 @@ ma_exit() {
   dt_agent_report blocker "${number:-}" "$text" || printf '%s\n' "$text" >&2
   exit "$status"
 }
-if [ "${DT_UNATTENDED:-0}" = 1 ]; then trap 'ma_exit "$?"' EXIT; fi
+if [ "${DEVTOOLS_UNATTENDED:-0}" = 1 ]; then trap 'ma_exit "$?"' EXIT; fi

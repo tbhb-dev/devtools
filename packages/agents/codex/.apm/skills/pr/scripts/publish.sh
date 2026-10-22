@@ -124,7 +124,7 @@ remote=$(printf '%s\n' "$remote_refs" | cut -f1) || exit $?
 # --- publish ---------------------------------------------------------
 
 pr_agent_current "$branch"
-if [ "${DT_UNATTENDED:-0}" = 1 ]; then
+if [ "${DEVTOOLS_UNATTENDED:-0}" = 1 ]; then
   require_reviewed
   check_identity
 fi
@@ -135,7 +135,7 @@ if [ -n "$open_number" ]; then
   step "updating pull request #${open_number}"
   current=$(dt_gh pr view "$open_number" \
     --json baseRefName,isDraft,labels,reviewRequests,assignees,milestone)
-  dt_gh pr edit "$open_number" --base "$base" --title "$title" --body-file "$body_file" >/dev/null
+  dt_gh_post pr edit "$open_number" --base "$base" --title "$title" --body-file "$body_file" >/dev/null
 
   # reconcile <add-flag> <remove-flag> <desired> <current>: bring one
   # property set to what the draft says, removals included.
@@ -144,14 +144,14 @@ if [ -n "$open_number" ]; then
     while IFS= read -r item; do
       [ -n "$item" ] || continue
       printf '%s\n' "$3" | grep -qxF -- "$item" ||
-        dt_gh pr edit "$open_number" "$2" "$item" >/dev/null
+        dt_gh_post pr edit "$open_number" "$2" "$item" </dev/null >/dev/null
     done <<EOF
 $4
 EOF
     while IFS= read -r item; do
       [ -n "$item" ] || continue
       printf '%s\n' "$4" | grep -qxF -- "$item" ||
-        dt_gh pr edit "$open_number" "$1" "$item" >/dev/null
+        dt_gh_post pr edit "$open_number" "$1" "$item" </dev/null >/dev/null
     done <<EOF
 $3
 EOF
@@ -166,9 +166,9 @@ EOF
 
   current_milestone=$(printf '%s' "$current" | jq -r '.milestone.title // empty') || exit $?
   if [ -n "$milestone" ]; then
-    dt_gh pr edit "$open_number" --milestone "$milestone" >/dev/null
+    dt_gh_post pr edit "$open_number" --milestone "$milestone" </dev/null >/dev/null
   elif [ -n "$current_milestone" ]; then
-    dt_gh pr edit "$open_number" --remove-milestone >/dev/null
+    dt_gh_post pr edit "$open_number" --remove-milestone </dev/null >/dev/null
   fi
   current_draft=$(printf '%s' "$current" | jq -r '.isDraft')
   if [ "$is_draft" = true ] && [ "$current_draft" = false ]; then
@@ -211,7 +211,7 @@ if [ -n "$milestone" ]; then
   set -- "$@" --milestone "$milestone"
 fi
 
-dt_gh pr create "$@" || exit $?
+dt_gh_post pr create "$@" || exit $?
 rm -f "$copy" "$body_file"
 
 step "done"

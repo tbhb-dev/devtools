@@ -22,12 +22,22 @@
 # This mirrors tools/vale-commit-msg.sh, which sidesteps the same
 # worktree path problem for vale.
 #
+# The squash-merge workflow sets DEVTOOLS_CSPELL_CONFIG to a temporary
+# copy read from the pull request head. In that case the virtual path
+# moves with the config, so cspell cannot merge policy from the
+# operator's checkout through path discovery.
+#
 # The hook receives the message-buffer path as $1
 # (.git/worktrees/<name>/COMMIT_EDITMSG from git, or COMMIT_AGENTMSG
 # from the lint-commit-msg recipe).
 set -euo pipefail
 
 msg_file=$1
+config=${DEVTOOLS_CSPELL_CONFIG:-.cspell.jsonc}
+virtual_dir=.
+if [ -n "${DEVTOOLS_CSPELL_CONFIG:-}" ]; then
+  virtual_dir=$(dirname "$config")
+fi
 
 # Read the buffer up front so the cspell invocation does not name the
 # message file in both a redirect and its virtual path (shellcheck
@@ -35,8 +45,8 @@ msg_file=$1
 message=$(<"${msg_file}")
 
 printf '%s\n' "${message}" | cspell \
-  --config .cspell.jsonc \
+  --config "$config" \
   --no-summary \
   --no-progress \
   --language-id commit-msg \
-  "stdin://./$(basename "${msg_file}")"
+  "stdin://${virtual_dir}/$(basename "${msg_file}")"

@@ -13,6 +13,8 @@ hooks:
 
 # Merge a pull request
 
+Use `gh-post` for issue and PR content, comments, reviews, comment edits, and release notes. Supply body text through `--body-file` or stdin. If `gh-post` is missing, stop and report the missing command. Never fall back to a direct GitHub content write.
+
 Work the steps in order. Scripts enforce every gate here. Step 5's review script stamps what an independent reviewer cleared, bound to the pull request's head and base. Step 7's merge script refuses a message the stamp doesn't cover, a pull request that moved or isn't ready, and a merge nobody confirmed, then merges pinned to the reviewed head. Both hold in any session, including a subagent's.
 
 A guard hook runs alongside them as a rail, refusing a direct `gh pr merge` and every other `gh pr` verb that changes a pull request. Reading remains permitted.
@@ -118,23 +120,25 @@ Read those lines, then check the `Closes` lines that remain against the branch. 
 Fix the prose findings with the `fix-prose` skill first, passing the draft and the task that judges it:
 
 ```text
-Skill(fix-prose, args: "SQUASH_AGENTMSG mise run lint-squash-msg")
+Skill(fix-prose, args: "SQUASH_AGENTMSG bash .claude/skills/merge-pr/scripts/lint-squash-msg.sh <number>")
 ```
 
-Then run the task yourself:
+Then run the wrapper yourself:
 
 ```text
-mise run lint-squash-msg
+bash .claude/skills/merge-pr/scripts/lint-squash-msg.sh <number>
 ```
 
-The same four hooks a commit must pass, plus the source-range identity context that requires `Assisted-by` when the squash collapses an agent commit:
+The workflow wrapper runs the repository's configured `lint-squash-msg` task with the cspell configuration and word list read from the pull request head. It never reads those files from the operator's checkout.
+
+The gate runs the commit hooks along with the source-range identity context that requires `Assisted-by` when the squash collapses an agent commit:
 
 - vale under the commit scope, which catches AI tells through `ai-tells-commits`
 - cspell with the commit dictionary
 - commitlint for the Conventional Commits shape
 - commit-trailers for trailer order
 
-Order matters here. The review in the next step stamps the exact bytes it read, so a lint fix after it voids the stamp and costs another review round over a comma. The merge script runs this task again before it merges, and refuses when the task is absent rather than skipping it.
+Order matters here. The review in the next step stamps the exact bytes it read, so a lint fix after it voids the stamp and costs another review round over a comma. Before merging, the script runs this task again and refuses when the task is absent rather than skipping it.
 
 ## Step 5: review the message
 
@@ -191,6 +195,8 @@ The merge script settles who confirmed the merge, in this order, and prints whic
 1. `--confirmed`, which you pass only after the operator answered yes to this message in this session
 2. a merge pre-approval for this session, which the operator granted through `mise run preapprove merge` and preflight reported as `merge: GRANTED`
 3. the machine's delegation check, when preflight reported one configured: it answers for the repository and the action `merge`, and a refusal stops the merge
+
+Without `--confirmed`, execution requires the same approval, owner, policy, and required-check gates as `agent-merge-pr`. An empty check rollup refuses every merge as inconclusive.
 
 A bare `mise run preapprove` grants commit and pr and never merge, because a merge is the one action here no later step can undo. With none of them the script exits 75 and merges nothing. Ask the operator, then run it again with `--confirmed`.
 

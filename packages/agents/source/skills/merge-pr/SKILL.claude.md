@@ -13,6 +13,8 @@ hooks:
 
 # Merge a pull request
 
+Use `gh-post` for issue and PR content, comments, reviews, comment edits, and release notes. Supply body text through `--body-file` or stdin. If `gh-post` is missing, stop and report the missing command. Never fall back to a direct GitHub content write.
+
 Work the steps in order. Scripts enforce every gate here. Step 5's review script stamps what an independent reviewer cleared, bound to the pull request's head and base. Step 7's merge script refuses a message the stamp doesn't cover, a pull request that moved or isn't ready, and a merge nobody confirmed, then merges pinned to the reviewed head. Both hold in any session, including a subagent's.
 
 A guard hook runs alongside them as a rail, refusing a direct `gh pr merge` and every other `gh pr` verb that changes a pull request. Reading remains permitted.
@@ -56,10 +58,14 @@ bash .claude/skills/merge-pr/scripts/squash-message.sh <number>
 Fix the prose findings with the `fix-prose` skill first, passing the draft and the task that judges it:
 
 ```text
-Skill(fix-prose, args: "SQUASH_AGENTMSG mise run lint-squash-msg")
+Skill(fix-prose, args: "SQUASH_AGENTMSG bash .claude/skills/merge-pr/scripts/lint-squash-msg.sh <number>")
 ```
 
-Then run the task yourself:
+Then run the wrapper yourself:
+
+```text
+bash .claude/skills/merge-pr/scripts/lint-squash-msg.sh <number>
+```
 
 @include parts/gates.md
 

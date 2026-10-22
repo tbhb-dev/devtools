@@ -52,6 +52,17 @@ file=${1:-}
   exit 1
 }
 
+# Resolve symlinks and parent components before checking cspell's scope.
+resolved_file=$(realpath "$file") || exit 1
+resolved_root=$(realpath "$root") || exit 1
+case $resolved_file in
+"$resolved_root"/*) ;;
+*)
+  printf '%s:1 [error] outside-repo  cspell only lints files under the repository; move the draft inside it\n' "$file"
+  exit 1
+  ;;
+esac
+
 # Source files answer to the tree-wide recipes. The probe below sends
 # bare prose, which a Go file would reject as code rather than comment,
 # so it would report every source file as unscoped.

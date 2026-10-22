@@ -78,6 +78,7 @@ MAIL
   run bash "$AGENT/merge.sh" 7
   [ "$status" -eq 0 ]
   grep -q 'pr edit 8 --base main' "$GH_FIXTURES/gh.log"
+  grep -qx 'pr edit 8 --base main' "$GH_FIXTURES/gh-post.log"
 }
 
 @test "merge reviewer receives local commit bodies rather than capped API metadata" {

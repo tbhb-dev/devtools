@@ -11,7 +11,7 @@ CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags "$ldflags" -o bin/ ${D
 '''
 
 ["devtools:install"]
-description = "Install every binary to GOPATH/bin"
+description = "Install every binary to the mise-managed Go installation's bin directory"
 run = '''
 #!/usr/bin/env bash
 set -eu
@@ -129,12 +129,17 @@ go test -race ${DEVTOOLS_GO_PACKAGES:-./...} "$@"
 '''
 
 ["devtools:mutate-go"]
-description = "Run mutation testing via gremlins"
-usage = 'arg "<path>" default="."'
+description = "Run mutation testing via gremlins: [path] -- [Gremlins arguments]"
+usage = '''
+arg "[path]" default="."
+arg "[args]" var=#true double_dash="required" help="Gremlins arguments after -- (for example --dry-run)"
+'''
 run = '''
 #!/usr/bin/env bash
 set -eu
-go tool gremlins unleash --timeout-coefficient "${GREMLINS_TIMEOUT_COEFFICIENT:-100}" $usage_path "$@"
+# mise supplies variadic arguments as a shell-quoted string.
+eval "args=(${usage_args:-})"
+go tool gremlins unleash --timeout-coefficient "${GREMLINS_TIMEOUT_COEFFICIENT:-100}" "$usage_path" ${args[@]+"${args[@]}"}
 '''
 
 ["devtools:mutate-go-all"]
@@ -241,29 +246,16 @@ set -eu
 go tool govulncheck -format sarif ${DEVTOOLS_GO_PACKAGES:-./...} > "$usage_file" "$@"
 '''
 
+# Modules without a tracked vendor manifest intentionally skip the text scan
+# and vendor check. SARIF requires vendor mode so a successful run has a report.
 ["devtools:gomodscan"]
-description = "Scan each vendored module for supply-chain concerns in one pass"
-run = '''
-#!/usr/bin/env bash
-set -uo pipefail
-go tool gomodscan
-rc=$?
-if [ "$rc" -gt 1 ]; then
-  echo "gomodscan: scan could not run; check network access to the scanner services and retry." >&2
-fi
-exit "$rc"
-'''
+description = "Scan tracked vendored modules, or skip a non-vendoring module"
+run = 'bash "$DEVTOOLS_DIR/scripts/gomodscan.sh" text'
 
 ["devtools:gomodscan-sarif"]
-description = "Emit the gomodscan findings as SARIF to <file> for the security.yml upload"
+description = "Write validated SARIF; findings succeed, incomplete scans fail"
 usage = 'arg "<file>"'
-run = '''
-#!/usr/bin/env bash
-set -uo pipefail
-go tool gomodscan -format sarif > "$usage_file"
-rc=$?
-if [ "$rc" -gt 1 ]; then exit "$rc"; fi
-'''
+run = 'bash "$DEVTOOLS_DIR/scripts/gomodscan.sh" sarif "$usage_file"'
 
 ["devtools:tidy"]
 description = "Tidy go.mod"
@@ -282,6 +274,11 @@ description = "Check that vendor/, go.mod, and go.sum are in sync"
 run = '''
 #!/usr/bin/env bash
 set -euo pipefail
+tracked=$(git ls-files -- vendor/modules.txt)
+if [ -z "$tracked" ]; then
+  echo "vendor-check: skipping module without tracked vendor/modules.txt"
+  exit 0
+fi
 go mod tidy
 go mod vendor
 rc=0

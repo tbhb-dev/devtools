@@ -7,7 +7,7 @@
 # syntaxes:
 #
 #   apm.yml                          root or packages/agents/<harness>#vX.Y.Z
-#   mise.toml                        go: guard-markdown and commit-lint tools, vX.Y.Z
+#   mise.toml                        go: guard-markdown, commit-lint, agentrepo and gh-post, vX.Y.Z
 #   vendir.yml                       two `ref: vX.Y.Z` under the git url
 #   .pre-commit-config.yaml          rev: <sha>  # frozen: vX.Y.Z
 #   .github/workflows/*.y*ml         four `uses: ...@<sha> # vX.Y.Z`
@@ -54,7 +54,7 @@
 # this task from a git hook today, which is exactly why the failure would
 # be a surprise.
 ["devtools:update-pins"]
-description = "Move every tbhb-dev/devtools pin to <version> and run the follow-ons (alias: devtools:update)"
+description = "Move every tbhb-dev/devtools pin to <version> and run the follow-ons; check-pins flags prose mentions for manual edits (alias: devtools:update)"
 alias = "devtools:update"
 usage = 'arg "<version>" help="The devtools release to move to, e.g. v0.5.0"'
 run = '''
@@ -80,6 +80,10 @@ fi
 guard_version=$(sed -nE 's|^"go:github.com/tbhb-dev/devtools/cmd/guard-markdown"[[:space:]]*=[[:space:]]*"([^"]*)"|\1|p' mise.toml)
 if ! grep -Eq '^"go:github.com/tbhb-dev/devtools/cmd/commit-lint"[[:space:]]*=' mise.toml; then
   printf '"go:github.com/tbhb-dev/devtools/cmd/commit-lint" = "%s"\n' "$guard_version" >&2
+  exit 1
+fi
+if ! grep -Eq '^"go:github.com/tbhb-dev/devtools/cmd/gh-post"[[:space:]]*=' mise.toml; then
+  printf '"go:github.com/tbhb-dev/devtools/cmd/gh-post" = "%s"\n' "$guard_version" >&2
   exit 1
 fi
 
@@ -118,6 +122,7 @@ fi
 
 edit mise.toml sed -E "s|^(\"go:github.com/tbhb-dev/devtools/cmd/guard-markdown\"[[:space:]]*=[[:space:]]*)\"[^\"]*\"|\\1\"$version\"|"
 edit mise.toml sed -E "s|^(\"go:github.com/tbhb-dev/devtools/cmd/commit-lint\"[[:space:]]*=[[:space:]]*)\"[^\"]*\"|\\1\"$version\"|"
+edit mise.toml sed -E "s|^(\"go:github.com/tbhb-dev/devtools/cmd/gh-post\"[[:space:]]*=[[:space:]]*)\"[^\"]*\"|\\1\"$version\"|"
 edit mise.toml sed -E "s|^(\"go:github.com/tbhb-dev/devtools/cmd/agentrepo\"[[:space:]]*=[[:space:]]*)\"[^\"]*\"|\\1\"$version\"|"
 
 for wf in .github/workflows/*.yml .github/workflows/*.yaml; do
@@ -229,7 +234,7 @@ read_sites() {
         emit(v, "-")
       }
 
-      /^"go:github.com\/tbhb-dev\/devtools\/cmd\/(guard-markdown|commit-lint|agentrepo)"[[:space:]]*=/ {
+      /^"go:github.com\/tbhb-dev\/devtools\/cmd\/(guard-markdown|commit-lint|agentrepo|gh-post)"[[:space:]]*=/ {
         v = $0; sub(/^[^=]*=[[:space:]]*"/, "", v); sub(/".*$/, "", v)
         emit(v, "-")
       }
@@ -303,6 +308,11 @@ if ! grep -Eq '^"go:github.com/tbhb-dev/devtools/cmd/commit-lint"[[:space:]]*=' 
   printf '"go:github.com/tbhb-dev/devtools/cmd/commit-lint" = "%s"\n' "$guard_version" >&2
   exit 1
 fi
+if ! grep -Eq '^"go:github.com/tbhb-dev/devtools/cmd/gh-post"[[:space:]]*=' mise.toml; then
+  printf 'missing gh-post tool pin in mise.toml [tools]; add exactly:\n' >&2
+  printf '"go:github.com/tbhb-dev/devtools/cmd/gh-post" = "%s"\n' "$guard_version" >&2
+  exit 1
+fi
 
 if [ -z "$sites" ]; then
   echo "no tbhb-dev/devtools pins found -- check-pins verified nothing" >&2
@@ -342,6 +352,27 @@ fi
 
 if [ "$rc" -ne 0 ]; then
   echo "         run 'mise run devtools:update-pins <version>' to move every site together" >&2
+  exit 1
+fi
+
+# Search tracked working-tree text, including adapted configuration headers.
+# git grep returns 1 for no matches; other failures must still fail the gate.
+mentions=$(git grep -nI -o -E 'tbhb-dev/devtools[[:space:]]+v[0-9]+\.[0-9]+\.[0-9]+' --) || {
+  status=$?
+  [ "$status" -eq 1 ] || exit "$status"
+}
+if ! printf '%s\n' "$mentions" | awk -v pin="$guard_version" '
+  NF {
+    mention = $0
+    sub(/^.*tbhb-dev\/devtools[[:space:]]+/, "", mention)
+    if (mention != pin) {
+      site = $0; sub(/:tbhb-dev\/devtools[[:space:]]+v[0-9]+\.[0-9]+\.[0-9]+$/, "", site)
+      printf "%s: prose mentions %s; pinned %s (edit manually)\n", site, mention, pin > "/dev/stderr"
+      bad = 1
+    }
+  }
+  END { exit bad }
+'; then
   exit 1
 fi
 

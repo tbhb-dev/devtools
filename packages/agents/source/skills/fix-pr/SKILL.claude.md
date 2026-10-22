@@ -13,6 +13,8 @@ hooks:
 
 # Fix a failing pull request
 
+Use `gh-post` for issue and PR content, comments, reviews, comment edits, and release notes. Supply body text through `--body-file` or stdin. If `gh-post` is missing, stop and report the missing command. Never fall back to a direct GitHub content write.
+
 Take a red pull request and make the checks pass. This skill ends after you commit a fix to the branch and push it. Confirming the result belongs to `watch-pr`, and merging belongs to `merge-pr`.
 
 A guard hook runs alongside. It refuses a log sweep that goes around the diagnosis below, while leaving one job's full log open to read, because that's the real next step once the printed tail runs short.

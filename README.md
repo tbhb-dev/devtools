@@ -7,10 +7,10 @@ Shared agent tooling for tbhb repositories. The repo provides Go command-line to
 Repositories across tbhb install the shared primitives with the [APM CLI](https://microsoft.github.io/apm/quickstart/):
 
 ```bash
-apm install tbhb-dev/devtools#v0.13.0
+apm install tbhb-dev/devtools#v0.14.2
 ```
 
-A consumer can also select a sub-package, such as `apm install tbhb-dev/devtools/packages/agents/claude#v0.13.0`. The pin tasks support both forms.
+A consumer can also select a sub-package, such as `apm install tbhb-dev/devtools/packages/agents/claude#v0.14.2`. The pin tasks support both forms.
 
 The package deploys these primitives from sub-packages under [`packages/agents/`](packages/agents/): `claude` contains the skills below plus the `guard-markdown` hook declaration, `codex` contains the Codex skill variants, and `common` contains the harness-neutral `worktree-wip` instructions.
 
@@ -21,7 +21,7 @@ The package deploys these primitives from sub-packages under [`packages/agents/`
 | `worktree-wip` | instructions | Stash and work-in-progress rules for repos that run more than one agent worktree session. |
 | `guard-markdown` | hook | `PreToolUse` gate on `Write` and `Edit` that refuses Markdown whose paragraphs span more than one line. |
 
-Pinning the bare repo (`apm install tbhb-dev/devtools#v0.13.0`) resolves the root workspace manifest, whose dependencies on the four sub-packages under `packages/agents/` are local paths that a remote consumer's `apm` resolves transitively, filtering each sub-package by its own targets. For a claude-only consumer, the bare pin gives exactly what the `claude` and `common` pins deliver. APM filters the other packages by their declared targets. This repo installs its own package the way a consumer does: `apm install` deploys the primitives into the local harness layout, and CI rejects drift between the `packages/agents/*/.apm/` sources and the deployed copies.
+Pinning the bare repo (`apm install tbhb-dev/devtools#v0.14.2`) resolves the root workspace manifest, whose dependencies on the four sub-packages under `packages/agents/` are local paths that a remote consumer's `apm` resolves transitively, filtering each sub-package by its own targets. For a claude-only consumer, the bare pin gives exactly what the `claude` and `common` pins deliver. APM filters the other packages by their declared targets. This repo installs its own package the way a consumer does: `apm install` deploys the primitives into the local harness layout, and CI rejects drift between the `packages/agents/*/.apm/` sources and the deployed copies.
 
 ## Checks
 
@@ -38,7 +38,7 @@ A check is one rule enforced everywhere it matters. Because all three callers ru
 ```yaml
 repos:
   - repo: https://github.com/tbhb-dev/devtools
-    rev: v0.13.0
+    rev: v0.14.2
     hooks:
       - id: guard-markdown
 ```
@@ -59,6 +59,7 @@ Each tool under [`cmd/`](cmd/) builds as a standalone binary:
 - `agentcontext` assembles shared agent context.
 - `guard-markdown` refuses Markdown whose paragraphs span more than one line.
 - [`commit-lint`](docs/commit-lint.md) checks Conventional Commits and attribution trailers.
+- [`gh-post`](docs/gh-post.md) scans GitHub content before posting under an allowed identity.
 - [`ssh-sign`](docs/agent-signing.md) signs agent commits through a dedicated SSH agent.
 
 Install one directly:
@@ -75,7 +76,9 @@ mise run build
 
 ## Development
 
-[mise](https://mise.jdx.dev) pins the toolchain and runs the workflow: `mise run bootstrap` sets up a fresh clone, `mise run lint` runs the full lint suite, `mise run test` runs the tests, and `mise run build` compiles the binaries into `bin/`. On a machine with no mise, the committed shim at `tools/mise-bootstrap` runs in place of `mise` and installs the pinned release on first use. The pins live in [mise.toml](mise.toml) and the drop-ins under `.config/mise/conf.d/`, locked by digest in the committed `mise.lock` files. See [AGENTS.md](AGENTS.md) for the agent-facing contributor guide.
+[mise](https://mise.jdx.dev) pins the toolchain and runs the workflow: `mise run bootstrap` sets up a fresh clone and builds the commands into the ignored `bin/` directory, `mise run lint` runs the full lint suite, and `mise run test` runs the tests. Run `mise run install` explicitly to put the commands on `PATH` in the mise-managed Go installation's bin directory. On a machine with no mise, the committed shim at `tools/mise-bootstrap` runs in place of `mise` and installs the pinned release on first use. The pins live in [mise.toml](mise.toml) and the drop-ins under `.config/mise/conf.d/`, locked by digest in the committed `mise.lock` files. See [AGENTS.md](AGENTS.md) for the agent-facing contributor guide.
+
+After creating a linked worktree, inspect its configuration and run `mise trust`, then run `mise run devtools:worktree-setup`. The setup task refuses an untrusted configuration. Once trusted, it prepares the worktree-local Vale styles with `vale sync` and the Python environment with `uv sync`. Skill setup checks stop with these commands when the configuration is untrusted or the ignored Vale styles are absent.
 
 The test task includes Go, Python, hook Bats, and leak Bats suites. Run `mise run test-hooks` or `mise run test-leaks` for the shell suites. CI runs them in `test-bats (ubuntu-24.04)` and `test-bats (macos-15)`. See the [task and CI routing guide](AGENTS.md#tasks) for the check names `fix-pr` recognizes.
 
@@ -91,17 +94,20 @@ PR, merge, and watch readers use GraphQL so REST core quota exhaustion doesn't p
 
 ### Bootstrap the runtime
 
-These instructions describe the current main branch for v0.13.0.
+These instructions describe the current main branch. Choose a released version that includes `gh-post` before adopting its posting skills.
 
 Choose that release for every devtools reference once it's available. Copy the [vendir manifest](.devtools/vendir.yml) into the consumer as `vendir.yml` and replace both refs with that tag. It delivers the whole `.devtools` tree and the mise drop-ins. Keep both paths in Git so updates can check their contents against the index. Existing consumers syncing only `.devtools/tasks` must expand the manifest to `.devtools/**` with `newRootPath: .devtools`.
 
-The consumer needs mise and vendir before its first sync. Declare vendir, uv and APM in its root mise tools, then run `vendir sync` and `mise install`. Add the guard and commit-message tools in the root tools table, using the same tag as the manifest:
+The consumer needs mise and vendir before its first sync. Declare vendir, uv and APM in its root mise tools, then run `vendir sync` and `mise install`. Add the guard, commit-message, and posting tools in the root tools table, using the same tag as the manifest:
 
 ```toml
 [tools]
-"go:github.com/tbhb-dev/devtools/cmd/guard-markdown" = "v0.13.0"
-"go:github.com/tbhb-dev/devtools/cmd/commit-lint" = "v0.13.0"
+"go:github.com/tbhb-dev/devtools/cmd/guard-markdown" = "<devtools-release>"
+"go:github.com/tbhb-dev/devtools/cmd/commit-lint" = "<devtools-release>"
+"go:github.com/tbhb-dev/devtools/cmd/gh-post" = "<devtools-release>"
 ```
+
+Configure the posting identity allowlist and private-list policy before posting. The [GitHub posting guide](docs/gh-post.md) covers installation, configuration keys, supported operations, exit codes, and the local audit log.
 
 The optional `agentrepo` declaration enables [reviewer deadlines](docs/reviewer-timeout.md) once pinned to a release containing `review run`.
 
@@ -261,6 +267,8 @@ Sync `.devtools/scripts/` alongside `.devtools/tasks/` in your consumer's `vendi
 Findings report the location and rule without printing matched text. Sensitive locations become opaque identifiers.
 
 Add the `leaks-staged`, `leaks-commit-msg`, `leaks-pre-push`, and `commit-msg-pre-push` hook IDs from this repository to prek. Run `mise run devtools:prek-install` followed by `mise run devtools:install-pre-push-hook` after syncing, and include both steps in your bootstrap task. The latter installs a wrapper before prek's pre-push hook so the scans receive Git's ref lines. The pre-push hook IDs verify the wrapper installation. The wrapper scans the exact outgoing objects and commit messages before prek consumes the ref lines. In CI, fetch full history and run `mise run --quiet devtools:lint-leaks -- --range "$BASE..$HEAD"` for the pull request's base and head commits.
+
+For review worktrees, run `DEVTOOLS_LEAK_HOOK_CHECK=warn mise run devtools:check-leak-hook` (or export the variable before `mise run lint`) to report a missing or mismatched pre-push wrapper as a warning with exit 0. This also applies to `devtools:check-pre-push-hook`. The default check still fails. CI continues to skip the local hook check. The variable doesn't change hook installation or leak scans.
 
 Keep private literals in `mise.local.toml`, which Git ignores:
 

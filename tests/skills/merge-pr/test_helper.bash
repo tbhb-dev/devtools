@@ -1,5 +1,6 @@
 HEAD_OID=1111111111111111111111111111111111111111
 BASE_OID=2222222222222222222222222222222222222222
+# cspell:words baseword
 
 merge_setup() {
   source "$(dirname "${BASH_SOURCE[0]}")/../../test_helper.bash"
@@ -16,6 +17,7 @@ merge_setup() {
   mkdir -p "$GH_FIXTURES/api" "${BATS_TEST_TMPDIR}/bin"
   export PATH="${BATS_TEST_TMPDIR}/bin:$PATH"
   export MERGE_STUB="$ROOT/tests/skills/merge-pr/gh-merge.bash"
+  export CSPELL_COMMIT_MSG="$ROOT/scripts/cspell-commit-msg.sh"
   write_stubs
   write_fixtures
 
@@ -23,8 +25,12 @@ merge_setup() {
   git -C "$REPO" config user.name Tester
   git -C "$REPO" config user.email tester@example.com
   cd "$REPO"
-  printf 'SQUASH_AGENTMSG\n' >.gitignore
-  git add -- .gitignore
+  printf 'SQUASH_AGENTMSG\nPR_AGENTDESC.md\n' >.gitignore
+  cat >.cspell.jsonc <<'JSON'
+{"dictionaryDefinitions":[{"name":"project","path":"./.cspell-words.txt","addWords":true}],"dictionaries":["project"]}
+JSON
+  printf 'baseword\n' >.cspell-words.txt
+  git add -- .gitignore .cspell.jsonc .cspell-words.txt
   git commit --quiet -m 'test: initial state'
   BASE_OID=$(git rev-parse HEAD)
   git checkout --quiet -b topic
@@ -50,15 +56,23 @@ write_stubs() {
 F=$GH_FIXTURES
 printf '%s\n' "$*" >>"$F/gh.log"
 filter=""
+json_fields=""
 args=()
 while [ $# -gt 0 ]; do
   case $1 in
   --jq | -q) filter=$2; shift 2 ;;
-  --json) shift 2 ;;
+  --json) json_fields=$2; shift 2 ;;
   *) args+=("$1"); shift ;;
   esac
 done
 out() { if [ -n "$filter" ]; then jq -r "$filter"; else cat; fi; }
+view_fields() {
+  if [ -n "$json_fields" ]; then
+    jq --arg fields "$json_fields" '($fields | split(",")) as $fields | with_entries(select(.key as $key | $fields | index($key)))'
+  else
+    cat
+  fi
+}
 case "${args[0]} ${args[1]:-}" in
 "auth status") exit 0 ;;
 "pr view")
@@ -71,9 +85,9 @@ case "${args[0]} ${args[1]:-}" in
   n=$(cat "$F/unknown" 2>/dev/null || echo 0)
   if [ "$n" = always ] || [ "$n" -gt 0 ]; then
     [ "$n" = always ] || echo $((n - 1)) >"$F/unknown"
-    jq '.mergeable = "UNKNOWN" | .mergeStateStatus = "UNKNOWN"' "$F/pr.json" | out
+    jq '.mergeable = "UNKNOWN" | .mergeStateStatus = "UNKNOWN"' "$F/pr.json" | view_fields | out
   else
-    out <"$F/pr.json"
+    jq '(.reviews[]?.author) |= del(.__typename)' "$F/pr.json" | view_fields | out
   fi
   ;;
 "pr list") if [ -f "$F/children.json" ]; then out <"$F/children.json"; else echo '[]' | out; fi ;;
@@ -92,6 +106,8 @@ case "${args[0]} ${args[1]:-}" in
   fi
   case "${args[*]}" in
   *viewer*) jq '{data:{viewer:.}}' "$F/user.json" | out ;;
+  *'author{__typename login}'*)
+    jq '[{data:{repository:{pullRequest:{headRefOid:(.reviewHead // .headRefOid),reviews:{nodes:.reviews,pageInfo:{hasNextPage:false,endCursor:null}}}}}}]' "$F/pr.json" | out ;;
   *qualifiedName*)
     if [ -f "$F/base-error" ]; then cat "$F/base-error" >&2; exit 1; fi
     jq '{data:{repository:{ref:{target:{oid:.object.sha}}}}}' "$F/api/repos_{owner}_{repo}_git_ref_heads_main.json" | out ;;
@@ -111,16 +127,26 @@ case "${args[0]} ${args[1]:-}" in
 *) echo "gh stub: unhandled: ${args[*]}" >&2; exit 1 ;;
 esac
 STUB
+  cat >"${BATS_TEST_TMPDIR}/bin/gh-post" <<'STUB'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >>"$GH_FIXTURES/gh-post.log"
+exec gh "$@"
+STUB
   cat >"${BATS_TEST_TMPDIR}/bin/mise" <<'STUB'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >>"$GH_FIXTURES/mise.log"
 case "$1 $2" in
 "task info") [ -z "${MISE_NO_TASK:-}" ] ;;
-"run lint-squash-msg") exit "${MISE_LINT_STATUS:-0}" ;;
+"run lint-squash-msg")
+  if [ "${MISE_REAL_SQUASH_LINT:-0}" = 1 ]; then
+    exec "$CSPELL_COMMIT_MSG" SQUASH_AGENTMSG
+  fi
+  exit "${MISE_LINT_STATUS:-0}"
+  ;;
 *) exit 1 ;;
 esac
 STUB
-  chmod +x "${BATS_TEST_TMPDIR}/bin/gh" "${BATS_TEST_TMPDIR}/bin/mise"
+  chmod +x "${BATS_TEST_TMPDIR}/bin/gh" "${BATS_TEST_TMPDIR}/bin/gh-post" "${BATS_TEST_TMPDIR}/bin/mise"
 }
 
 write_fixtures() {

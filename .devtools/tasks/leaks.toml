@@ -6,7 +6,7 @@ run = "bash $DEVTOOLS_DIR/scripts/check-leaks.sh"
 
 # prek consumes Git ref lines itself; the wrapper must scan before prek.
 ["devtools:check-leak-hook"]
-description = "Check that the leak scan runs before prek at pre-push"
+description = "Check that the leak scan runs before prek at pre-push (DEVTOOLS_LEAK_HOOK_CHECK=warn warns only)"
 quiet = true
 run = "bash $DEVTOOLS_DIR/scripts/install-pre-push.sh --check"
 

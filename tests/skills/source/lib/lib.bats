@@ -10,6 +10,7 @@ setup() {
   isolate_git
   ROOT="${BATS_TEST_DIRNAME}/../../../.."
   LIB="${ROOT}/packages/agents/claude/.apm/skills/commit/scripts/lib.sh"
+  WORKTREE_READY="${ROOT}/packages/agents/claude/.apm/skills/commit/scripts/worktree-ready.sh"
   REPO="${BATS_TEST_TMPDIR}/repo"
   unset CLAUDE_CODE_SESSION_ID CODEX_THREAD_ID CLAUDECODE DEVTOOLS_HARNESS
   unset DEVTOOLS_REVIEW_CMD DEVTOOLS_REVIEW_MODEL DEVTOOLS_REVIEW_EFFORT DEVTOOLS_DELEGATION_CHECK DEVTOOLS_REVIEW_TIMEOUT
@@ -19,9 +20,13 @@ setup() {
   git -C "$REPO" config user.name Tester
   git -C "$REPO" config user.email tester@example.com
   cd "$REPO"
+  export REAL_AGENTREPO
+  REAL_AGENTREPO=$(command -v agentrepo)
   mkdir -p "$BATS_TEST_TMPDIR/bin"
   cat >"$BATS_TEST_TMPDIR/bin/agentrepo" <<'STUB'
 #!/usr/bin/env bash
+[ "${1:-}" != --help ] || exit 0
+if [ "$1" = config ]; then exec "$REAL_AGENTREPO" "$@"; fi
 printf '%s\n' "$@" >"$DEVTOOLS_REVIEW_INPUTS/args"
 shift 5
 exec "$@"
@@ -54,21 +59,48 @@ lib() {
   [ "$output" = t ]
 }
 
-@test "dt_conf reads the environment, then the machine files, never the repository" {
-  mkdir -p "$XDG_CONFIG_HOME/devtools"
-  printf 'review_cmd = from-defaults\nreview_model = m1\n' >"$XDG_CONFIG_HOME/devtools/devtools.conf"
-  printf '# comment\nreview_cmd = from-repo-conf\n' >"$XDG_CONFIG_HOME/devtools/repo.conf"
-  printf 'review_cmd = planted\n' >"$REPO/devtools.conf"
-  printf 'review_cmd = planted\n' >"$REPO/agent-skills.conf"
+@test "dt_worktree_ready stops on an untrusted mise config without trusting it" {
+  printf '[env]\nVALUE = "unsafe"\n' >mise.toml
+  cat >"$BATS_TEST_TMPDIR/bin/mise" <<'STUB'
+#!/usr/bin/env bash
+case "$*" in
+*"trust --show") printf '%s: untrusted\n' "$PWD" ;;
+*"trust"*) touch "$BATS_TEST_TMPDIR/trusted" ;;
+esac
+STUB
+  chmod +x "$BATS_TEST_TMPDIR/bin/mise"
 
-  lib dt_conf review_cmd
-  [ "$output" = from-repo-conf ]
-  lib dt_conf review_model
-  [ "$output" = m1 ]
-  DEVTOOLS_REVIEW_CMD=from-env lib dt_conf review_cmd
-  [ "$output" = from-env ]
-  lib dt_conf review_effort fallback
-  [ "$output" = fallback ]
+  run bash "$WORKTREE_READY"
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"mise config is untrusted"* ]]
+  [[ "$output" == *"mise trust"* ]]
+  [ ! -e "$BATS_TEST_TMPDIR/trusted" ]
+}
+
+@test "dt_worktree_ready stops on missing Vale styles with the setup command" {
+  printf '[*]\nBasedOnStyles = Google\n' >.vale.ini
+  cat >"$BATS_TEST_TMPDIR/bin/vale" <<'STUB'
+#!/usr/bin/env bash
+echo "Style 'Google' isn't on the StylesPath" >&2
+exit 2
+STUB
+  chmod +x "$BATS_TEST_TMPDIR/bin/vale"
+
+  run bash "$WORKTREE_READY"
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Vale styles are missing"* ]]
+  [[ "$output" == *"mise run devtools:worktree-setup"* ]]
+}
+
+@test "all gate preflights run the shared worktree readiness check" {
+  for skill in commit pr merge-pr rebase; do
+    grep -q 'worktree-ready[.]sh' "$ROOT/packages/agents/source/skills/$skill/shared/scripts/preflight.sh"
+  done
+  for skill in agent-commit agent-pr agent-merge-pr; do
+    grep -q '../../.*scripts/preflight.sh' "$ROOT/packages/agents/source/skills/$skill/shared/scripts/preflight.sh"
+  done
 }
 
 @test "dt_verdict accepts only a bare PASS line" {
@@ -103,15 +135,15 @@ review_once() {
 
 review_subject() {
   export REVIEW_SUBJECT=$1 REVIEW_DRAFT=$2
-  export DEVTOOLS_REVIEW_CMD=$3 DT_TEST_UNATTENDED=${4:-0}
+  export DEVTOOLS_REVIEW_CMD=$3 DEVTOOLS_TEST_UNATTENDED=${4:-0}
   lib '
     printf "%s\n" "$REVIEW_DRAFT" >draft
     inputs=$(dt_new_inputs t)
     cp draft "$inputs/draft"
     printf "criteria\n" >criteria.md
     ok() { return 0; }
-    if [ "$DT_TEST_UNATTENDED" = 1 ]; then
-      DT_UNATTENDED=1
+    if [ "${DEVTOOLS_TEST_UNATTENDED-${DT_TEST_UNATTENDED:-0}}" = 1 ]; then
+      DEVTOOLS_UNATTENDED=1
       dt_agent_context() { return 0; }
       dt_repo_digest() { printf "repo\n"; }
       dt_repo_conf() { printf "3\n"; }
@@ -556,7 +588,7 @@ STUB
 
 @test "runner timeout after PASS removes an old stamp and reports timeout" {
   review_once 'cat >/dev/null; echo "VERDICT: PASS"'
-  printf '#!/usr/bin/env bash\necho "VERDICT: PASS"\nexit 124\n' >"$BATS_TEST_TMPDIR/bin/agentrepo"
+  printf '#!/usr/bin/env bash\n[ "$1" != --help ] || exit 0\nif [ "$1" = config ]; then exec "$REAL_AGENTREPO" "$@"; fi\necho "VERDICT: PASS"\nexit 124\n' >"$BATS_TEST_TMPDIR/bin/agentrepo"
   review_once 'exit 0'
   [ "$status" -eq 124 ]
   [[ "$output" == *'reviewer timed out; nothing stamped'* ]]
@@ -566,7 +598,7 @@ STUB
 @test "runner cancellation and PASS followed by failure never stamp" {
   for code in 130 1; do
     review_once 'cat >/dev/null; echo "VERDICT: PASS"'
-    printf '#!/usr/bin/env bash\necho "VERDICT: PASS"\nexit %s\n' "$code" >"$BATS_TEST_TMPDIR/bin/agentrepo"
+    printf '#!/usr/bin/env bash\n[ "$1" != --help ] || exit 0\nif [ "$1" = config ]; then exec "$REAL_AGENTREPO" "$@"; fi\necho "VERDICT: PASS"\nexit %s\n' "$code" >"$BATS_TEST_TMPDIR/bin/agentrepo"
     review_once 'exit 0'
     [ "$status" -eq 4 ]
     [ ! -e .git/agent-skills/t.stamp ]
@@ -583,7 +615,7 @@ STUB
     DEVTOOLS_REVIEW_CMD="cat; echo VERDICT: PASS" dt_run_reviewer "$PWD" "$PWD" <<<prompt
   '
   [ "$status" -eq 0 ]
-  [[ "$output" == *'unbounded because agentrepo is missing'* ]]
+  [[ "$output" == *'unbounded because agentrepo is missing or unusable'* ]]
   [[ "$output" == *prompt*'VERDICT: PASS'* ]]
   [ "$(printf '%s\n' "$output" | grep -c unbounded)" -eq 1 ]
 }
@@ -597,6 +629,36 @@ STUB
     DEVTOOLS_REVIEW_CMD="echo VERDICT: PASS; exit 7" dt_run_reviewer "$PWD" "$PWD" </dev/null
   '
   [ "$status" -eq 7 ]
-  [[ "$output" == *'unbounded because agentrepo is missing'* ]]
+  [[ "$output" == *'unbounded because agentrepo is missing or unusable'* ]]
   [ ! -e .git/agent-skills/t.stamp ]
+}
+
+@test "broken agentrepo shim preserves the reviewer and warns once" {
+  printf '#!/usr/bin/env bash\nif [ "$1" = config ]; then exec "$REAL_AGENTREPO" "$@"; fi\nexit 1\n' >"$BATS_TEST_TMPDIR/bin/agentrepo"
+
+  lib 'DEVTOOLS_REVIEW_CMD="cat; echo VERDICT: PASS" dt_run_reviewer "$PWD" "$PWD" <<<prompt'
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'unbounded because agentrepo is missing or unusable'* ]]
+  [[ "$output" == *prompt*'VERDICT: PASS'* ]]
+  [ "$(printf '%s\n' "$output" | grep -c unbounded)" -eq 1 ]
+}
+
+@test "content posting names a missing gh-post and never falls back to gh" {
+  lib 'gh() { echo raw-fallback; }; PATH=/nonexistent; dt_gh_post pr comment 1 --body-file body'
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"gh-post is missing"* ]]
+  [[ "$output" != *raw-fallback* ]]
+}
+
+@test "content posting preserves the wrapper arguments and failure status" {
+  cat >"$BATS_TEST_TMPDIR/bin/gh-post" <<'STUB'
+#!/usr/bin/env bash
+printf '%s\n' "$*"
+exit 2
+STUB
+  chmod +x "$BATS_TEST_TMPDIR/bin/gh-post"
+  lib 'dt_gh_post pr review 1 --approve --body-file review.md'
+  [ "$status" -eq 2 ]
+  [ "$output" = 'pr review 1 --approve --body-file review.md' ]
 }
