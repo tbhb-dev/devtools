@@ -21,52 +21,92 @@ name: apm-package
 on:
   push:
     branches: [main]
-    paths:
-      - apm.yml
-      - apm.lock.yaml
-      - packages/agents/**
-      - hooks/**
-      - .claude/rules/**
-      - .claude/skills/**
-      - .claude/hooks/**
-      - .claude/settings.json
-      - .claude/apm-hooks.json
-      - .agents/**
-      - .github/workflows/apm-package.yml
-      - .github/skill-scanner-policy.yaml
-      # The apm pin and its checksums: a bump changes what every step
-      # below runs, so it has to trigger this workflow.
-      - mise.toml
-      - mise.lock
+  # No paths filter: the ruleset requires validate and scan-skills on every
+  # pull request, and a workflow that never starts leaves them pending
+  # forever. The changes job below decides whether validate runs.
   pull_request:
-    paths:
-      - apm.yml
-      - apm.lock.yaml
-      - packages/agents/**
-      - hooks/**
-      - .claude/rules/**
-      - .claude/skills/**
-      - .claude/hooks/**
-      - .claude/settings.json
-      - .claude/apm-hooks.json
-      - .agents/**
-      - .github/workflows/apm-package.yml
-      - .github/skill-scanner-policy.yaml
-      # The apm pin and its checksums: a bump changes what every step
-      # below runs, so it has to trigger this workflow.
-      - mise.toml
-      - mise.lock
 
 permissions:
   contents: read
 
+# A push gets its own group so an irrelevant push cannot replace a pending
+# relevant one; only pull requests share a group per ref.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # The one list of paths that make this workflow relevant. A bump of the
+  # apm pin or its checksums (mise.toml, mise.lock) changes what every step
+  # below runs, so those count too.
+  changes:
+    name: changes
+    runs-on: ubuntu-24.04
+    outputs:
+      relevant: ${{ steps.diff.outputs.relevant }}
+    steps:
+      - name: Harden the runner
+        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Detect relevant changes
+        id: diff
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
+          AFTER_SHA: ${{ github.sha }}
+        run: |
+          paths=(
+            apm.yml
+            apm.lock.yaml
+            packages/agents
+            hooks
+            .claude/rules
+            .claude/skills
+            .claude/hooks
+            .claude/settings.json
+            .claude/apm-hooks.json
+            .agents
+            .github/workflows/apm-package.yml
+            .github/skill-scanner-policy.yaml
+            mise.toml
+            mise.lock
+          )
+          # Compare the endpoints the old path filters used: the topic
+          # branch against its merge base for a pull request, the old and
+          # new tips for a push. A diff that cannot run (a new branch's
+          # all-zero before, a force-pushed-away tip, unrelated history)
+          # has nothing to compare, so run the gate.
+          if [ "$EVENT" = pull_request ]; then
+            range=("$BASE_SHA...$HEAD_SHA")
+          else
+            range=("$BEFORE_SHA" "$AFTER_SHA")
+          fi
+          relevant=true
+          if changed=$(git diff --name-only "${range[@]}" -- "${paths[@]}" 2>/dev/null); then
+            [ -n "$changed" ] || relevant=false
+          fi
+          echo "relevant=$relevant" >> "$GITHUB_OUTPUT"
+          if [ "$relevant" = false ]; then
+            echo "No APM package paths changed; validate is skipped." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
   validate:
     name: validate
+    needs: changes
+    # Skip only when the detector succeeded and reported nothing relevant.
+    # A failed detector leaves its output empty, and skipping validate then
+    # would pass the required check without running it.
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.relevant == 'true') }}
     runs-on: ubuntu-24.04
     steps:
       - name: Harden the runner
@@ -114,6 +154,10 @@ jobs:
             exit 1
           fi
 
+  # Always runs. The ruleset requires the nested "scan-skills / Skill
+  # Scanner" context, and a skipped caller reports only its own name, which
+  # leaves that context pending. The upstream workflow takes no condition
+  # of its own, so the scan runs on every pull request.
   scan-skills:
     name: scan-skills
     permissions:

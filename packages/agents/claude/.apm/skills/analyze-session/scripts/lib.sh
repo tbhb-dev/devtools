@@ -753,6 +753,18 @@ dt_confirm() {
   return "$DT_HELD"
 }
 
+# Content writes require the scanner.
+dt_require_gh_post() {
+  command -v gh-post >/dev/null 2>&1 && return 0
+  printf 'gh-post is missing; install the gh-post tool before publishing content.\n' >&2
+  return 2
+}
+
+dt_gh_post() {
+  dt_require_gh_post || return $?
+  gh-post "$@"
+}
+
 # dt_gh preserves gh's failure status; quota exhaustion has status 76.
 # Only quota failures need the extra rate_limit reset lookup. Never retry a
 # mutation: its outcome may already have taken effect on GitHub.

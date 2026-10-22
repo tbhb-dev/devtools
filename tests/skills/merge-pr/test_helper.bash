@@ -127,6 +127,11 @@ case "${args[0]} ${args[1]:-}" in
 *) echo "gh stub: unhandled: ${args[*]}" >&2; exit 1 ;;
 esac
 STUB
+  cat >"${BATS_TEST_TMPDIR}/bin/gh-post" <<'STUB'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >>"$GH_FIXTURES/gh-post.log"
+exec gh "$@"
+STUB
   cat >"${BATS_TEST_TMPDIR}/bin/mise" <<'STUB'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >>"$GH_FIXTURES/mise.log"
@@ -141,7 +146,7 @@ case "$1 $2" in
 *) exit 1 ;;
 esac
 STUB
-  chmod +x "${BATS_TEST_TMPDIR}/bin/gh" "${BATS_TEST_TMPDIR}/bin/mise"
+  chmod +x "${BATS_TEST_TMPDIR}/bin/gh" "${BATS_TEST_TMPDIR}/bin/gh-post" "${BATS_TEST_TMPDIR}/bin/mise"
 }
 
 write_fixtures() {
