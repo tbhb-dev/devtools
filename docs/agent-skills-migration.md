@@ -80,6 +80,8 @@ Reports print locally unless both `mail_cmd` and `mail_to` are nonempty. The com
 
 Repository configuration can't select a reviewer, GitHub account, or delegation checker. Unattended publication requires a nonempty machine `gh_login` with no built-in account default. It rejects `--confirmed`. Either session pre-approval or machine delegation must grant the action, and neither skill prompts or grants itself authority.
 
+The machine's `delegation_check` receives `check <repository> <action>`. Exit 0 grants, exit 1 refuses, and any other exit leaves the action waiting. For `merge`, `--pr <number>` and `--head <40-hex sha>` are always present: `<checker> check <repository> merge --pr <number> --head <40-hex sha>`. Its head is the reviewed commit passed to `gh pr merge --match-head-commit`. The invocation appends `--owner-path` exactly when the merge gates run and owner paths appear in the merge policy, while checkers should ignore arguments they don't use.
+
 ## Behavior comparison
 
 The public source is the [avirt local skill family](https://github.com/tbhb-dev/avirt-poc/tree/main/.agents/skills). Comparison with the original consumer found a missing publication delegation check in that public copy. The shared confirmation chain supplies it. No consumer identities, mailbox values, or protected-path patterns belong in the package.

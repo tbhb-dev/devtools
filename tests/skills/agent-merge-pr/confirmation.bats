@@ -233,6 +233,6 @@ CHECKER
   CHECK_STATUS=0 run bash "$SCRIPTS/squash-merge.sh" 7
   [ "$status" -eq 0 ]
   [[ "$output" == *"confirmation: delegation_check granted merge in repo"* ]]
-  [ "$(cat "$CHECK_ARGS")" = $'check repo merge\ncheck repo merge' ]
+  [ "$(cat "$CHECK_ARGS")" = "$(printf 'check repo merge --pr 7 --head %s\ncheck repo merge --pr 7 --head %s' "$HEAD_OID" "$HEAD_OID")" ]
   grep -q -- "--match-head-commit $HEAD_OID" "$GH_FIXTURES/merged"
 }
