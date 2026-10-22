@@ -48,6 +48,8 @@ merge_ready_cmd =
 
 The commit and publication values preceding are defaults. Merge requires explicit nonempty `golden_paths`, `loosening_markers`, `gate_config_paths`, `owner_paths`, and `disposable_ignored` patterns. Use `^$` for a deliberately empty set. The merge examples are placeholders for consumer policy, not built-in protected paths. The round bound accepts integers from 1 to 9. Success resets the corresponding finding counter. Reaching the bound blocks further reviews even after preflight or a new commit.
 
+devtools defines its own patterns in `.agents/agent-skills.conf`. They protect the published payload and hooks, workflows, rule sets, gate configuration, and skill guards. Cleanup permits known build and cache output and preserves local settings, notes, dependency directories, and other worktrees. Consumers must choose patterns for their own trees. Policy refusals print the exception message. An empty pattern reports its key.
+
 Inspect the last review before an operator clears the worktree's `agent-skills/commit.rounds` , `agent-skills/pr.rounds`, or `agent-skills/squash.rounds` file under its Git directory. Failed reviewer execution and changed inputs don't count as findings.
 
 `pr_template` names a file inside the repository. Scaffolding, shared validation, and the committed review snapshot use it. An empty `lint_pr_cmd` fails. The existing `PR_TEMPLATE` environment variable remains the fallback when the repository doesn't specify a template.
@@ -108,6 +110,10 @@ Reports record whether execution used an override and the approving login. The o
 The scan skips full comment lines. It recognizes exclusion keys instead of matching words inside values and ignores suppression text inside quoted values. Non-local APM deployments come from `apm.lock.yaml` at the pinned base commit. Local deployment overrides stay in scope. A missing lockfile means no deployment exemptions. Malformed ownership data refuses the scan. A PR can't grant itself an exemption by editing its lockfile. Changes to `.agents/agent-skills.conf` always require the owner approval so a policy edit can't waive its own check. The scan is a backstop and doesn't replace review.
 
 Required checks come from GitHub's applied branch rules and active ruleset JSON files in `ruleset_dir` at the pinned base. Requirements match names exactly. The merge requires a nonempty list of known required checks and a nonempty rollup. Skipped required checks, unknown states, and missing results refuse the merge. Check judgement uses `agentrepo checks evaluate` instead of another check judge. A configured `merge_ready_cmd` must be an executable path and receives `<repo-root> <pr> <head>`. Its nonzero status blocks, while empty readiness doesn't add a check.
+
+`merge-pr` also enforces the full merge gates when confirmation comes from session pre-approval or machine delegation. Only an explicit `--confirmed` representing an operator answer keeps the attended behavior. Every execution refuses an empty check rollup as inconclusive.
+
+The workflow environment variable is `DEVTOOLS_UNATTENDED`. `DT_UNATTENDED` remains a deprecated alias for one release: the reader uses `DEVTOOLS_UNATTENDED` when set, otherwise `DT_UNATTENDED`. Generated entry points and child review processes pass the new name. The context isn't exported while repository gates and reviewers run.
 
 Existing lint, review, stamps, and the `merge` confirmation chain serve these scripts. Unattended execution rejects `--confirmed`. Use session pre-approval or machine delegation. Owner paths add `--owner-path` to merge delegation and appear in the report. `merge.sh <pr> <expected-head>` preserves the previous explicit head interface. Shared stamps also pin that head. Failed reviewer execution, timeout, and input drift don't consume a finding round.
 

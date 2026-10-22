@@ -78,7 +78,7 @@ Received: ${arg}"
   esac
 done
 
-if [ "${DT_UNATTENDED:-0}" = 1 ] && [ "$confirmed" = true ]; then
+if [ "${DEVTOOLS_UNATTENDED:-0}" = 1 ] && [ "$confirmed" = true ]; then
   fail "Unattended workflows refuse --confirmed; use pre-approval or delegation."
 fi
 
@@ -87,7 +87,7 @@ cd "$root"
 draft=$root/COMMIT_AGENTMSG
 state=$(dt_state_dir)
 here=$DT_LIB_DIR
-if [ "${DT_UNATTENDED:-0}" = 1 ]; then
+if [ "${DEVTOOLS_UNATTENDED:-0}" = 1 ]; then
   dt_agent_context
   dt_agent_signing
   commit_ref=$(gitr symbolic-ref --quiet HEAD)
@@ -134,9 +134,9 @@ mise run devtools:gitleaks
 dt_gate lint "" "$rerun_gates" mise run lint
 dt_gate test "" "$rerun_gates" mise run test
 if [ "$mode" = amend ]; then
-  DT_UNATTENDED=${DT_UNATTENDED:-0} bash "$here/review.sh" --amend
+  DEVTOOLS_UNATTENDED=${DEVTOOLS_UNATTENDED:-0} bash "$here/review.sh" --amend
 else
-  DT_UNATTENDED=${DT_UNATTENDED:-0} bash "$here/review.sh"
+  DEVTOOLS_UNATTENDED=${DEVTOOLS_UNATTENDED:-0} bash "$here/review.sh"
 fi
 require_reviewed
 [ "$dry_run" = false ] || exit 0
@@ -181,7 +181,7 @@ snapshot() {
     gitr status --porcelain --untracked-files=all
   } | gitr hash-object --stdin
 }
-if [ "${DT_UNATTENDED:-0}" = 1 ]; then
+if [ "${DEVTOOLS_UNATTENDED:-0}" = 1 ]; then
   dt_agent_context
   dt_agent_signing
   dt_agent_before_commit "$message" "$commit_ref"
@@ -189,7 +189,7 @@ if [ "${DT_UNATTENDED:-0}" = 1 ]; then
 fi
 before=$(snapshot)
 status=0
-if [ "${DT_UNATTENDED:-0}" = 1 ]; then
+if [ "${DEVTOOLS_UNATTENDED:-0}" = 1 ]; then
   command git "$@" >"$state/commit.log" 2>&1 || status=$?
   cat "$state/commit.log"
   if [ "$status" != 0 ] && grep -Eq "^(error: gpg failed to sign the data|fatal: failed to write commit object)" "$state/commit.log"; then
@@ -227,7 +227,7 @@ if [ "$status" != 0 ]; then
   exit "$status"
 fi
 
-if [ "${DT_UNATTENDED:-0}" = 1 ]; then
+if [ "${DEVTOOLS_UNATTENDED:-0}" = 1 ]; then
   dt_agent_verify_commit "$start" "$tree" "$mode" "$state"
 fi
 

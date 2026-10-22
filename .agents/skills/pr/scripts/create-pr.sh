@@ -90,9 +90,10 @@ for arg in "$@"; do
   esac
 done
 
-if [ "${DT_UNATTENDED:-0}" = 1 ] && [ "$confirmed" = true ]; then
+if [ "${DEVTOOLS_UNATTENDED:-0}" = 1 ] && [ "$confirmed" = true ]; then
   die "Unattended workflows refuse --confirmed; use pre-approval or delegation."
 fi
+[ "$check_description" = true ] || dt_require_gh_post || exit $?
 root=$(dt_root)
 cd "$root"
 git_dir=$(dt_git_dir)
@@ -118,7 +119,7 @@ pr_agent_range "$base_ref"
 check_identity() {
   local want login
   want=$(dt_conf gh_login)
-  [ "${DT_UNATTENDED:-0}" != 1 ] || [ -n "$want" ] || die "gh_login must be configured on the machine"
+  [ "${DEVTOOLS_UNATTENDED:-0}" != 1 ] || [ -n "$want" ] || die "gh_login must be configured on the machine"
   if [ -z "$want" ]; then
     printf 'gh identity: gh_login is not configured, so the account check is skipped\n'
     return 0
@@ -172,7 +173,7 @@ require_reviewed
 mise run devtools:lint-leaks
 mise run devtools:gitleaks
 dt_gate lint "" "$rerun_gates" mise run lint
-DT_UNATTENDED=${DT_UNATTENDED:-0} bash "$here/review.sh"
+DEVTOOLS_UNATTENDED=${DEVTOOLS_UNATTENDED:-0} bash "$here/review.sh"
 step "checking the review stamp"
 require_reviewed
 head=$(dt_head)

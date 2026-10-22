@@ -7,7 +7,7 @@ set -o pipefail
 . "$DT_LIB_DIR/pr-checks.sh"
 
 pr_agent_context() {
-  [ "${DT_UNATTENDED:-0}" = 1 ] || return 0
+  [ "${DEVTOOLS_UNATTENDED:-0}" = 1 ] || return 0
   dt_agent_context || return $?
   local dirty template mode
   dirty=$(gitr status --porcelain --untracked-files=all) || return $?
@@ -23,7 +23,7 @@ pr_agent_context() {
 }
 
 pr_agent_range() {
-  [ "${DT_UNATTENDED:-0}" = 1 ] || return 0
+  [ "${DEVTOOLS_UNATTENDED:-0}" = 1 ] || return 0
   local count current base_branch
   current=$(gitr symbolic-ref --short HEAD) || return $?
   base_branch=${1#refs/remotes/}
@@ -35,7 +35,7 @@ pr_agent_range() {
 }
 
 pr_agent_current() {
-  [ "${DT_UNATTENDED:-0}" = 1 ] || return 0
+  [ "${DEVTOOLS_UNATTENDED:-0}" = 1 ] || return 0
   pr_agent_context || return $?
   local current
   current=$(gitr symbolic-ref --short HEAD) || return $?
@@ -46,7 +46,7 @@ pr_agent_current() {
 pr_checks() {
   local draft=$1 rerun=$2 cmd
   bash "$DT_LIB_DIR/validate-description.sh" "$draft" || return $?
-  if [ "${DT_UNATTENDED:-0}" != 1 ]; then
+  if [ "${DEVTOOLS_UNATTENDED:-0}" != 1 ]; then
     dt_gate lint-pr-description "$draft" "$rerun" mise run lint-pr-description
     return $?
   fi
@@ -68,7 +68,7 @@ pr_checks() {
 # The checker receives a restrictive signal for any matching path on the branch.
 pr_agent_owner_paths() {
   pr_owner=false
-  [ "${DT_UNATTENDED:-0}" = 1 ] || return 0
+  [ "${DEVTOOLS_UNATTENDED:-0}" = 1 ] || return 0
   local patterns mergebase changed status=0
   patterns=$(dt_repo_conf owner_paths) || return $?
   [ -n "$patterns" ] || return 0
@@ -84,7 +84,7 @@ pr_agent_owner_paths() {
 
 # Publication succeeded before reporting. A transport failure never retries it.
 pr_agent_report() {
-  [ "${DT_UNATTENDED:-0}" = 1 ] || return 0
+  [ "${DEVTOOLS_UNATTENDED:-0}" = 1 ] || return 0
   local result number url text
   result=$(dt_gh pr list --head "$branch" --state open --json number,url --jq '.[0] | [.number,.url] | @tsv') || return $?
   IFS=$'\t' read -r number url <<<"$result"

@@ -6,6 +6,8 @@ description: >-
 
 # Publish unattended
 
+Use `gh-post` for issue and PR content, comments, reviews, comment edits, and release notes. Supply body text through `--body-file` or stdin. If `gh-post` is missing, stop and report the missing command. Never fall back to a direct GitHub content write.
+
 Never prompt, use `AskUserQuestion`, pass `--confirmed`, or create a pre-approval record. Missing authority returns 75. Report the hold and preserve the draft.
 
 Install the sibling `pr` and `review-pr-description` skills from the same package.

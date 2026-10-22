@@ -25,7 +25,7 @@ merge_setup() {
   git -C "$REPO" config user.name Tester
   git -C "$REPO" config user.email tester@example.com
   cd "$REPO"
-  printf 'SQUASH_AGENTMSG\n' >.gitignore
+  printf 'SQUASH_AGENTMSG\nPR_AGENTDESC.md\n' >.gitignore
   cat >.cspell.jsonc <<'JSON'
 {"dictionaryDefinitions":[{"name":"project","path":"./.cspell-words.txt","addWords":true}],"dictionaries":["project"]}
 JSON
@@ -127,6 +127,11 @@ case "${args[0]} ${args[1]:-}" in
 *) echo "gh stub: unhandled: ${args[*]}" >&2; exit 1 ;;
 esac
 STUB
+  cat >"${BATS_TEST_TMPDIR}/bin/gh-post" <<'STUB'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >>"$GH_FIXTURES/gh-post.log"
+exec gh "$@"
+STUB
   cat >"${BATS_TEST_TMPDIR}/bin/mise" <<'STUB'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >>"$GH_FIXTURES/mise.log"
@@ -141,7 +146,7 @@ case "$1 $2" in
 *) exit 1 ;;
 esac
 STUB
-  chmod +x "${BATS_TEST_TMPDIR}/bin/gh" "${BATS_TEST_TMPDIR}/bin/mise"
+  chmod +x "${BATS_TEST_TMPDIR}/bin/gh" "${BATS_TEST_TMPDIR}/bin/gh-post" "${BATS_TEST_TMPDIR}/bin/mise"
 }
 
 write_fixtures() {
