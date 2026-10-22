@@ -9,6 +9,7 @@ EDITMSG
 ENV
 Equalf
 Errorf
+GORACE
 Honnef
 JUnit
 Magika
@@ -20,10 +21,12 @@ RUSTDOCFLAGS
 Sprintf
 TSSDK
 Tricolon
+USERPROFILE
 Uncomparables
 Worktree
 Worktrees
 addopts
+afakt
 agentcontext
 agenthooks
 agentrepo
@@ -33,6 +36,7 @@ argjson
 argparse
 asasalint
 asciicheck
+atexit
 autobuild
 autostash
 avirt
