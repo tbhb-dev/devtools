@@ -6,7 +6,7 @@ The script pins `commit.cleanup=whitespace` for you. At the default of `strip`, 
 
 Only `--amend`, `--confirmed`, `--dry-run`, and `--rerun-gates` pass through. `--amend` is the form `fix-pr` routes here for, and it needs a review run with `--amend` too. The script refuses every other flag, because a check on the command line sees `bash commit.sh` and none of the flags underneath it.
 
-Then rebase onto the base from step 1, without asking. Skip this when step 1 found nothing to rebase onto.
+Then rebase onto the base from step 1, without asking. Skip this after a base merge commit or when step 1 found nothing to rebase onto.
 
 ```text
 git -c rebase.updateRefs=false -c rebase.autoSquash=false rebase --autostash <base>

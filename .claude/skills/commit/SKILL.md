@@ -35,7 +35,7 @@ Track these steps with the session's task-list tools where it provides them. New
 8. Confirm the message with the operator
 9. Commit and rebase
 
-Stop before any of it if preflight reports a rebase, merge, or cherry-pick in progress, or a missing precondition. Say what's wrong and hand back.
+Stop for a missing precondition or an operation in progress other than the base merge described below. Say what's wrong and hand back.
 
 ## Step 1: choose the rebase base
 
@@ -46,6 +46,12 @@ Preflight computed this under `== rebase base ==`. Take its recommendation:
 - `recommended base: none` means there is nothing to rebase onto. A repository's first commit is the usual case. The other is a branch whose default branch is missing both locally and on origin. Record that, and step 9 skips its rebase.
 
 Record the base now. Step 9 rebases onto it without asking again.
+
+## Base merge mode
+
+When a branch must keep its published history, fetch origin and merge `origin/<base>` into it. Resolve conflicts and stage the resolved paths by name before review. Preflight accepts only the current fetched tip of the pull request's base, or the repository default branch when there is no pull request. Other merges, octopus merges, rebases, cherry-picks, and reverts still hold. Don't use `--amend` during a merge.
+
+Review reconstructs conflicted paths from both parents after staging and shows each resolution against each parent. The stamp binds both parents and `MERGE_HEAD`. Gates check the merged tree. Verification checks both parents and the SSH signature. Follow the repository's merge-subject rule and keep all required trailers. Skip the post-commit rebase in this mode.
 
 Worktrees under `.claude/worktrees` are the usual layout here, and each one has its own checkout of the branch.
 
@@ -240,7 +246,7 @@ The script pins `commit.cleanup=whitespace` for you. At the default of `strip`, 
 
 Only `--amend`, `--confirmed`, `--dry-run`, and `--rerun-gates` pass through. `--amend` is the form `fix-pr` routes here for, and it needs a review run with `--amend` too. The script refuses every other flag, because a check on the command line sees `bash commit.sh` and none of the flags underneath it.
 
-Then rebase onto the base from step 1, without asking. Skip this when step 1 found nothing to rebase onto.
+Then rebase onto the base from step 1, without asking. Skip this after a base merge commit or when step 1 found nothing to rebase onto.
 
 ```text
 git -c rebase.updateRefs=false -c rebase.autoSquash=false rebase --autostash <base>

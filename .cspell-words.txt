@@ -269,6 +269,7 @@ passthrough
 pathbuf
 pathlib
 pathspec
+pathspecs
 pdir
 peekable
 perfsprint

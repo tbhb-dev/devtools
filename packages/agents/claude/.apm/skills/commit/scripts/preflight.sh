@@ -105,8 +105,9 @@ behind_count() {
   printf '%s\n' "${counts%%[[:space:]]*}"
 }
 
+dt_commit_context
 if [ "${DEVTOOLS_UNATTENDED:-0}" = 1 ]; then
-  dt_agent_context
+  dt_agent_context commit
   dt_agent_signing
 fi
 # symbolic-ref rather than rev-parse: before the first commit HEAD names
@@ -143,7 +144,7 @@ in_progress=none
 if [ -d "$git_dir/rebase-merge" ] || [ -d "$git_dir/rebase-apply" ]; then
   in_progress="rebase (finish or abort it first)"
 elif [ -f "$git_dir/MERGE_HEAD" ]; then
-  in_progress="merge (finish or abort it first)"
+  in_progress="base merge (resolve and stage conflicts; skip the post-commit rebase)"
 elif [ -f "$git_dir/CHERRY_PICK_HEAD" ]; then
   in_progress="cherry-pick (finish or abort it first)"
 fi
