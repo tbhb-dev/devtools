@@ -32,7 +32,7 @@ permissions:
 # A push gets its own group so an irrelevant push cannot replace a pending
 # relevant one; only pull requests share a group per ref.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
