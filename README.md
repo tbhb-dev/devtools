@@ -59,6 +59,7 @@ Each tool under [`cmd/`](cmd/) builds as a standalone binary:
 - `agentcontext` assembles shared agent context.
 - `guard-markdown` refuses Markdown whose paragraphs span more than one line.
 - [`commit-lint`](docs/commit-lint.md) checks Conventional Commits and attribution trailers.
+- [`gh-post`](docs/gh-post.md) scans GitHub content before posting under an allowed identity.
 - [`ssh-sign`](docs/agent-signing.md) signs agent commits through a dedicated SSH agent.
 
 Install one directly:
@@ -93,17 +94,20 @@ PR, merge, and watch readers use GraphQL so REST core quota exhaustion doesn't p
 
 ### Bootstrap the runtime
 
-These instructions describe the current main branch for v0.13.0.
+These instructions describe the current main branch. Choose a released version that includes `gh-post` before adopting its posting skills.
 
 Choose that release for every devtools reference once it's available. Copy the [vendir manifest](.devtools/vendir.yml) into the consumer as `vendir.yml` and replace both refs with that tag. It delivers the whole `.devtools` tree and the mise drop-ins. Keep both paths in Git so updates can check their contents against the index. Existing consumers syncing only `.devtools/tasks` must expand the manifest to `.devtools/**` with `newRootPath: .devtools`.
 
-The consumer needs mise and vendir before its first sync. Declare vendir, uv and APM in its root mise tools, then run `vendir sync` and `mise install`. Add the guard and commit-message tools in the root tools table, using the same tag as the manifest:
+The consumer needs mise and vendir before its first sync. Declare vendir, uv and APM in its root mise tools, then run `vendir sync` and `mise install`. Add the guard, commit-message, and posting tools in the root tools table, using the same tag as the manifest:
 
 ```toml
 [tools]
-"go:github.com/tbhb-dev/devtools/cmd/guard-markdown" = "v0.13.0"
-"go:github.com/tbhb-dev/devtools/cmd/commit-lint" = "v0.13.0"
+"go:github.com/tbhb-dev/devtools/cmd/guard-markdown" = "<devtools-release>"
+"go:github.com/tbhb-dev/devtools/cmd/commit-lint" = "<devtools-release>"
+"go:github.com/tbhb-dev/devtools/cmd/gh-post" = "<devtools-release>"
 ```
+
+Configure the posting identity allowlist and private-list policy before posting. The [GitHub posting guide](docs/gh-post.md) covers installation, configuration keys, supported operations, exit codes, and the local audit log.
 
 The optional `agentrepo` declaration enables [reviewer deadlines](docs/reviewer-timeout.md) once pinned to a release containing `review run`.
 

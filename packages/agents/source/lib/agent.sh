@@ -3,7 +3,7 @@
 
 # Only repository behavior belongs here. Authorities still use dt_conf.
 dt_repo_conf() {
-  if [ "$_DT_AGENTREPO_CONFIG" = true ]; then
+  if [ "$_DEVTOOLS_AGENTREPO_CONFIG" = true ]; then
     agentrepo config repository -- "$@"
     return $?
   fi
@@ -80,7 +80,7 @@ dt_agent_rounds() {
 # Use the same gate cache, with the configured command in its cache key.
 dt_commit_lint() {
   local cmd
-  if [ "${DT_UNATTENDED:-0}" = 1 ]; then
+  if [ "${DEVTOOLS_UNATTENDED:-0}" = 1 ]; then
     cmd=$(dt_repo_conf lint_commit_cmd 'mise run lint-commit-msg') || return $?
     [ -n "$cmd" ] || dt_die "lint_commit_cmd must not be empty"
     dt_gate lint-commit-msg "$1" "$2" bash -c "$cmd"

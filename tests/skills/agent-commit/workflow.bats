@@ -14,7 +14,7 @@ setup() {
   ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   SCRIPTS="$ROOT/packages/agents/codex/.apm/skills/agent-commit/scripts"
   unset CLAUDE_CODE_SESSION_ID CODEX_THREAD_ID CLAUDECODE DEVTOOLS_HARNESS
-  unset DEVTOOLS_REVIEW_MODEL DEVTOOLS_REVIEW_EFFORT DEVTOOLS_DELEGATION_CHECK DT_UNATTENDED
+  unset DEVTOOLS_REVIEW_MODEL DEVTOOLS_REVIEW_EFFORT DEVTOOLS_DELEGATION_CHECK DEVTOOLS_UNATTENDED
   export XDG_CONFIG_HOME="$BATS_TEST_TMPDIR/config"
   unset DEVTOOLS_SIGNOFF_IDENTITY
   export DEVTOOLS_REVIEW_CMD='cat >/dev/null; echo "VERDICT: PASS"'
@@ -291,7 +291,7 @@ grant() {
 
 @test "internal unattended context does not leak into repository gates" {
   grant
-  printf 'lint_commit_cmd = test -z "${DT_UNATTENDED:-}"\n' >.agents/agent-skills.conf
+  printf 'lint_commit_cmd = test -z "${DEVTOOLS_UNATTENDED:-}"\n' >.agents/agent-skills.conf
   bash "$SCRIPTS/review.sh"
   run bash "$SCRIPTS/commit.sh"
   [ "$status" -eq 0 ]
