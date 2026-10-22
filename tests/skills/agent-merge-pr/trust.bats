@@ -24,7 +24,8 @@ local_change() {
 
 @test "local-package gates ignore clean divergent golden patterns" {
   change golden/result.txt protected
-  sed -i 's/golden_paths = .*/golden_paths = ^$/' .agents/agent-skills.conf
+  sed 's/golden_paths = .*/golden_paths = ^$/' .agents/agent-skills.conf >.agents/agent-skills.conf.new
+  mv .agents/agent-skills.conf.new .agents/agent-skills.conf
   local_change .agents/agent-skills.conf
   run bash "$AGENT/preflight.sh" 7
   [ "$status" -ne 0 ]
@@ -33,7 +34,8 @@ local_change() {
 }
 
 @test "local-package squash lint ignores a clean divergent command" {
-  sed -i 's/lint_squash_cmd = .*/lint_squash_cmd = true/' .agents/agent-skills.conf
+  sed 's/lint_squash_cmd = .*/lint_squash_cmd = true/' .agents/agent-skills.conf >.agents/agent-skills.conf.new
+  mv .agents/agent-skills.conf.new .agents/agent-skills.conf
   local_change .agents/agent-skills.conf
   MISE_LINT_STATUS=1 run bash "$AGENT/review.sh" 7
   [ "$status" -ne 0 ]
@@ -57,7 +59,8 @@ remote_base() {
 @test "remote-package gates ignore clean divergent golden patterns" {
   remote_base
   change golden/result.txt protected
-  sed -i 's/golden_paths = .*/golden_paths = ^$/' .agents/agent-skills.conf
+  sed 's/golden_paths = .*/golden_paths = ^$/' .agents/agent-skills.conf >.agents/agent-skills.conf.new
+  mv .agents/agent-skills.conf.new .agents/agent-skills.conf
   local_change .agents/agent-skills.conf
   run bash "$AGENT/preflight.sh" 7
   [ "$status" -ne 0 ]
@@ -67,7 +70,8 @@ remote_base() {
 
 @test "remote-package squash lint ignores a clean divergent command" {
   remote_base
-  sed -i 's/lint_squash_cmd = .*/lint_squash_cmd = true/' .agents/agent-skills.conf
+  sed 's/lint_squash_cmd = .*/lint_squash_cmd = true/' .agents/agent-skills.conf >.agents/agent-skills.conf.new
+  mv .agents/agent-skills.conf.new .agents/agent-skills.conf
   local_change .agents/agent-skills.conf
   MISE_LINT_STATUS=1 run bash "$AGENT/review.sh" 7
   [ "$status" -ne 0 ]
@@ -90,7 +94,10 @@ integrity_change() {
 }
 
 @test "preflight refuses a verifier that accepts every checkout before sourcing helpers" {
-  sed -i '/^def integrity(base: str, scripts: str) -> None:/a\    return' "$POLICY"
+  sed '/^def integrity(base: str, scripts: str) -> None:/a\
+    return
+' "$POLICY" >"$POLICY.new"
+  mv "$POLICY.new" "$POLICY"
   printf '\nprintf "untrusted helper sourced\\n" >"$GH_FIXTURES/untrusted"\n' >>"$SCRIPTS/signing.sh"
   git add -- .claude/skills/merge-pr/scripts/merge-policy.py .claude/skills/merge-pr/scripts/signing.sh
   git commit --quiet -m 'test: bypass verifier'
@@ -141,7 +148,10 @@ integrity_change() {
   [ "$status" -eq 0 ]
   cat >"$BATS_TEST_TMPDIR/checker" <<'CHECK'
 #!/usr/bin/env bash
-sed -i '/^def integrity(base: str, scripts: str) -> None:/a\    return' .claude/skills/merge-pr/scripts/merge-policy.py
+sed '/^def integrity(base: str, scripts: str) -> None:/a\
+    return
+' .claude/skills/merge-pr/scripts/merge-policy.py >.claude/skills/merge-pr/scripts/merge-policy.py.new
+mv .claude/skills/merge-pr/scripts/merge-policy.py.new .claude/skills/merge-pr/scripts/merge-policy.py
 printf '\n# swapped after preflight\n' >>.claude/skills/merge-pr/scripts/signing.sh
 git add -- .claude/skills/merge-pr/scripts/merge-policy.py .claude/skills/merge-pr/scripts/signing.sh
 git commit --quiet -m 'test: swap helper'

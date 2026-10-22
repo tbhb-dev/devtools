@@ -78,7 +78,8 @@ machine() {
   local file=$XDG_CONFIG_HOME/devtools/devtools.conf
   mkdir -p "$(dirname "$file")"
   touch "$file"
-  sed -i "/^$1 =/d" "$file"
+  sed "/^$1 =/d" "$file" >"$file.new"
+  mv "$file.new" "$file"
   printf '%s = %s\n' "$1" "${2:-}" >>"$file"
 }
 
