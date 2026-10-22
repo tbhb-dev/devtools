@@ -273,6 +273,99 @@ YAML
   done
 }
 
+@test "update preserves untracked neighbors named like the old temporary files" {
+  printf '# tbhb-dev/devtools v0.10.0\n' > notes.md
+  git add -- notes.md
+  for file in notes.md mise.toml apm.yml vendir.yml .pre-commit-config.yaml .github/renovate.json5; do
+    printf 'unrelated notes for %s\n' "$file" > "$file.pins.tmp"
+  done
+  run env usage_version=v0.11.0 bash "${BATS_TEST_TMPDIR}/update.sh"
+  [ "$status" -eq 0 ]
+  for file in notes.md mise.toml apm.yml vendir.yml .pre-commit-config.yaml .github/renovate.json5; do
+    [ "$(cat -- "$file.pins.tmp")" = "unrelated notes for $file" ]
+  done
+  grep -Fxq '# tbhb-dev/devtools v0.11.0' -- notes.md
+}
+
+@test "update rewrites tracked filenames beginning with command options" {
+  for file in -n.md --version.md; do
+    printf '# tbhb-dev/devtools v0.10.0\n' > "$file"
+    git add -- "$file"
+  done
+  run env usage_version=v0.11.0 bash "${BATS_TEST_TMPDIR}/update.sh"
+  [ "$status" -eq 0 ]
+  for file in -n.md --version.md; do
+    grep -Fxq '# tbhb-dev/devtools v0.11.0' -- "$file"
+    [[ "$output" == *"$file:1: prose v0.10.0 -> v0.11.0"* ]]
+  done
+}
+
+@test "update skips a tracked symlink without changing its target" {
+  target="${BATS_TEST_TMPDIR}/tbhb-devtools-v0.10.0.md"
+  printf '# tbhb-dev/devtools v0.10.0\n' > "$target"
+  ln -s -- "$target" notes.md
+  git add -- notes.md
+  run env usage_version=v0.11.0 bash "${BATS_TEST_TMPDIR}/update.sh"
+  [ "$status" -eq 0 ]
+  [ -L notes.md ]
+  [ "$(readlink -- notes.md)" = "$target" ]
+  grep -Fxq '# tbhb-dev/devtools v0.10.0' -- "$target"
+  [[ "$output" == *'notes.md: skipped symlink'* ]]
+}
+
+@test "update skips a tracked path replaced by a non-regular file" {
+  printf '# tbhb-dev/devtools v0.10.0\n' > notes.md
+  git add -- notes.md
+  rm -- notes.md
+  mkdir -- notes.md
+  run env usage_version=v0.11.0 bash "${BATS_TEST_TMPDIR}/update.sh"
+  [ "$status" -eq 0 ]
+  [ -d notes.md ]
+  [[ "$output" == *'notes.md: skipped non-regular file'* ]]
+}
+
+@test "update preserves executable prose permissions" {
+  printf '#!/usr/bin/env bash\n# tbhb-dev/devtools v0.10.0\n' > executable
+  chmod 751 -- executable
+  git add -- executable
+  run env usage_version=v0.11.0 bash "${BATS_TEST_TMPDIR}/update.sh"
+  [ "$status" -eq 0 ]
+  [ "$(stat -c %a -- executable)" = 751 ]
+  grep -Fxq '# tbhb-dev/devtools v0.11.0' -- executable
+}
+
+@test "update cleans random temporary files after a rewrite failure" {
+  cat > "$STUB/sed" <<'STUB'
+#!/usr/bin/env bash
+if [ "$1" = -nE ]; then
+  exec "$REAL_SED" "$@"
+fi
+exit 19
+STUB
+  chmod +x -- "$STUB/sed"
+  export REAL_SED
+  REAL_SED=$(PATH="${PATH#*:}" command -v sed)
+  export REAL_MKTEMP
+  REAL_MKTEMP=$(command -v mktemp)
+  export TEMP_CALLS="${BATS_TEST_TMPDIR}/temp-calls"
+  cat > "$STUB/mktemp" <<'STUB'
+#!/usr/bin/env bash
+created=$("$REAL_MKTEMP" "$@") || exit "$?"
+printf '%s\n' "$created" >> "$TEMP_CALLS"
+printf '%s\n' "$created"
+STUB
+  chmod +x -- "$STUB/mktemp"
+  cp -p -- apm.yml "${BATS_TEST_TMPDIR}/apm-before"
+  run env TMPDIR="$WORK" usage_version=v0.11.0 bash "${BATS_TEST_TMPDIR}/update.sh"
+  [ "$status" -eq 19 ]
+  cmp -- "${BATS_TEST_TMPDIR}/apm-before" apm.yml
+  while IFS= read -r created; do
+    [ ! -e "$created" ]
+  done < "$TEMP_CALLS"
+  [[ "$(head -n 1 -- "$TEMP_CALLS")" == /tmp/devtools-update-pins.* ]]
+  [ -z "$(find . -name '.pins.*' -print)" ]
+}
+
 @test "update preserves other releases for manual edits even beside the previous pin" {
   printf '# tbhb-dev/devtools v0.8.0; tbhb-dev/devtools v0.10.00; tbhb-dev/devtools v0.10.0; tbhb-dev/devtools\tv0.10.0.\n' > tombi.toml
   git add -- tombi.toml
@@ -295,6 +388,15 @@ YAML
   grep -Fxq '# tbhb-dev/devtools v0.10.0' untracked.toml
   cmp untracked.toml ignored.toml
   cmp "${BATS_TEST_TMPDIR}/binary-before" binary.dat
+}
+
+@test "update respects Git binary attributes when selecting tracked prose" {
+  printf 'notes.md binary\n' > .gitattributes
+  printf '# tbhb-dev/devtools v0.10.0\n' > notes.md
+  git add -- .gitattributes notes.md
+  run env usage_version=v0.11.0 bash "${BATS_TEST_TMPDIR}/update.sh"
+  [ "$status" -eq 0 ]
+  grep -Fxq '# tbhb-dev/devtools v0.10.0' -- notes.md
 }
 
 @test "sync failure stops the update after rewriting prose" {
