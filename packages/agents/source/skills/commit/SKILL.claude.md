@@ -35,9 +35,11 @@ Track these steps with the session's task-list tools where it provides them. New
 8. Confirm the message with the operator
 9. Commit and rebase
 
-Stop before any of it if preflight reports a rebase, merge, or cherry-pick in progress, or a missing precondition. Say what's wrong and hand back.
+Stop for a missing precondition or an operation in progress other than the base merge described below. Say what's wrong and hand back.
 
 @include parts/base.md
+
+@include parts/merge.md
 
 Worktrees under `.claude/worktrees` are the usual layout here, and each one has its own checkout of the branch.
 

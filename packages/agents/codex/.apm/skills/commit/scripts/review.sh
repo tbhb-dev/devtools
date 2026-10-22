@@ -64,6 +64,13 @@ cd "$root"
 draft=$root/COMMIT_AGENTMSG
 [ -s "$draft" ] || dt_die "COMMIT_AGENTMSG is missing or empty. Draft the message first."
 
+dt_commit_context
+merge_head=$(dt_commit_merge_head)
+if [ "$merge_head" != none ]; then
+  [ "$mode" = normal ] || dt_die "HELD: cannot amend during a base merge."
+  mode=merge
+fi
+
 # The snapshot. Everything the reviewer reads derives from these three.
 tree=$(gitr write-tree)
 head=$(dt_head)
@@ -88,10 +95,31 @@ esac
 # external diff program, no text conversion, and no file shown as
 # binary. A change that names paths but produces no diff means
 # something hid it.
-gitr diff --no-ext-diff --no-textconv --no-renames --name-status "$against" "$tree" >"$inputs/staged-paths.txt"
-gitr diff --no-ext-diff --text --no-textconv --no-renames "$against" "$tree" >"$inputs/staged.diff"
-if [ -s "$inputs/staged-paths.txt" ] && [ ! -s "$inputs/staged.diff" ]; then
-  dt_die "The staged change names paths, but its diff is empty; something is hiding the content."
+if [ "$mode" = merge ]; then
+  # merge-tree reconstructs conflicts even after staging discarded index stages.
+  status=0
+  gitr merge-tree --write-tree --name-only -z "$head" "$merge_head" >"$inputs/merge-tree" || status=$?
+  [ "$status" -le 1 ] || dt_die "Could not reconstruct merge conflicts."
+  : >"$inputs/staged-paths.txt"
+  : >"$inputs/staged.diff"
+  {
+    IFS= read -r -d '' _automatic_tree
+    while IFS= read -r -d '' path && [ -n "$path" ]; do
+      printf '%s\n' "$path" >>"$inputs/staged-paths.txt"
+      for parent in "$head" "$merge_head"; do
+        printf '\nResolution against parent %s for %s\n' "$parent" "$path" >>"$inputs/staged.diff"
+        gitr --literal-pathspecs diff --no-ext-diff --text --no-textconv --no-renames "$parent" "$tree" -- "$path" >>"$inputs/staged.diff"
+      done
+    done
+  } <"$inputs/merge-tree"
+  rm "$inputs/merge-tree"
+  printf 'Base merge: first parent %s; second parent %s.\nReview conflict resolutions against both parents; clean base changes are omitted.\n' "$head" "$merge_head" >"$inputs/merge-context.txt"
+else
+  gitr diff --no-ext-diff --no-textconv --no-renames --name-status "$against" "$tree" >"$inputs/staged-paths.txt"
+  gitr diff --no-ext-diff --text --no-textconv --no-renames "$against" "$tree" >"$inputs/staged.diff"
+  if [ -s "$inputs/staged-paths.txt" ] && [ ! -s "$inputs/staged.diff" ]; then
+    dt_die "The staged change names paths, but its diff is empty; something is hiding the content."
+  fi
 fi
 if [ "$head" = unborn ]; then
   printf '(no commits yet: this is the first commit)\n' >"$inputs/recent-subjects.txt"
@@ -101,10 +129,11 @@ fi
 
 # shellcheck disable=SC2329 # dt_review calls it by name
 still_as_gathered() {
-  local live_tree live_head
+  local live_tree live_head live_merge_head
   live_tree=$(gitr write-tree) || return $?
   live_head=$(dt_head) || return $?
-  [ "$live_tree" = "$tree" ] && [ "$live_head" = "$head" ] &&
+  live_merge_head=$(dt_commit_merge_head) || return $?
+  [ "$live_merge_head" = "$merge_head" ] && [ "$live_tree" = "$tree" ] && [ "$live_head" = "$head" ] &&
     { [ "$note_digest" = none ] || {
       local live_note_digest
       live_note_digest=$(dt_digest "$inputs/operator-note.txt") || return $?
@@ -117,8 +146,8 @@ dt_review_policy "$inputs" "$head" "$tree"
 criteria=$DT_LIB_DIR/../../review-commit-message/SKILL.md
 status=0
 dt_review commit "$draft" "$snapshot" "$criteria" "$root$arguments_suffix" "$inputs" still_as_gathered \
-  "tree:$tree" \
-  tree "$tree" head "$head" mode "$mode" note "$note_digest" || status=$?
+  "tree:$tree:merge:$merge_head" \
+  tree "$tree" head "$head" mode "$mode" merge_head "$merge_head" parents "$head $merge_head" note "$note_digest" || status=$?
 case $status in
 0) ;;
 2) printf '\nFix every finding in COMMIT_AGENTMSG, then run review.sh again.\n' ;;

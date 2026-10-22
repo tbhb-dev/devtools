@@ -14,13 +14,19 @@ hooks:
 
 Run these steps in order. Never prompt for confirmation, use `AskUserQuestion`, pass `--confirmed`, or create a pre-approval record. Missing authority holds the workflow with exit 75. Report the reason and leave the staged change and draft in place.
 
-1. Run `bash .claude/skills/agent-commit/scripts/preflight.sh`. Create the initial commit through `commit` first. Stop for missing prerequisites or an operation in progress. The sibling `commit` and `review-commit-message` skills must come from the same installed package.
+1. Run `bash .claude/skills/agent-commit/scripts/preflight.sh`. Create the initial commit through `commit` first. Stop for missing prerequisites or an operation in progress other than a supported base merge. The sibling `commit` and `review-commit-message` skills must come from the same installed package.
 2. Read the diff, group one atomic change, and stage its paths by name. Never stage the whole tree.
 3. Draft `COMMIT_AGENTMSG` using the message rules and identity printed by preflight. Explain why the change exists. Include `Assisted-by` before `Signed-off-by`.
 4. Run the repository's `lint_commit_cmd`, which defaults to `mise run lint-commit-msg`. Fix findings before review.
 5. Run `bash .claude/skills/agent-commit/scripts/review.sh`. Add `--amend` when replacing the current commit. The script runs the review and writes the stamp. Never supply a verdict yourself. Findings return 2, and reaching the configured finding bound returns 3. Stop at the bound and report the last findings. Failed reviewer execution returns 4. Changed inputs return 5. Neither counts as a finding round.
 6. Run `bash .claude/skills/agent-commit/scripts/commit.sh`, with `--amend` when reviewed that way. It runs the existing leak, lint, test, review, stamp, and confirmation gates. Only session pre-approval or the machine delegation check can permit it. Signing uses Git's configured SSH signer. A signing failure holds with exit 75. Restore signing before retrying.
 7. Report the resulting commit and any groups still waiting. Don't push or rebase as part of this skill.
+
+## Base merges
+
+When a branch must keep its published history, fetch origin and merge `origin/<base>` into it. Resolve conflicts and stage the resolved paths by name, then run this workflow. Preflight accepts only the current fetched tip of the pull request's base, or the repository default branch when there is no pull request. Other merges, octopus merges, rebases, cherry-picks, and reverts still hold. Don't use `--amend` during a merge.
+
+The review reconstructs conflicted paths from both parents after staging and shows each resolution against each parent. The stamp binds both parents and `MERGE_HEAD`. Gates check the merged tree. Verification checks the parents and SSH signature. Follow the repository's merge-subject rule and keep all required trailers. Don't rebase after the merge commit.
 
 ## Reviewer access
 
