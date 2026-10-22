@@ -67,7 +67,7 @@ devtools keeps its merge patterns in `.agents/agent-skills.conf`. They protect t
 
 Golden files and detected gate loosening require an exact-head APPROVED review by machine `merge_owner`, also available as `DEVTOOLS_MERGE_OWNER`. Use the GraphQL login without `[bot]` for `merge_owner` too. Keep this authority a person: an App owner override can approve its own golden-file waivers. Repositories can't choose this authority, and pushing invalidates approval.
 
-When using an override, the merge report specifies the approving login. It doesn't waive the owner-review label, required checks, independent review, or write authority.
+When using an override, the merge report specifies the approving login. The owner-review label releases only when the latest decisive review from machine `merge_owner` is APPROVED on the exact current head. An older approval, a later CHANGES_REQUESTED or DISMISSED review, or no configured owner keeps the label hold. The final check reads live reviews again. Both merge skills report the approving login and head, also recorded in the agent result JSON, while preserving the required reviewer, required checks, independent review, and write authority.
 
 From the base commit's lockfile, the scan reads non-local APM deployments and preserves local overrides. It skips comments and quoted marker text and matches exclusion keys. Policy configuration changes require owner approval. After delegation and changing dependent pull requests' base branches, the merger checks live approvals. It pins the merge to the reviewed head and verifies the remote message before cleanup. Cleanup preserves fork branches, newer work, current worktrees, and valuable ignored files. The migration note for consumers defines settings and remaining commit work.
 

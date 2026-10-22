@@ -135,9 +135,6 @@ ma_gates() {
   ma_approved "$view" "$reviewer" "$head" "$reviewer_type" || dt_die "WAITING_REVIEW: $reviewer must approve the current head"
   label=$(dt_repo_conf owner_review_label owner-review) || return $?
   [ -n "$label" ] || dt_die "owner_review_label must not be empty"
-  if jq -e --arg label "$label" '.labels | any(.name == $label)' "$view" >/dev/null; then
-    dt_die "needs-owner: the PR has the owner-review label"
-  fi
   if [ "$final" != true ]; then
     mp_local_diff "$base_oid" "$head" "$st" || return $?
     config='{}'
@@ -149,6 +146,24 @@ ma_gates() {
   fi
   if [ "$final" != true ]; then MA_POLICY=$(cat "$st/merge.policy.json") || return $?; fi
   MA_OWNER_OVERRIDE=''
+  MA_OWNER_LABEL_RELEASE=''
+  if jq -e --arg label "$label" '.labels | any(.name == $label)' "$view" >/dev/null; then
+    value=$(ma_login merge_owner) || return $?
+    [ -n "$value" ] || dt_die "needs-owner: owner-review label held; no merge_owner configured"
+    if ! ma_approved "$view" "$value" "$head"; then
+      key=$(jq -r --arg login "$value" '
+        [.reviews[] | select(.author.login == $login) |
+          select(.state == "APPROVED" or .state == "CHANGES_REQUESTED" or .state == "DISMISSED")]
+        | sort_by(.submittedAt) | last | .state // "NONE"
+      ' "$view") || return $?
+      case $key in
+      APPROVED) dt_die "needs-owner: owner-review label held; $value approved an older head" ;;
+      CHANGES_REQUESTED | DISMISSED) dt_die "needs-owner: owner-review label held; latest review from $value is $key" ;;
+      *) dt_die "needs-owner: owner-review label held; $value has no decisive review" ;;
+      esac
+    fi
+    MA_OWNER_LABEL_RELEASE=$(jq -cn --arg login "$value" --arg head "$head" '{login:$login,head:$head}') || return $?
+  fi
   if jq -e '.findings | length > 0' <<<"$MA_POLICY" >/dev/null; then
     jq -r '.findings[] | @json' <<<"$MA_POLICY" >&2
     value=$(ma_login merge_owner) || return $?
@@ -206,11 +221,15 @@ ma_verify() {
 }
 
 ma_report() {
+  local text owners release=''
+  if [ -n "${MA_OWNER_LABEL_RELEASE:-}" ]; then
+    release=$(jq -r '"Owner-review label released by \(.login) at \(.head)."' <<<"$MA_OWNER_LABEL_RELEASE") || return $?
+    printf '%s\n' "$release"
+  fi
   [ "${DEVTOOLS_UNATTENDED:-0}" = 1 ] || return 0
-  local text owners
   owners=$(jq -c '.owner_paths' <<<"$MA_POLICY") || return $?
-  text="Merged #$number as $merge_commit. Owner override: ${MA_OWNER_OVERRIDE:-none}. Owner paths: $owners."
-  jq --arg owner "${MA_OWNER_OVERRIDE:-}" --argjson paths "$owners" '. + {owner_override:$owner,owner_paths:$paths}' "$result" >"$result.next" || return $?
+  text="Merged #$number as $merge_commit. Owner override: ${MA_OWNER_OVERRIDE:-none}. Owner paths: $owners.${release:+ $release}"
+  jq --arg owner "${MA_OWNER_OVERRIDE:-}" --argjson paths "$owners" --argjson release "${MA_OWNER_LABEL_RELEASE:-null}" '. + {owner_override:$owner,owner_paths:$paths,owner_label_release:$release}' "$result" >"$result.next" || return $?
   mv "$result.next" "$result"
   dt_agent_report fixed "$number" "$text" || return $?
   printf '%s\n' "$text"

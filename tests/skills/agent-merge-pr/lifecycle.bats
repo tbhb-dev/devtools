@@ -54,7 +54,6 @@ MAIL
   [[ "$output" == *MERGE_HEAD* ]]
   rm "$(git rev-parse --absolute-git-dir)/MERGE_HEAD"
   pr '.labels=[{name:"owner-review"}]'
-  approve_owner
   run bash "$AGENT/review.sh" 7
   [ "$status" -ne 0 ]
   [[ "$output" == *owner-review* ]]
