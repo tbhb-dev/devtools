@@ -3,6 +3,12 @@
 
 # Only repository behavior belongs here. Authorities still use dt_conf.
 dt_repo_conf() {
+  if [ "$_DT_AGENTREPO_CONFIG" = true ]; then
+    agentrepo config repository -- "$@"
+    return $?
+  fi
+  # #321 removes this fallback when config is in the minimum agentrepo version
+  # on every host and in every consumer.
   local root file value
   root=$(dt_root) || return $?
   file=$root/.agents/agent-skills.conf

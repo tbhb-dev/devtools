@@ -134,6 +134,16 @@ dt_session_id() {
 
 # --- configuration -----------------------------------------------------
 
+# Probe in the sourcing shell so command substitutions share the cached answer.
+if [ -z "${_DT_AGENTREPO_CONFIG+set}" ]; then
+  _DT_AGENTREPO_CONFIG=false
+  if agentrepo config --help >/dev/null 2>&1; then
+    _DT_AGENTREPO_CONFIG=true
+  fi
+fi
+
+# Remove the shell fallback under #321 once the minimum agentrepo version
+# on every host and in every consumer supports config.
 # _dt_conf_file <file> <key>: print the key's value, or fail when the
 # file or the key is absent.
 _dt_conf_file() {
@@ -158,6 +168,10 @@ _dt_conf_file() {
 
 # dt_conf <key> [default]: the configured value, or the default.
 dt_conf() {
+  if [ "$_DT_AGENTREPO_CONFIG" = true ]; then
+    agentrepo config machine -- "$@"
+    return $?
+  fi
   local key=$1 default=${2:-} env_name value dir repo
   env_name=DEVTOOLS_$(printf '%s' "$key" | tr '[:lower:]' '[:upper:]')
   if [ -n "${!env_name+set}" ]; then
