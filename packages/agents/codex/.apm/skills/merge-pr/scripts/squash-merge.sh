@@ -245,9 +245,9 @@ ma_gates "$view" "$number" "$base_oid"
 
 step "confirming"
 status=0
-set --
+set -- --pr "$number" --head "$reviewed_head"
 if ma_require_gates && jq -e '.owner_paths | length > 0' "$state/merge.policy.json" >/dev/null; then
-  set -- --owner-path
+  set -- "$@" --owner-path
 fi
 dt_confirm merge "$confirmed" "$@" || status=$?
 case $status in
