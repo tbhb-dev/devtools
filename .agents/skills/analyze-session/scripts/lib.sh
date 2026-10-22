@@ -137,10 +137,10 @@ dt_session_id() {
 # --- configuration -----------------------------------------------------
 
 # Probe in the sourcing shell so command substitutions share the cached answer.
-if [ -z "${_DT_AGENTREPO_CONFIG+set}" ]; then
-  _DT_AGENTREPO_CONFIG=false
+if [ -z "${_DEVTOOLS_AGENTREPO_CONFIG+set}" ]; then
+  _DEVTOOLS_AGENTREPO_CONFIG=false
   if agentrepo config --help >/dev/null 2>&1; then
-    _DT_AGENTREPO_CONFIG=true
+    _DEVTOOLS_AGENTREPO_CONFIG=true
   fi
 fi
 
@@ -170,7 +170,7 @@ _dt_conf_file() {
 
 # dt_conf <key> [default]: the configured value, or the default.
 dt_conf() {
-  if [ "$_DT_AGENTREPO_CONFIG" = true ]; then
+  if [ "$_DEVTOOLS_AGENTREPO_CONFIG" = true ]; then
     agentrepo config machine -- "$@"
     return $?
   fi

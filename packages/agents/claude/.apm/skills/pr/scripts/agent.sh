@@ -3,7 +3,7 @@
 
 # Only repository behavior belongs here. Authorities still use dt_conf.
 dt_repo_conf() {
-  if [ "$_DT_AGENTREPO_CONFIG" = true ]; then
+  if [ "$_DEVTOOLS_AGENTREPO_CONFIG" = true ]; then
     agentrepo config repository -- "$@"
     return $?
   fi
