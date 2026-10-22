@@ -20,6 +20,15 @@ def test_task_rejects_slow_hook(tmp_path: Path) -> None:
     )
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
+    # The fixture has no uv pin for mise's shim to resolve under MISE_LOCKED.
+    uv = subprocess.run(
+        ["mise", "which", "uv"],
+        cwd=ROOT,
+        stdout=subprocess.PIPE,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    (bin_dir / "uv").symlink_to(uv)
     compiler = bin_dir / "go"
     compiler.write_text(
         f"#!{sys.executable}\n"
@@ -39,6 +48,7 @@ def test_task_rejects_slow_hook(tmp_path: Path) -> None:
         env={
             **os.environ,
             "PATH": str(bin_dir) + os.pathsep + os.environ["PATH"],
+            "MISE_LOCKED": "1",
             "MISE_TRUSTED_CONFIG_PATHS": str(tmp_path),
         },
         capture_output=True,
@@ -46,6 +56,8 @@ def test_task_rejects_slow_hook(tmp_path: Path) -> None:
         check=False,
         timeout=120,
     )
+    sys.stdout.write(result.stdout)
+    sys.stderr.write(result.stderr)
     assert result.returncode != 0, result.stdout + result.stderr
     assert "First cold call (non-gating):" in result.stdout
     assert "20 warm-up calls, 500 hook subprocesses over six fixtures:" in result.stdout
