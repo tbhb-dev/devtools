@@ -23,14 +23,16 @@ on:
     branches: [main]
   # No paths filter: the ruleset requires validate and scan-skills on every
   # pull request, and a workflow that never starts leaves them pending
-  # forever. The changes job below decides whether they run.
+  # forever. The changes job below decides whether validate runs.
   pull_request:
 
 permissions:
   contents: read
 
+# A push gets its own group so an irrelevant push cannot replace a pending
+# relevant one; only pull requests share a group per ref.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -59,7 +61,9 @@ jobs:
         env:
           EVENT: ${{ github.event_name }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           BEFORE_SHA: ${{ github.event.before }}
+          AFTER_SHA: ${{ github.sha }}
         run: |
           paths=(
             apm.yml
@@ -77,21 +81,23 @@ jobs:
             mise.toml
             mise.lock
           )
+          # Compare the endpoints the old path filters used: the topic
+          # branch against its merge base for a pull request, the old and
+          # new tips for a push. A diff that cannot run (a new branch's
+          # all-zero before, a force-pushed-away tip, unrelated history)
+          # has nothing to compare, so run the gate.
           if [ "$EVENT" = pull_request ]; then
-            base=$BASE_SHA
+            range=("$BASE_SHA...$HEAD_SHA")
           else
-            base=$BEFORE_SHA
+            range=("$BEFORE_SHA" "$AFTER_SHA")
           fi
-          # A push with no usable parent (a new branch reports an all-zero
-          # before) has nothing to compare against, so run the gates.
           relevant=true
-          if git cat-file -e "$base^{commit}" 2>/dev/null; then
-            changed=$(git diff --name-only "$base...HEAD" -- "${paths[@]}")
+          if changed=$(git diff --name-only "${range[@]}" -- "${paths[@]}" 2>/dev/null); then
             [ -n "$changed" ] || relevant=false
           fi
           echo "relevant=$relevant" >> "$GITHUB_OUTPUT"
           if [ "$relevant" = false ]; then
-            echo "No APM package paths changed; validate and scan-skills are skipped." >> "$GITHUB_STEP_SUMMARY"
+            echo "No APM package paths changed; validate is skipped." >> "$GITHUB_STEP_SUMMARY"
           fi
 
   validate:
@@ -145,10 +151,12 @@ jobs:
             exit 1
           fi
 
+  # Always runs. The ruleset requires the nested "scan-skills / Skill
+  # Scanner" context, and a skipped caller reports only its own name, which
+  # leaves that context pending. The upstream workflow takes no condition
+  # of its own, so the scan runs on every pull request.
   scan-skills:
     name: scan-skills
-    needs: changes
-    if: needs.changes.outputs.relevant == 'true'
     permissions:
       contents: read
       actions: read
