@@ -171,7 +171,13 @@ fi
 require_reviewed
 
 mise run devtools:lint-leaks
-mise run devtools:gitleaks
+scan_base="refs/remotes/origin/$base"
+scan_base_oid=$(gitr rev-parse --verify "$scan_base^{commit}") ||
+  die "Fetch the declared origin base $scan_base before publication."
+reviewed_base_oid=$(dt_stamp_value pr base_oid) || exit $?
+[ "$scan_base_oid" = "$reviewed_base_oid" ] || die "The scanner base differs from the reviewed PR base."
+mise run devtools:gitleaks -- --mode local --base "$scan_base"
+require_reviewed
 dt_gate lint "" "$rerun_gates" mise run lint
 DEVTOOLS_UNATTENDED=${DEVTOOLS_UNATTENDED:-0} bash "$here/review.sh"
 step "checking the review stamp"

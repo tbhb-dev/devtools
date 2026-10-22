@@ -13,3 +13,5 @@ After the push it checks that `HEAD` is still the reviewed commit and that origi
 Use `--dry-run` to check without writing and `--rerun-gates` to force fresh gates. For an hour, the script can skip checks that passed for the same clean committed tree. It prints each check it skips. Leak scans and the scripted review always run.
 
 Use `--check-description` to run the description validator and prose lint along with labels and property checks. This skips scans, review, lint, tests, and publication. Publication runs description checks, leak scans, lint, the scripted review, and tests in that order.
+
+The secret gate selects `devtools:gitleaks -- --mode local --base refs/remotes/origin/<declared-base>`. Unattended creation and updates share this gate. The origin base must match the review stamp. Fetch complete history and that exact origin branch first. The gate rejects local fallbacks. The scan covers captured branch-added history and the full index. It deliberately excludes unrelated refs and historical base findings absent from the index. CI retains all-ref coverage. See [the scan contract](https://github.com/tbhb-dev/devtools/blob/main/docs/gitleaks.md).

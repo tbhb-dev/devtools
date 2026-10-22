@@ -167,6 +167,8 @@ Use `--dry-run` to check without writing and `--rerun-gates` to force fresh gate
 
 Use `--check-description` to run the description validator and prose lint along with labels and property checks. This skips scans, review, lint, tests, and publication. Publication runs description checks, leak scans, lint, the scripted review, and tests in that order.
 
+The secret gate selects `devtools:gitleaks -- --mode local --base refs/remotes/origin/<declared-base>`. Unattended creation and updates share this gate. The origin base must match the review stamp. Fetch complete history and that exact origin branch first. The gate rejects local fallbacks. The scan covers captured branch-added history and the full index. It deliberately excludes unrelated refs and historical base findings absent from the index. CI retains all-ref coverage. See [the scan contract](https://github.com/tbhb-dev/devtools/blob/main/docs/gitleaks.md).
+
 Report the URL.
 
 ## Step 8: route the rest

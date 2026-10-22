@@ -130,7 +130,7 @@ the same. Run the review again against the current draft and index:
 require_reviewed
 dt_commit_lint "$draft" "$rerun_gates"
 mise run devtools:lint-leaks
-mise run devtools:gitleaks
+mise run devtools:gitleaks -- --mode local
 dt_gate lint "" "$rerun_gates" mise run lint
 dt_gate test "" "$rerun_gates" mise run test
 if [ "$mode" = amend ]; then

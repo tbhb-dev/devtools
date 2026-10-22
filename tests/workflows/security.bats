@@ -16,7 +16,7 @@ checkout = next(step for step in steps if step.get("uses", "").split("@")[0] == 
 assert checkout["with"]["fetch-depth"] == 0
 assert checkout["with"]["persist-credentials"] is False
 assert any(step.get("uses", "").split("@")[0] == "jdx/mise-action" for step in steps)
-assert any(step.get("run") == "mise run devtools:gitleaks" for step in steps)
+assert any(step.get("run") == "mise run devtools:gitleaks -- --mode ci" for step in steps)
 for step in steps:
     if "uses" in step:
         assert re.search(r"@[0-9a-f]{40}$", step["uses"])
@@ -43,6 +43,9 @@ for name in ("govulncheck", "gomodscan", "gitleaks"):
         if "uses" in step:
             assert re.search(r"@[0-9a-f]{40}$", step["uses"])
     caller = yaml.safe_load((workflows / "security.yml").read_text())
+    assert set(caller[True]) == {"push", "pull_request", "schedule"}
+    assert caller[True]["push"]["branches"] == ["main"]
+    assert caller[True]["schedule"] == [{"cron": "26 6 * * *"}]
     assert caller["jobs"][name]["uses"] == f"./.github/workflows/scan-{name}.yml"
 steps = yaml.safe_load((workflows / "scan-govulncheck.yml").read_text())["jobs"]["govulncheck"]["steps"]
 artifact = next(s for s in steps if s.get("uses", "").startswith("actions/upload-artifact@"))

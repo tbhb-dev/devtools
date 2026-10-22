@@ -20,6 +20,8 @@ bash .agents/skills/fix-pr/scripts/diagnose.sh <number>
 
 Stop if the checkout differs from the commit CI tested. For each failure, run the mapped local task before editing. If it passes, inspect the workflow for an environment mismatch, flake, incomplete task mapping, or stale base. Use `rebase` when the failing combined tree doesn't exist locally.
 
+For gitleaks or secret failures, reproduce with `mise run devtools:gitleaks -- --mode ci` after matching CI’s fetched refs and complete history. An unrelated fetched branch or tag can block CI.
+
 Fix only the cause. Don't weaken a rule, exclusion, or threshold without user approval. Re-run the reproducer until it passes.
 
 ## Choose and commit the fix

@@ -34,4 +34,4 @@ jobs:
           install_args: gitleaks
 
       - name: Run gitleaks
-        run: mise run devtools:gitleaks
+        run: mise run devtools:gitleaks -- --mode ci

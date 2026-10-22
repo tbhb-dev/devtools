@@ -167,6 +167,8 @@ Edited the draft to make the linters pass? Then step 6 runs again before you com
 
 Whatever this task reports, `.git/COMMIT_EDITMSG` and its commit-msg hook stay the real gate. A clean run here only predicts that hook's verdict.
 
+The commit gate selects `devtools:gitleaks -- --mode local` for normal and amended commits, including unattended entry points. It requires the origin default symbolic ref and complete history. It scans captured branch-added history plus the full index, covering unchanged files as well as partially staged bytes. Local-only bases have no fallback. This deliberately excludes unrelated refs and historical base findings absent from the index. CI retains all-ref coverage. See [the scan contract](https://github.com/tbhb-dev/devtools/blob/main/docs/gitleaks.md).
+
 ## Step 8: confirm with the operator
 
 Show the operator the staged paths and the complete message first:

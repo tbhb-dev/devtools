@@ -732,7 +732,7 @@ description = "Security-only sub-aggregator"
 run = [
   "mise run vuln",
   "mise run gomodscan",
-  "mise run devtools:gitleaks",
+  "mise run devtools:gitleaks -- --mode ci",
   "mise run audit",
 ]
 
@@ -797,7 +797,7 @@ run = [
   "mise run check",
   "mise run test-go-race",
   "mise run fuzz",
-  "mise run devtools:gitleaks",
+  "mise run devtools:gitleaks -- --mode ci",
 ]
 
 # --- APM ---

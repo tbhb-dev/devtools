@@ -39,7 +39,7 @@ Keep caller job IDs `lint` and `test` stable for the fix-pr routing contract. Ke
 
 The lint workflow requires `devtools:check-vendored`, `install-tools`, `install-guard-markdown` and `lint`. It checks vendored payload first, installs project dependencies and the Markdown guard, then adds the Go binary directory to PATH before linting. Checkout includes full history.
 
-With full history checked, the gitleaks workflow invokes `devtools:gitleaks`. Scanner failures fail the job. Your root gitleaks configuration still applies. See [the fixture policy](gitleaks.md) for the default policy and narrow fixture exceptions.
+With full history checked, the gitleaks workflow invokes `mise run devtools:gitleaks -- --mode ci`. It scans all fetched refs, including unrelated pushed branches and tags, regardless of the checked-out ref. Scanner failures fail the job. Your root gitleaks configuration still applies. See [the fixture policy](gitleaks.md) for the default policy and narrow fixture exceptions.
 
 Go scans require the shared Go tasks and scanner tools declared in the caller's module. SARIF tasks report findings without converting them into scanner execution failures. Task errors still fail the job. Keep the separate reachable-vulnerability gate (`mise run devtools:vuln`) in CI when findings must fail checks. Run security workflows on pull requests, pushes to the default branch and a daily schedule to seed code scanning and detect new advisories.
 
@@ -56,3 +56,5 @@ The text `devtools:gomodscan` task and `devtools:vendor-check` intentionally ski
 The wrappers support the pinned gomodscan v0.1.0 completion diagnostics. Any extra stderr output, including a module lookup failure, or a missing completion summary is a tool failure (status 2). Diagnostics keep the module and service error. Complete text scans return 0 when clean and 1 for findings. Complete SARIF scans return 0 for either outcome, after validating the report's JSON, SARIF version, runs, tool names, and result messages. SARIF validation requires `jq`. The output parent directory must already exist. An output open failure or invalid report fails the task with the requested path in the error.
 
 Agent content publication also requires the `gh-post` tool pin and machine configuration. See [the GitHub posting guide](gh-post.md) for installation, allowed identities, private-string loading, and exit codes. Updated skills stop when the command is missing.
+
+When adopting the scan modes, sync `.devtools/scripts/` with `.devtools/tasks/` and update the skill package together. Fetch complete origin history and set `refs/remotes/origin/HEAD` before local publication. PR publication also needs the declared origin base. Keep security aggregates and CI on explicit `--mode ci`. See [scan boundaries](gitleaks.md#scan-boundaries) for local coverage and index semantics.
