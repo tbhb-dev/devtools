@@ -149,7 +149,7 @@ func identityAllowed(ctx context.Context, allowlist string) (bool, error) {
 		return false, nil
 	}
 	data, err := gh(ctx, []string{apiCommand, "user", jqFlag, ".login"}, nil)
-	if err != nil && os.Getenv("GH_TOKEN") != "" {
+	if err != nil {
 		data, err = gh(
 			ctx,
 			[]string{apiCommand, "graphql", "-f", "query={viewer{login}}", jqFlag, ".data.viewer.login"},

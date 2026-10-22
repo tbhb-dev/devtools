@@ -29,7 +29,7 @@ func setup(t *testing.T) string {
 	t.Setenv("HOME", dir)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(dir, "config"))
 	t.Setenv("XDG_STATE_HOME", filepath.Join(dir, "state"))
-	for _, key := range []string{"DEVTOOLS_PRIVATE_STRINGS", "DEVTOOLS_PRIVATE_STRINGS_REF", "DEVTOOLS_PRIVATE_STRINGS_TOKEN_COMMAND", "DEVTOOLS_SCAN_MODE", "DEVTOOLS_POST_IDENTITIES", "GH_TOKEN", "OP_SERVICE_ACCOUNT_TOKEN", "LOGIN", "IDENTITY_STATUS", "WRITE_STATUS", "SILENT", "PRIVATE_RESULT"} {
+	for _, key := range []string{"DEVTOOLS_PRIVATE_STRINGS", "DEVTOOLS_PRIVATE_STRINGS_REF", "DEVTOOLS_PRIVATE_STRINGS_TOKEN_COMMAND", "DEVTOOLS_SCAN_MODE", "DEVTOOLS_POST_IDENTITIES", "GH_TOKEN", "OP_SERVICE_ACCOUNT_TOKEN", "LOGIN", "IDENTITY_STATUS", "GRAPHQL_STATUS", "WRITE_STATUS", "SILENT", "PRIVATE_RESULT"} {
 		t.Setenv(key, "")
 		require.NoError(t, os.Unsetenv(key))
 	}
@@ -40,7 +40,7 @@ func setup(t *testing.T) string {
 printf '%s\n' "$*" >> "$CALLS"
 case "$*" in
 	'api user --jq .login') echo "${LOGIN:-agent}"; exit "${IDENTITY_STATUS:-0}" ;;
-	'api graphql '*) echo 'app[bot]'; exit 0 ;;
+	'api graphql '*) echo 'app[bot]'; exit "${GRAPHQL_STATUS:-1}" ;;
 	*' view '*) echo 'https://github.com/owner/repo/pull/12'; exit 0 ;;
 esac
 cat > "$PAYLOAD"
@@ -94,6 +94,50 @@ func TestPostAndAudit(t *testing.T) {
 		_, err = time.Parse(time.RFC3339Nano, record.Time)
 		require.NoError(t, err)
 		require.NotContains(t, line, body)
+	}
+}
+
+func TestPostWithGHConfigDir(t *testing.T) {
+	for _, tt := range []struct {
+		name, login string
+		graphql     bool
+	}{
+		{"app", "app[bot]", true},
+		{"user", "agent", false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := setup(t)
+			configDir := filepath.Join(dir, "gh-config")
+			write(
+				t,
+				filepath.Join(configDir, "hosts.yml"),
+				"github.com:\n    user: "+tt.login+"\n    oauth_token: test-placeholder\n    git_protocol: https\n",
+			)
+			t.Setenv("GH_CONFIG_DIR", configDir)
+			write(t, filepath.Join(dir, "gh"), `#!/bin/sh
+printf '%s\n' "$*" >> "$CALLS"
+login=$(sed -n 's/^    user: //p' "$GH_CONFIG_DIR/hosts.yml")
+case "$*" in
+	'api user --jq .login')
+		[ "$login" != 'app[bot]' ] || exit 1
+		echo "$login"; exit 0 ;;
+	'api graphql '*) echo "$login"; exit 0 ;;
+esac
+cat > "$PAYLOAD"
+echo 'https://github.com/owner/repo/pull/12'
+`)
+			t.Setenv("DEVTOOLS_POST_IDENTITIES", tt.login)
+			code, out, errOut := run(t, "Public text\n", "pr", "comment", "12", "-R", "owner/repo")
+			require.Equal(t, 0, code, errOut)
+			require.Equal(t, "https://github.com/owner/repo/pull/12\n", out)
+			require.Empty(t, errOut)
+			calls, err := os.ReadFile(filepath.Join(dir, "calls"))
+			require.NoError(t, err)
+			require.Equal(t, tt.graphql, strings.Contains(string(calls), "api graphql"))
+			payload, err := os.ReadFile(filepath.Join(dir, "payload"))
+			require.NoError(t, err)
+			require.Equal(t, "Public text\n", string(payload))
+		})
 	}
 }
 
@@ -285,6 +329,7 @@ func TestSecretsOnlyAndApp(t *testing.T) {
 	t.Setenv("DEVTOOLS_POST_IDENTITIES", "app[bot]")
 	t.Setenv("GH_TOKEN", "test-placeholder")
 	t.Setenv("IDENTITY_STATUS", "1")
+	t.Setenv("GRAPHQL_STATUS", "0")
 	t.Setenv("SILENT", "1")
 	code, out, errOut := run(
 		t,
