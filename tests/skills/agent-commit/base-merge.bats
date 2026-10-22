@@ -1,6 +1,13 @@
 #!/usr/bin/env bats
 
+setup_file() {
+  local source_root
+  source_root=$(git -C "$BATS_TEST_DIRNAME" rev-parse --show-toplevel)
+  (cd "$source_root" && go build -o "$BATS_FILE_TMPDIR/commit-lint" ./cmd/commit-lint)
+}
+
 setup() {
+  export PATH="$BATS_FILE_TMPDIR:$PATH"
   source "${BATS_TEST_DIRNAME}/../../test_helper.bash"
   isolate_git
   stub_gates
