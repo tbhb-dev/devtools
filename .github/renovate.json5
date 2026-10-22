@@ -36,6 +36,16 @@
   repositories: ["tbhb-dev/devtools"],
 
   packageRules: [
+    // A major-only comment makes Renovate track the floating major tag,
+    // independently of exact release pins for the same action. Keep
+    // CodeQL comments at full versions so every sub-action moves together
+    // in the shared github-actions group, including reusable scan workflows.
+    {
+      matchManagers: ["github-actions"],
+      matchPackageNames: ["github/codeql-action"],
+      rangeStrategy: "pin",
+    },
+
     // The Renovate engine image is pinned twice: the `renovate-image` input
     // in renovate.yaml, and the validator's image in
     // renovate-config-validator.yaml. Separate PRs let the two skew, and
