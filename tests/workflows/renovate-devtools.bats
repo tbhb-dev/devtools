@@ -15,11 +15,15 @@ JS
 # RUN_RENOVATE_GROUPING=1 mise run test-hooks tests/workflows/renovate-devtools.bats
 @test "Renovate groups all thirteen devtools sites and excludes unrelated Go tools" {
 	[ "${RUN_RENOVATE_GROUPING:-}" = 1 ] || skip 'set RUN_RENOVATE_GROUPING=1 to run the pinned image'
+	bats_require_minimum_version 1.5.0
 	local root="${BATS_TEST_DIRNAME}/../.."
 	local work="${BATS_TEST_TMPDIR}/fixture"
 	local image
 	image=$(sed -n 's/.*renovate-image: \([^ ]*\).*/\1/p' "$root/.github/workflows/renovate.yaml")
 	[ -n "$image" ]
+	# Pull diagnostics must not enter the JSON stream parsed below.
+	run docker pull "$image"
+	[ "$status" -eq 0 ]
 	mkdir -p "$work/consumer/.github/workflows"
 	cp "$root/.github/renovate-config.json5" "$work/preset.json5"
 	for name in lint test renovate renovate-config-validator; do
@@ -120,7 +124,7 @@ for (const name of ['github-tags', 'git-tags', 'git-refs', 'go']) {
 }
 JS
 	tar --mtime=2020-01-01 -C "$work" -cf "$BATS_TEST_TMPDIR/fixture.tar" .
-	run docker run --rm -i --network none -w /tmp \
+	run --separate-stderr docker run --pull=never --rm -i --network none -w /tmp \
 		-e LOG_LEVEL=debug -e LOG_FORMAT=json --entrypoint sh "$image" -c '
       set -eu
       work=$(mktemp -d)
