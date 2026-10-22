@@ -7,6 +7,7 @@
 # ///
 """Inspect pinned Git changes and APM ownership; never execute repository settings."""
 
+import hashlib
 import json
 import re
 import shutil
@@ -521,10 +522,85 @@ def cleanup(base: str, branch: str, expected: str, merge: str, disposable: str) 
         print("Local branch retained by Git cleanup protections")
 
 
+def skill_owner(records: list[str], relative: str) -> tuple[LockRecord, str]:
+    """Require an unambiguous base lock owner for a deployed directory."""
+    owners = []
+    for record in records:
+        dep = lock_record(
+            record, ("source", "local_path", "repo_url", "deployed_files")
+        )
+        files = dep.get("deployed_files", [])
+        if isinstance(files, list) and any(
+            path == relative or path.startswith(relative + "/") for path in files
+        ):
+            owners.append((dep, record))
+    if len(owners) != 1:
+        fail(
+            f"merge integrity: missing or ambiguous base lock ownership for {relative}"
+        )
+    return owners[0]
+
+
+def skill_hashes(base: str, records: list[str], relative: str) -> dict[str, str]:
+    """Local packages trust base blobs; remote packages trust base lock hashes."""
+    dep, record = skill_owner(records, relative)
+    if (
+        lock_text(dep, "source") == "local"
+        or lock_text(dep, "local_path")
+        or lock_text(dep, "repo_url").startswith("_local/")
+    ):
+        paths = git("ls-tree", "-r", "--name-only", "-z", base, "--", relative)
+        return {
+            path.decode("utf-8"): "sha256:"
+            + hashlib.sha256(blob(base, path.decode("utf-8"))).hexdigest()
+            for path in paths.split(b"\0")
+            if path
+        }
+    expected: dict[str, str] = {}
+    section = re.search(
+        r"(?m)^  deployed_file_hashes:\n((?:    .+\n?)*)", "  " + record
+    )
+    if section:
+        for line in section.group(1).splitlines():
+            path_text, digest = line.strip().rsplit(": ", 1)
+            path = lock_scalar(path_text)
+            if path and path.startswith(relative + "/"):
+                if path in expected or not re.fullmatch(r"sha256:[0-9a-f]{64}", digest):
+                    fail("merge integrity: invalid base lock hash")
+                expected[path] = digest
+    return expected
+
+
+def integrity(base: str, scripts: str) -> None:
+    """Check both sibling skills against base ownership, including all helpers."""
+    root = Path(git("rev-parse", "--show-toplevel").decode().strip()).resolve()
+    parent = Path(scripts).parent.parent.resolve()
+    text = blob(base, "apm.lock.yaml").decode("utf-8")
+    records = lock_records(text, "dependencies", required_section=True)
+    for name in ("merge-pr", "agent-merge-pr"):
+        directory = parent / name
+        relative = directory.relative_to(root).as_posix()
+        expected = skill_hashes(base, records, relative)
+        if not expected or directory.is_symlink() or not directory.is_dir():
+            fail(f"merge integrity: no trusted skill files for {relative}")
+        actual = {}
+        for path in directory.rglob("*"):
+            if path.is_symlink() or not (path.is_dir() or path.is_file()):
+                fail(f"merge integrity: non-regular skill file in {relative}")
+            if path.is_file():
+                actual[path.relative_to(root).as_posix()] = (
+                    "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
+                )
+        if actual != expected:
+            fail(f"merge integrity: skill files differ from pinned base for {relative}")
+
+
 def main() -> None:
     """Expose file-oriented interfaces for the shared shell entry points."""
     mode, *args = sys.argv[1:]
     match mode, args:
+        case "integrity", [base, scripts]:
+            integrity(base, scripts)
         case "inspect", [base, head]:
             print(json.dumps(inspect(base, head, json.loads(sys.stdin.read()))))
         case "required", [base, branch, default, directory]:

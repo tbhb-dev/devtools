@@ -149,7 +149,7 @@ printf 'reviewed at head %s, onto %s at %s\n' "$reviewed_head" "$base_ref" "$bas
 # compare against, and the output says the check was skipped.
 
 step "checking the gh account"
-want_login=$(dt_conf gh_login)
+want_login=$(dt_merge_conf gh_login)
 if [ -z "$want_login" ]; then
   printf 'gh_login is not configured; skipping the account check\n'
 else
@@ -230,6 +230,7 @@ if [ "${DEVTOOLS_UNATTENDED:-0}" != 1 ]; then
   mise task info lint-squash-msg >/dev/null 2>&1 ||
     die "mise run lint-squash-msg is absent; the squash-message gate cannot run."
 fi
+ma_trust "$base_oid"
 ma_lint "$reviewed_head" ||
   die "the squash message fails the commit-msg gates. Fix it, review it again, retry."
 commit-lint --rules trailers --require-assisted-from "$base_oid..$reviewed_head" "$SQUASH_DRAFT" ||

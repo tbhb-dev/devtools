@@ -29,9 +29,12 @@ fi
 case $number in "" | *[!0-9]*) dt_die "Pass the pull request number or name it at the end of the squash subject." ;; esac
 
 view=$state/squash-lint.view.json
-mp_view "$number" "$view" number,headRefOid || exit $?
+mp_view "$number" "$view" number,headRefOid,baseRefName || exit $?
 head=$(mp_field "$view" headRefOid) || exit $?
 case $head in "" | *[!0-9a-f]*) dt_die "Pull request #$number has no valid head commit." ;; esac
 [ "${#head}" -eq 40 ] || dt_die "Pull request #$number has no full head commit."
 
+base=$(mp_field "$view" baseRefName) || exit $?
+base_oid=$(mp_base_oid "$base") || exit $?
+ma_trust "$base_oid"
 ma_lint "$head"

@@ -190,6 +190,27 @@ dt_conf() {
   printf '%s\n' "$default"
 }
 
+# Merge authority is machine-only, including the shell compatibility path.
+dt_merge_conf() {
+  local key env_name value dir repo
+  for key in merge_owner required_reviewer required_reviewer_type delegation_check gh_login; do
+    env_name=DEVTOOLS_$(printf '%s' "$key" | tr '[:lower:]' '[:upper:]')
+    [ -z "${!env_name+set}" ] || dt_die "merge authority refuses environment variable $env_name; use machine configuration"
+  done
+  if agentrepo config merge-machine --help >/dev/null 2>&1; then
+    agentrepo config merge-machine -- "$@"
+    return $?
+  fi
+  dir=${XDG_CONFIG_HOME:-$HOME/.config}/devtools
+  repo=$(dt_repo_name) || return $?
+  if value=$(_dt_conf_file "$dir/$repo.conf" "$1") ||
+    value=$(_dt_conf_file "$dir/devtools.conf" "$1"); then
+    printf '%s\n' "$value"
+  else
+    printf '%s\n' "${2:-}"
+  fi
+}
+
 # dt_signoff_identity prints the configured responsible person, falling
 # back to Git's identity for consumers that have not needed an override.
 # The repository's identity policy judges either source before a caller
@@ -699,7 +720,11 @@ dt_preapproval() {
 # A broken checker never lets an action through.
 dt_delegation() {
   local checker status repo configured
-  configured=$(dt_conf delegation_check) || return "$DT_HELD"
+  if [ "$1" = merge ]; then
+    configured=$(dt_merge_conf delegation_check) || return "$DT_HELD"
+  else
+    configured=$(dt_conf delegation_check) || return "$DT_HELD"
+  fi
   checker=$(dt_path "$configured") || return "$DT_HELD"
   if [ -z "$checker" ] || [ ! -x "$checker" ]; then
     return "$DT_HELD"

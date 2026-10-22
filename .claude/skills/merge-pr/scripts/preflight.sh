@@ -135,7 +135,7 @@ rm -f "$view"
 # The account gh acts as. A merge cannot be undone, so squash-merge.sh
 # refuses one made from any account but the configured one.
 section "identity"
-want_login=$(dt_conf gh_login)
+want_login=$(dt_merge_conf gh_login)
 if [ -z "$want_login" ]; then
   printf 'gh account: %s; gh_login is not configured, so the merge does not check it\n' "${login:-unknown}"
 elif [ "$login" = "$want_login" ]; then
@@ -163,7 +163,7 @@ if [ -n "$session" ] && grant=$(dt_preapproval merge); then
 else
   printf 'merge: not granted — merge holds until an authority grants it\n'
 fi
-checker=$(dt_conf delegation_check)
+checker=$(dt_merge_conf delegation_check)
 if [ -n "$checker" ]; then
   printf 'delegation: %s is configured; squash-merge.sh asks it when nobody else has answered\n' "$checker"
 else
@@ -191,7 +191,7 @@ else
   printf '%s gitignored: NO — add it to .gitignore before drafting\n' "$DRAFT"
 fi
 if [ "${DEVTOOLS_UNATTENDED:-0}" = 1 ]; then
-  configured_lint=$(dt_repo_conf lint_squash_cmd 'mise run lint-squash-msg')
+  configured_lint=$(ma_repo_conf lint_squash_cmd 'mise run lint-squash-msg')
   [ -n "$configured_lint" ] || dt_die "lint_squash_cmd must not be empty"
   printf 'configured squash lint: %s\n' "$configured_lint"
 elif command -v mise >/dev/null 2>&1 && mise task info lint-squash-msg >/dev/null 2>&1; then
