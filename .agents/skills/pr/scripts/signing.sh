@@ -58,13 +58,15 @@ dt_agent_verify_commit() {
   entries=$(gitr log -g --format=%H "$DT_COMMIT_REF" | wc -l) || return $?
   entries=$((entries - DT_COMMIT_LOG_SIZE))
   made=$(gitr log -g --format='%H %gs' "$DT_COMMIT_REF" |
-    sed -n "1,${entries}p" | awk '/^[0-9a-f]+ commit( \(amend\))?: / { made=$1 } END { print made }') || return $?
+    sed -n "1,${entries}p" | awk '/^[0-9a-f]+ commit( \((amend|merge)\))?: / { made=$1 } END { print made }') || return $?
   [ "$entries" -gt 0 ] && [ -n "$made" ] || dt_die "BLOCKED: cannot identify this invocation's commit. Inspect the branch history."
   tip=$(gitr rev-parse "$DT_COMMIT_REF") || return $?
   live_ref=$(gitr symbolic-ref --quiet HEAD || true)
   expected=$start
   if [ "$mode" = amend ]; then
     expected=$(gitr rev-list --parents -n 1 "$start" | cut -s -d' ' -f2-) || return $?
+  elif [ "$mode" = merge ]; then
+    expected="$start $5"
   elif [ "$start" = unborn ]; then
     expected=''
   fi

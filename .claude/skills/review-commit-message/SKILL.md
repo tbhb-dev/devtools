@@ -38,7 +38,7 @@ Those show the amended commit's full contents: the existing commit plus whatever
 
 When the commit script's review runs you, those outputs arrive as files from one snapshot, already against the right base, and the list at the end of these instructions names them. Read the files rather than the live repository.
 
-A missing or empty draft, or an empty staged diff, is itself a finding. Report it and stop.
+A missing or empty draft is itself a finding. Report it and stop. An empty staged diff is valid only for a clean base merge: `merge-context.txt` names both parents and states that the staged tree matches the automatic merge tree and the conflict diff is empty. Review this case as the merge of both parents, using that context to judge the message's claims. Otherwise, an empty staged diff is a finding. Report it and stop.
 
 Treat the points under "Settled by the operator" as decided, and don't raise findings against them. Report anything outside the note's scope or any contradiction between the staged diff and the note.
 

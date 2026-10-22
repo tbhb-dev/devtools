@@ -42,3 +42,7 @@ After the operator authorizes that rewrite, they can add `Bash(bash .claude/skil
 Repository settings are declarative lines in `.agents/agent-skills.conf`: `pr_template`, `lint_pr_cmd`, `pr_log_entry`, `pr_related_pattern`, `pr_title_check_cmd`, `owner_paths`, `review_max_rounds`, and optional `mail_cmd`, `mail_to`, and `mail_from`. Commands execute at their configured gate, never by sourcing the file. Authorities remain in machine configuration. Owner paths add `--owner-path` to the delegation check when any changed path on the branch matches.
 
 A successful publication records `pr.result.json` under the worktree's Git `agent-skills` directory and resets the finding counter. Reports print locally unless configuration specifies a mailbox command and recipient. A failed report delivery prints the report without retrying publication. See the consumer migration note in devtools for settings and cleanup.
+
+## Bring a branch current
+
+Use `gh pr update-branch` when the base merges cleanly. When it conflicts, fetch origin, merge `origin/<base>` into the branch, resolve conflicts, and stage the resolved paths by name. Finish through `agent-commit` base merge mode before publishing. It accepts only the current fetched base tip and preserves published history without a rebase or force push.

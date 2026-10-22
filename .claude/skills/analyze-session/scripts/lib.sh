@@ -526,7 +526,11 @@ dt_review() {
     return 3
   fi
   if [ "${DEVTOOLS_UNATTENDED:-0}" = 1 ]; then
-    dt_agent_context || return $?
+    if [ "$kind" = commit ]; then
+      dt_agent_context commit || return $?
+    else
+      dt_agent_context || return $?
+    fi
     dt_agent_rounds "$kind" "$subject" || return $?
     repo_digest=$(dt_repo_digest) || return $?
     set -- "$@" repo_config "$repo_digest"

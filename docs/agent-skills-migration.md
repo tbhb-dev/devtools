@@ -16,6 +16,8 @@ After replacing the local merge skill, remove its compatibility copy of `legacy-
 
 Install the sibling `commit`, `pr`, `merge-pr`, and review skills from the same package. The unattended entry points delegate to them. These skills supply the shared gates and publication machinery.
 
+To adopt base merge mode, pin a package containing it and run `apm install`. Use `gh pr update-branch` when the base merges cleanly. For conflicts, fetch origin, merge `origin/<base>`, resolve conflicts, stage paths by name, and finish through `agent-commit`. It accepts only the current fetched PR base tip, or the default branch tip without a PR. Keep the repository's merge-subject rule and required trailers. Skip the post-commit rebase after a base merge.
+
 Their interfaces remain available for the later `agentrepo` port.
 
 ## Repository configuration

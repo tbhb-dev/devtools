@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Shared unattended policy. Loaded by lib.sh, never sourced from a repository.
 
+export LC_ALL=C
+
 # Only repository behavior belongs here. Authorities still use dt_conf.
 dt_repo_conf() {
   if [ "$_DEVTOOLS_AGENTREPO_CONFIG" = true ]; then
@@ -40,10 +42,44 @@ dt_agent_context() {
   local dir marker
   dir=$(dt_git_dir) || return $?
   for marker in MERGE_HEAD CHERRY_PICK_HEAD REVERT_HEAD rebase-merge rebase-apply; do
+    if [ "$marker" = MERGE_HEAD ] && [ "${1:-}" = commit ]; then continue; fi
     [ ! -e "$dir/$marker" ] || dt_die "HELD: $marker is in progress; finish or abort it first."
   done
   gitr symbolic-ref --quiet HEAD >/dev/null || dt_die "HELD: HEAD is detached."
   gitr rev-parse --verify --quiet HEAD >/dev/null || dt_die "Create the initial commit through the interactive commit skill first."
+}
+
+# Commit workflows alone may finish a merge of the fetched PR base tip.
+# Other workflows retain dt_agent_context's refusal of every merge.
+dt_commit_merge_head() {
+  local dir
+  dir=$(dt_git_dir) || return $?
+  if [ -f "$dir/MERGE_HEAD" ]; then
+    cat "$dir/MERGE_HEAD"
+  else
+    printf 'none\n'
+  fi
+}
+
+dt_commit_context() {
+  local dir marker merge branch base ref tip
+  dir=$(dt_git_dir) || return $?
+  for marker in CHERRY_PICK_HEAD REVERT_HEAD rebase-merge rebase-apply; do
+    [ ! -e "$dir/$marker" ] || dt_die "HELD: $marker is in progress; finish or abort it first."
+  done
+  merge=$(dt_commit_merge_head) || return $?
+  [ "$merge" != none ] || return 0
+  branch=$(gitr symbolic-ref --quiet --short HEAD) || dt_die "HELD: HEAD is detached."
+  # No PR is a successful empty result. API errors must not select a default.
+  base=$(dt_gh pr list --head "$branch" --state open --json baseRefName --jq '.[0].baseRefName // empty') || return $?
+  if [ -z "$base" ]; then
+    ref=$(dt_policy_ref) || return $?
+    base=${ref#refs/remotes/origin/}
+  fi
+  gitr check-ref-format "refs/heads/$base" || dt_die "HELD: invalid base branch."
+  git fetch --quiet origin "refs/heads/$base:refs/remotes/origin/$base" || return $?
+  tip=$(gitr rev-parse --verify "refs/remotes/origin/$base^{commit}") || return $?
+  [ "$merge" = "$tip" ] || dt_die "HELD: MERGE_HEAD must name only the current origin/$base tip."
 }
 
 # Persistent bounds count findings only for one review subject.
