@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file. See [conven
 - - -
 <!-- release -->
 
+## [v0.15.0](https://github.com/tbhb-dev/devtools/compare/1228a3fea10bf36ab61d5056831ccd5637203b72..v0.15.0) - 2026-10-22
+
+### Features
+
+- (**gh-post**) scan GitHub content before publication (#436) - ([09cf26c](https://github.com/tbhb-dev/devtools/commit/09cf26c31af3f8834bd2f896702ed1082cc09119)) - tbhb.dev Agent
+
+### Bug Fixes
+
+- (**merge**) enforce delegated gates and configure repository policy (#434) - ([8585616](https://github.com/tbhb-dev/devtools/commit/8585616dcea31a452362560e0babe58cd52add81)) - tbhb.dev Agent
+
+### Continuous Integration
+
+- (**apm-package**) report required checks on every pull request (#526) - ([06b68e5](https://github.com/tbhb-dev/devtools/commit/06b68e5b5555e4f32db3ce9a183b67cd0f3982bf)) - tbhb.dev Agent
+
+### Refactoring
+
+- (**skills**) resolve shared configuration through agentrepo (#385) - ([1228a3f](https://github.com/tbhb-dev/devtools/commit/1228a3fea10bf36ab61d5056831ccd5637203b72)) - tbhb.dev Agent
+
+- - -
+
+<!-- release -->
+
 ## [v0.14.2](https://github.com/tbhb-dev/devtools/compare/f92ca96f4054d41f08adf948f9087ac82c9fd186..v0.14.2) - 2026-10-21
 
 ### Bug Fixes
