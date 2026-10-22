@@ -63,6 +63,8 @@ Generated unattended entry points use `DEVTOOLS_UNATTENDED` with `DT_UNATTENDED`
 
 Repository configuration supplies squash lint, readiness, ruleset location, owner-review label, protected paths, suppression patterns, and disposable ignored paths. Check judgement calls `agentrepo checks evaluate`. Required checks come from applied GitHub rules and ruleset files at the pinned base. No checks or known requirements means no unattended merge. The YAML policy reader requires `uv`.
 
+devtools keeps its merge patterns in `.agents/agent-skills.conf`. They protect the published payload, workflows, rule sets, gate definitions, and skill guards. Cleanup permits build and cache output and preserves local settings and agent worktrees. Policy errors include the refusal reason and specify any empty pattern.
+
 Golden files and detected gate loosening require an exact-head APPROVED review by machine `merge_owner`, also available as `DEVTOOLS_MERGE_OWNER`. Use the GraphQL login without `[bot]` for `merge_owner` too. Keep this authority a person: an App owner override can approve its own golden-file waivers. Repositories can't choose this authority, and pushing invalidates approval.
 
 When using an override, the merge report specifies the approving login. It doesn't waive the owner-review label, required checks, independent review, or write authority.

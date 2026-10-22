@@ -251,3 +251,36 @@ LOCK
   [ "$status" -eq 0 ]
   [ "$(printf '%s' "$output" | jq '.findings|length')" -eq 1 ]
 }
+
+@test "empty policy patterns report the key and refusal reason" {
+  local key config
+  for key in golden_paths loosening_markers gate_config_paths owner_paths disposable_ignored; do
+    config=$(policy_config | jq --arg key "$key" '.[$key] = ""')
+    run uv run --quiet --script "$POLICY" inspect "$BASE_OID" "$HEAD_OID" <<<"$config"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"merge policy unreadable: Policy pattern $key must not be empty"* ]]
+  done
+}
+
+@test "missing policy pattern reports its key" {
+  run uv run --quiet --script "$POLICY" inspect "$BASE_OID" "$HEAD_OID" <<<'{}'
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Policy pattern golden_paths must not be empty"* ]]
+}
+
+@test "top-level policy refusals include the exception message" {
+  run uv run --quiet --script "$POLICY" unknown
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"merge policy unreadable: Unknown policy operation or arguments"* ]]
+}
+
+@test "devtools repository policy protects published gate tasks" {
+  cp "$ROOT/.agents/agent-skills.conf" .agents/agent-skills.conf
+  git add -- .agents/agent-skills.conf
+  change .devtools/tasks/lint.toml 'lint = "mise run lint"'
+  run bash "$AGENT/review.sh" 7
+  [ "$status" -ne 0 ]
+  [[ "$output" == *".devtools/tasks/lint.toml"*"changes a golden file"* ]]
+  [[ "$output" == *"needs-owner"* ]]
+  [[ "$output" != *"merge policy unreadable"* ]]
+}

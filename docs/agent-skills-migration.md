@@ -48,6 +48,8 @@ merge_ready_cmd =
 
 The commit and publication values preceding are defaults. Merge requires explicit nonempty `golden_paths`, `loosening_markers`, `gate_config_paths`, `owner_paths`, and `disposable_ignored` patterns. Use `^$` for a deliberately empty set. The merge examples are placeholders for consumer policy, not built-in protected paths. The round bound accepts integers from 1 to 9. Success resets the corresponding finding counter. Reaching the bound blocks further reviews even after preflight or a new commit.
 
+devtools defines its own patterns in `.agents/agent-skills.conf`. They protect the published payload and hooks, workflows, rule sets, gate configuration, and skill guards. Cleanup permits known build and cache output and preserves local settings, notes, dependency directories, and other worktrees. Consumers must choose patterns for their own trees. Policy refusals print the exception message. An empty pattern reports its key.
+
 Inspect the last review before an operator clears the worktree's `agent-skills/commit.rounds` , `agent-skills/pr.rounds`, or `agent-skills/squash.rounds` file under its Git directory. Failed reviewer execution and changed inputs don't count as findings.
 
 `pr_template` names a file inside the repository. Scaffolding, shared validation, and the committed review snapshot use it. An empty `lint_pr_cmd` fails. The existing `PR_TEMPLATE` environment variable remains the fallback when the repository doesn't specify a template.
