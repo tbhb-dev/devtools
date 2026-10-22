@@ -93,6 +93,7 @@ done
 if [ "${DEVTOOLS_UNATTENDED:-0}" = 1 ] && [ "$confirmed" = true ]; then
   die "Unattended workflows refuse --confirmed; use pre-approval or delegation."
 fi
+[ "$check_description" = true ] || dt_require_gh_post || exit $?
 root=$(dt_root)
 cd "$root"
 git_dir=$(dt_git_dir)

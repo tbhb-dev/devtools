@@ -13,6 +13,8 @@ hooks:
 
 # Watch a pull request
 
+Use `gh-post` for issue and PR content, comments, reviews, comment edits, and release notes. Supply body text through `--body-file` or stdin. If `gh-post` is missing, stop and report the missing command. Never fall back to a direct GitHub content write.
+
 Wait for the checks on a pull request to settle, then say what happened. This skill ends when the checks stop moving. Fixing what failed belongs to `fix-pr`, and merging belongs to `merge-pr`.
 
 A guard hook runs alongside and refuses the watching forms this skill wraps, so a hand-rolled poll can't quietly replace the watcher. A plain `gh pr checks` for a one-off look remains allowed.

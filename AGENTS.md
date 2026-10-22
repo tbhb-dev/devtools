@@ -71,6 +71,12 @@ When using an override, the merge report specifies the approving login. It doesn
 
 From the base commit's lockfile, the scan reads non-local APM deployments and preserves local overrides. It skips comments and quoted marker text and matches exclusion keys. Policy configuration changes require owner approval. After delegation and changing dependent pull requests' base branches, the merger checks live approvals. It pins the merge to the reviewed head and verifies the remote message before cleanup. Cleanup preserves fork branches, newer work, current worktrees, and valuable ignored files. The migration note for consumers defines settings and remaining commit work.
 
+## GitHub content posts
+
+Use `gh-post` for issue and PR content, comments, reviews, comment edits, and release notes. Supply body text through `--body-file` or stdin. The command refuses inline bodies and unknown flags. If the command is missing, report `gh-post` as missing and stop before posting. Never fall back to a direct content write.
+
+Machine configuration supplies allowed posting identities and private strings for the target repository. Findings print category and line only, and successful posts record a body hash in the local audit log. See [the posting guide](docs/gh-post.md) for installation, configuration, and exit codes.
+
 ## Pull requests
 
 Publication checks the description before leak scans, lint, the independent review, and tests. Use `create-pr.sh --check-description` to run only description checks. PR and commit workflows can use gate passes from a clean committed tree for an hour when the command matches and the gate definitions and tool versions match. Description gates also bind the draft. Records stay under the Git directory. The scripts print each cached pass they use, and `--rerun-gates` forces fresh checks. Leak scans and independent reviews always run.
