@@ -26,7 +26,8 @@ formatters:
       custom-order: true
     gofumpt:
       module-path: example.com/project
-      extra-rules: true
+      extra:
+        group-params: true
     goimports:
       local-prefixes:
         - example.com/project
