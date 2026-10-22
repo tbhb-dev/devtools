@@ -81,6 +81,7 @@ grant() {
   bash "$SCRIPTS/review.sh"
   run bash "$SCRIPTS/commit.sh"
   [ "$status" -eq 0 ]
+  grep -Fxq 'run devtools:gitleaks -- --mode local' "$GATE_ARGS_LOG"
   [[ "$output" == *'committed:'* ]]
   [ "$(git show HEAD:tracked)" = reviewed ]
   [ ! -e .git/agent-skills/commit.stamp ]

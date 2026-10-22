@@ -516,3 +516,41 @@ STUB
   [ "$status" -eq 0 ]
   grep -q '^pr edit 1 .*--title .*--body-file ' "$GH_POST_LOG"
 }
+
+@test "publication scans the declared origin base including slash names" {
+  git update-ref refs/remotes/origin/release/next origin/main
+  sed 's/^base: main$/base: release\/next/' PR_AGENTDESC.md > changed
+  mv changed PR_AGENTDESC.md
+  bash "$SCRIPTS/review.sh"
+  run bash "$SCRIPTS/create-pr.sh" --dry-run
+  [ "$status" -eq 0 ]
+  grep -Fxq 'run devtools:gitleaks -- --mode local --base refs/remotes/origin/release/next' "$GATE_ARGS_LOG"
+}
+
+@test "publication refuses a local-only base before the scanner or push" {
+  git branch local-only origin/main
+  sed 's/^base: main$/base: local-only/' PR_AGENTDESC.md > changed
+  mv changed PR_AGENTDESC.md
+  bash "$SCRIPTS/review.sh"
+  run bash "$SCRIPTS/create-pr.sh" --dry-run
+  [ "$status" -ne 0 ]
+  [[ "$output" == *'Fetch the declared origin base refs/remotes/origin/local-only'* ]]
+  refute_grep devtools:gitleaks "$GATE_LOG"
+  [ -z "$(remote_topic)" ]
+}
+
+@test "publication refuses a scanner base that differs from the review stamp" {
+  bash "$SCRIPTS/review.sh"
+  mv "$BATS_TEST_TMPDIR/bin/mise" "$BATS_TEST_TMPDIR/bin/mise-original"
+  cat > "$BATS_TEST_TMPDIR/bin/mise" <<'STUB'
+#!/usr/bin/env bash
+if [ "$2" = devtools:lint-leaks ]; then git update-ref refs/remotes/origin/main HEAD; fi
+exec "$BATS_TEST_TMPDIR/bin/mise-original" "$@"
+STUB
+  chmod +x "$BATS_TEST_TMPDIR/bin/mise"
+  run bash "$SCRIPTS/create-pr.sh" --dry-run
+  [ "$status" -ne 0 ]
+  [[ "$output" == *'The scanner base differs from the reviewed PR base.'* ]]
+  refute_grep devtools:gitleaks "$GATE_LOG"
+  [ -z "$(remote_topic)" ]
+}

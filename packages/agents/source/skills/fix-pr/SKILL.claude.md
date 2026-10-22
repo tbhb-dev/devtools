@@ -46,6 +46,8 @@ The script also compares the local checkout against the commit CI tested. Stop w
 
 ## Step 2: reproduce
 
+For gitleaks or secret failures, reproduce with `mise run devtools:gitleaks -- --mode ci` after matching CI’s fetched refs and complete history. An unrelated fetched branch or tag can block CI.
+
 Run the task the script named for each failure. Reproducing first is what separates a fix from a guess.
 
 The mapping from job name to task is a guess, so treat a task that passes locally as a signal rather than a contradiction. Look for the explanation among these:

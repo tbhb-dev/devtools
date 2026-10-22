@@ -4,8 +4,9 @@ setup() {
   source "${BATS_TEST_DIRNAME}/../test_helper.bash"
   isolate_git
   local task="${BATS_TEST_DIRNAME}/../../.devtools/tasks/security.toml"
+  export DEVTOOLS_DIR="${BATS_TEST_DIRNAME}/../../.devtools"
   SCRIPT="${BATS_TEST_TMPDIR}/gitleaks.sh"
-  # Run the shipped task body, including its exit-status and commit guard.
+  # Run the shipped task body and helper.
   sed -n "/^run = '''$/,/^'''$/p" "$task" | sed '1d;$d' > "$SCRIPT"
   mkdir "${BATS_TEST_TMPDIR}/repo"
   cd "${BATS_TEST_TMPDIR}/repo"
@@ -21,9 +22,12 @@ import tomllib
 
 source = pathlib.Path(sys.argv[1]).read_text()
 task = tomllib.loads(source)["devtools:gitleaks"]
-assert "gitleaks git --verbose --redact ." in task["run"]
-assert task["description"] == "Scan Git history for committed secrets"
-assert "it reads git history rather than the\n# working tree" in source
+assert 'scripts/gitleaks.sh" "$@"' in task["run"]
+assert "--mode ci (default, all refs)" in task["description"]
+assert "--mode local" in task["description"]
+assert "full index" in task["description"]
+assert "origin base" in task["description"]
+assert "standalone use retain all-ref history coverage" in source
 PY
 
   [ "$status" -eq 0 ]
@@ -52,11 +56,11 @@ PY
   [[ $output == *"leaks found"* ]]
 }
 
-@test "an unresolvable repository fails the zero-commits guard" {
+@test "an unresolvable repository fails before scanning" {
   run bash "$SCRIPT"
 
   [ "$status" -eq 1 ]
-  [[ $output == *"gitleaks walked 0 commits"* ]]
+  [[ $output == *"cannot resolve repository root"* ]]
 }
 
 @test "an empty README root commit has no content to scan" {
@@ -86,13 +90,13 @@ PY
   [[ $output == *"no leaks found"* ]]
 }
 
-@test "a repository without HEAD fails the zero-commits guard" {
+@test "a repository without HEAD fails clearly" {
   git init -q
 
   run bash "$SCRIPT"
 
   [ "$status" -eq 1 ]
-  [[ $output == *"gitleaks walked 0 commits"* ]]
+  [[ $output == *"HEAD must name a commit"* ]]
 }
 
 @test "a history with content still fails when the scanner walks zero commits" {

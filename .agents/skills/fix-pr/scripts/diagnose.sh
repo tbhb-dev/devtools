@@ -112,7 +112,7 @@ reproducer() {
   *test*) printf 'mise run test\n' ;;
   *vendor*) printf 'mise run devtools:vendor-check\n' ;;
   *vuln*) printf 'mise run devtools:vuln\n' ;;
-  *gitleaks* | *secret*) printf 'mise run devtools:gitleaks\n' ;;
+  *gitleaks* | *secret*) printf 'mise run devtools:gitleaks -- --mode ci\n' ;;
   *apm* | *validate*) printf 'apm install --frozen && apm audit --ci\n' ;;
   *fuzz*) printf 'mise run fuzz\n' ;;
   *) printf '(no local task maps to this job; read the log)\n' ;;

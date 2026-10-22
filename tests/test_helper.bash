@@ -10,6 +10,7 @@ isolate_git() {
 # Gate runners are deterministic; no consumer toolchain runs in fixtures.
 stub_gates() {
   mkdir -p "$BATS_TEST_TMPDIR/bin"
+  export GATE_ARGS_LOG="$BATS_TEST_TMPDIR/gate-args"
   export GATE_LOG="$BATS_TEST_TMPDIR/gates.log"
   : >"$GATE_LOG"
   cat >"$BATS_TEST_TMPDIR/bin/mise" <<'STUB'
@@ -19,6 +20,7 @@ case "$1" in
 ls) printf '%s\n' "${TOOL_VERSION:-{}}" ;;
 run)
   printf '%s\n' "$2" >>"$GATE_LOG"
+  printf '%s\n' "$*" >>"$GATE_ARGS_LOG"
   [ "$2" != "${FAIL_GATE:-}" ] || exit 1
   ;;
 esac
