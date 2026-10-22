@@ -135,7 +135,7 @@ if [ -n "$open_number" ]; then
   step "updating pull request #${open_number}"
   current=$(dt_gh pr view "$open_number" \
     --json baseRefName,isDraft,labels,reviewRequests,assignees,milestone)
-  dt_gh pr edit "$open_number" --base "$base" --title "$title" --body-file "$body_file" >/dev/null
+  dt_gh_post pr edit "$open_number" --base "$base" --title "$title" --body-file "$body_file" >/dev/null
 
   # reconcile <add-flag> <remove-flag> <desired> <current>: bring one
   # property set to what the draft says, removals included.
@@ -211,7 +211,7 @@ if [ -n "$milestone" ]; then
   set -- "$@" --milestone "$milestone"
 fi
 
-dt_gh pr create "$@" || exit $?
+dt_gh_post pr create "$@" || exit $?
 rm -f "$copy" "$body_file"
 
 step "done"

@@ -6,6 +6,8 @@ description: >-
 
 # Open a pull request
 
+Use `gh-post` for issue and PR content, comments, reviews, comment edits, and release notes. Supply body text through `--body-file` or stdin. If `gh-post` is missing, stop and report the missing command. Never fall back to a direct GitHub content write.
+
 Work the steps in order. Scripts enforce every gate here. Step 4's review script stamps what an independent reviewer cleared. Step 7's publish script refuses a draft, branch, or base the stamp doesn't cover, a push that would rewrite origin without the operator's word, and a publish nobody confirmed. Codex doesn't provide a skill-scoped command hook, so those scripts are the whole enforcement. Never run a `gh pr` command that changes a pull request yourself.
 
 ## Preflight

@@ -643,3 +643,22 @@ STUB
   [[ "$output" == *prompt*'VERDICT: PASS'* ]]
   [ "$(printf '%s\n' "$output" | grep -c unbounded)" -eq 1 ]
 }
+
+@test "content posting names a missing gh-post and never falls back to gh" {
+  lib 'gh() { echo raw-fallback; }; PATH=/nonexistent; dt_gh_post pr comment 1 --body-file body'
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"gh-post is missing"* ]]
+  [[ "$output" != *raw-fallback* ]]
+}
+
+@test "content posting preserves the wrapper arguments and failure status" {
+  cat >"$BATS_TEST_TMPDIR/bin/gh-post" <<'STUB'
+#!/usr/bin/env bash
+printf '%s\n' "$*"
+exit 2
+STUB
+  chmod +x "$BATS_TEST_TMPDIR/bin/gh-post"
+  lib 'dt_gh_post pr review 1 --approve --body-file review.md'
+  [ "$status" -eq 2 ]
+  [ "$output" = 'pr review 1 --approve --body-file review.md' ]
+}
