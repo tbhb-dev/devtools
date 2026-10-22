@@ -54,7 +54,7 @@
 # this task from a git hook today, which is exactly why the failure would
 # be a surprise.
 ["devtools:update-pins"]
-description = "Move every tbhb-dev/devtools pin to <version> and run the follow-ons; check-pins flags prose mentions for manual edits (alias: devtools:update)"
+description = "Move every tbhb-dev/devtools pin to <version> and run the follow-ons; rewrite prose naming the previous pin, leaving other versions for manual edits (alias: devtools:update)"
 alias = "devtools:update"
 usage = 'arg "<version>" help="The devtools release to move to, e.g. v0.5.0"'
 run = '''
@@ -107,6 +107,8 @@ echo "$version resolves to $sha"
 edit() {
   local file=$1
   shift
+  # Prose can occur in executable tracked files; retain their permissions.
+  cp -p "$file" "$file.pins.tmp"
   "$@" "$file" > "$file.pins.tmp" && mv "$file.pins.tmp" "$file"
 }
 
@@ -157,6 +159,22 @@ if [ -f .pre-commit-config.yaml ]; then
     { print }
   ' .pre-commit-config.yaml > .pre-commit-config.yaml.pins.tmp && mv .pre-commit-config.yaml.pins.tmp .pre-commit-config.yaml
 fi
+
+# Match the tracked text that check-pins checks, but rewrite only the
+# previous pin. Other releases remain for its manual-edit diagnostic.
+mentions=$(git grep -nI -o -E 'tbhb-dev/devtools[[:space:]]+v[0-9]+\.[0-9]+\.[0-9]+' --) || {
+  status=$?
+  [ "$status" -eq 1 ] || exit "$status"
+}
+while IFS= read -r record; do
+  mention=${record##*:}
+  [ "${mention##*[[:space:]]}" = "$guard_version" ] || continue
+  site=${record%:*}
+  file=${site%:*}
+  line=${site##*:}
+  edit "$file" sed -E "${line}s@(tbhb-dev/devtools[[:space:]]+)${guard_version//./\\.}([^0-9]|$)@\\1$version\\2@g"
+  printf '%s: prose %s -> %s\n' "$site" "$guard_version" "$version"
+done <<< "$mentions"
 
 # The payload arrives first: the lock and the install below have to see
 # the tool pins this sync delivers, not the ones it replaced.
