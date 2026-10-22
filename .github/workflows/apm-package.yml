@@ -103,7 +103,10 @@ jobs:
   validate:
     name: validate
     needs: changes
-    if: needs.changes.outputs.relevant == 'true'
+    # Skip only when the detector succeeded and reported nothing relevant.
+    # A failed detector leaves its output empty, and skipping validate then
+    # would pass the required check without running it.
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.relevant == 'true') }}
     runs-on: ubuntu-24.04
     steps:
       - name: Harden the runner
