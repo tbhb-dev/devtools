@@ -88,7 +88,7 @@ mp_require_reviews "$view" "$number"
 head=$(mp_field "$view" headRefOid)
 base=$(mp_field "$view" baseRefName)
 [ -n "$head" ] && [ -n "$base" ] || dt_die "#$number names no head or no base."
-if [ "${DT_UNATTENDED:-0}" = 1 ]; then ma_lint "$head"; fi
+if [ "${DEVTOOLS_UNATTENDED:-0}" = 1 ]; then ma_lint "$head"; fi
 base_oid=$(mp_base_oid "$base") || exit $?
 [ -n "$base_oid" ] || dt_die "Could not read where $base points."
 ma_gates "$view" "$number" "$base_oid"

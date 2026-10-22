@@ -105,7 +105,7 @@ behind_count() {
   printf '%s\n' "${counts%%[[:space:]]*}"
 }
 
-if [ "${DT_UNATTENDED:-0}" = 1 ]; then
+if [ "${DEVTOOLS_UNATTENDED:-0}" = 1 ]; then
   dt_agent_context
   dt_agent_signing
 fi
@@ -219,7 +219,7 @@ if git check-ignore --quiet COMMIT_AGENTMSG 2>/dev/null; then
 else
   printf 'COMMIT_AGENTMSG gitignored: NO — add it to .gitignore before drafting\n'
 fi
-if [ "${DT_UNATTENDED:-0}" = 1 ]; then
+if [ "${DEVTOOLS_UNATTENDED:-0}" = 1 ]; then
   lint_cmd=$(dt_repo_conf lint_commit_cmd 'mise run lint-commit-msg')
   [ -n "$lint_cmd" ] || dt_die "lint_commit_cmd must not be empty"
   printf 'commit message gate: %s\n' "$lint_cmd"
@@ -262,7 +262,7 @@ if [ -n "$session" ] && grant=$(dt_preapproval commit); then
   *) how="no biometric prompt stood behind it" ;;
   esac
   printf 'commit: GRANTED, %s — step 8 skips the confirmation once every gate and the review pass\n' "$how"
-elif [ "${DT_UNATTENDED:-0}" = 1 ]; then
+elif [ "${DEVTOOLS_UNATTENDED:-0}" = 1 ]; then
   printf 'commit: not granted; delegation must authorize the write, otherwise report the hold\n'
 else
   printf 'commit: not granted — step 8 confirms with the operator as written\n'

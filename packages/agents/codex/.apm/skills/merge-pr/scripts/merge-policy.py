@@ -43,10 +43,10 @@ def blob(ref: str, path: str) -> bytes:
     return git("cat-file", "blob", f"{ref}:{path}")
 
 
-def regex(value: str) -> re.Pattern[str]:
+def regex(value: str, key: str = "policy") -> re.Pattern[str]:
     """Require explicit patterns, including ^$ for an intentionally empty set."""
     if not value:
-        fail("Policy patterns must not be empty")
+        fail(f"Policy pattern {key} must not be empty")
     # Preserve the C-locale POSIX character classes used by existing ERE settings.
     classes = {
         "alnum": string.ascii_letters + string.digits,
@@ -271,7 +271,7 @@ def inline_comment(text: str) -> str:
 def inspect(base: str, head: str, config: dict[str, str]) -> dict[str, object]:
     """Return reasons needing an owner and the owner paths for reporting."""
     golden, markers, configs, owners = [
-        regex(config[key])
+        regex(config.get(key, ""), key)
         for key in (
             "golden_paths",
             "loosening_markers",
@@ -280,7 +280,7 @@ def inspect(base: str, head: str, config: dict[str, str]) -> dict[str, object]:
         )
     ]
     # Validate cleanup policy before any irreversible write as well.
-    regex(config["disposable_ignored"])
+    regex(config.get("disposable_ignored", ""), "disposable_ignored")
     mergebase = git("merge-base", base, head).decode().strip()
     paths = [
         p.decode("utf-8", "surrogateescape")
@@ -547,5 +547,5 @@ if __name__ == "__main__":
         OSError,
         subprocess.CalledProcessError,
     ) as error:
-        print(f"merge policy unreadable: {type(error).__name__}", file=sys.stderr)
+        print(f"merge policy unreadable: {error}", file=sys.stderr)
         sys.exit(1)

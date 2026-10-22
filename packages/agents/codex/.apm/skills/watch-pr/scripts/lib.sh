@@ -31,7 +31,9 @@ unset CDPATH GH_REPO GH_HOST GREP_OPTIONS
 IFS=$' \t\n'
 
 # Workflow context belongs to this shell, not repository gates or reviewers.
-export -n DT_UNATTENDED
+# DT_UNATTENDED is a deprecated caller alias for one release.
+DEVTOOLS_UNATTENDED=${DEVTOOLS_UNATTENDED-${DT_UNATTENDED:-0}}
+export -n DEVTOOLS_UNATTENDED DT_UNATTENDED
 
 DT_LIB_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
@@ -135,10 +137,10 @@ dt_session_id() {
 # --- configuration -----------------------------------------------------
 
 # Probe in the sourcing shell so command substitutions share the cached answer.
-if [ -z "${_DT_AGENTREPO_CONFIG+set}" ]; then
-  _DT_AGENTREPO_CONFIG=false
+if [ -z "${_DEVTOOLS_AGENTREPO_CONFIG+set}" ]; then
+  _DEVTOOLS_AGENTREPO_CONFIG=false
   if agentrepo config --help >/dev/null 2>&1; then
-    _DT_AGENTREPO_CONFIG=true
+    _DEVTOOLS_AGENTREPO_CONFIG=true
   fi
 fi
 
@@ -168,7 +170,7 @@ _dt_conf_file() {
 
 # dt_conf <key> [default]: the configured value, or the default.
 dt_conf() {
-  if [ "$_DT_AGENTREPO_CONFIG" = true ]; then
+  if [ "$_DEVTOOLS_AGENTREPO_CONFIG" = true ]; then
     agentrepo config machine -- "$@"
     return $?
   fi
@@ -523,7 +525,7 @@ dt_review() {
     printf 'BLOCKED: this byte-identical draft already has CHANGES REQUIRED for the same review subject. Change the draft or ask the operator.\n' >&2
     return 3
   fi
-  if [ "${DT_UNATTENDED:-0}" = 1 ]; then
+  if [ "${DEVTOOLS_UNATTENDED:-0}" = 1 ]; then
     dt_agent_context || return $?
     dt_agent_rounds "$kind" "$subject" || return $?
     repo_digest=$(dt_repo_digest) || return $?
@@ -559,7 +561,7 @@ dt_review() {
     return 5
   fi
 
-  if [ "${DT_UNATTENDED:-0}" = 1 ]; then
+  if [ "${DEVTOOLS_UNATTENDED:-0}" = 1 ]; then
     local live_config
     live_config=$(dt_repo_digest) || return 5
     [ "$live_config" = "$repo_digest" ] || return 5
@@ -575,7 +577,7 @@ dt_review() {
   changes)
     printf 'subject %s\ndraft %s\nverdict changes\n' "$subject" "$before" >"$verdict_record"
     cat "$reply"
-    if [ "${DT_UNATTENDED:-0}" = 1 ]; then
+    if [ "${DEVTOOLS_UNATTENDED:-0}" = 1 ]; then
       dt_agent_rounds "$kind" "$subject" finding || return $?
     fi
     return 2
@@ -635,7 +637,7 @@ dt_require_stamp() {
       dt_die "The $1 changed after the review (reviewed ${recorded:-nothing}, now $2). Run the review script again."
     shift 2
   done
-  if [ "${DT_UNATTENDED:-0}" = 1 ]; then
+  if [ "${DEVTOOLS_UNATTENDED:-0}" = 1 ]; then
     recorded=$(dt_stamp_value "$kind" repo_config) || return $?
     digest=$(dt_repo_digest) || return $?
     [ "$recorded" = "$digest" ] || dt_die "Repository configuration changed after review. Run the review again."
@@ -717,7 +719,7 @@ dt_delegation() {
 dt_confirm() {
   local action=$1 operator=$2 grant status
   shift 2
-  if [ "${DT_UNATTENDED:-0}" = 1 ] && [ "$operator" = true ]; then
+  if [ "${DEVTOOLS_UNATTENDED:-0}" = 1 ] && [ "$operator" = true ]; then
     dt_die "Unattended workflows refuse --confirmed; use pre-approval or delegation."
   fi
   if [ "$operator" = true ]; then
@@ -743,7 +745,7 @@ dt_confirm() {
     return 1
     ;;
   esac
-  if [ "${DT_UNATTENDED:-0}" = 1 ]; then
+  if [ "${DEVTOOLS_UNATTENDED:-0}" = 1 ]; then
     printf 'HELD: no pre-approval or delegation grants %s. Report the hold without prompting.\n' "$action" >&2
     return "$DT_HELD"
   fi

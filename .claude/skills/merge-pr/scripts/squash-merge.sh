@@ -86,8 +86,10 @@ mp_need_tools
 root=$(dt_root)
 cd "$root"
 state=$(dt_state_dir)
+# shellcheck disable=SC2034 # ma_require_gates reads this shell-local confirmation state.
+if [ "$confirmed" = true ]; then MA_REQUIRE_GATES=false; else MA_REQUIRE_GATES=true; fi
 ma_context
-if [ "${DT_UNATTENDED:-0}" = 1 ] && [ "$confirmed" = true ]; then
+if [ "${DEVTOOLS_UNATTENDED:-0}" = 1 ] && [ "$confirmed" = true ]; then
   die "Unattended workflows refuse --confirmed; use pre-approval or delegation."
 fi
 here=$DT_LIB_DIR
@@ -210,6 +212,7 @@ case $status in
   printf '%s\n' "$judged" | awk -F'\t' '$1 == "pending" { printf "%-14s %s\n", $2, $3 }' >&2
   die "#${number} has a check still running. Wait through the watch-pr skill."
   ;;
+4) die "#${number} has no checks reported; the result is inconclusive." ;;
 *) die "the checks of #${number} could not be read." ;;
 esac
 printf 'open, ready, mergeable, and green\n'
@@ -222,7 +225,7 @@ printf 'open, ready, mergeable, and green\n'
 # There is no fallback: without the task, nothing merges.
 
 step "running the commit-msg gates"
-if [ "${DT_UNATTENDED:-0}" != 1 ]; then
+if [ "${DEVTOOLS_UNATTENDED:-0}" != 1 ]; then
   command -v mise >/dev/null 2>&1 || die "mise is not installed; the squash-message gate cannot run."
   mise task info lint-squash-msg >/dev/null 2>&1 ||
     die "mise run lint-squash-msg is absent; the squash-message gate cannot run."
@@ -243,7 +246,7 @@ ma_gates "$view" "$number" "$base_oid"
 step "confirming"
 status=0
 set --
-if [ "${DT_UNATTENDED:-0}" = 1 ] && jq -e '.owner_paths | length > 0' "$state/merge.policy.json" >/dev/null; then
+if ma_require_gates && jq -e '.owner_paths | length > 0' "$state/merge.policy.json" >/dev/null; then
   set -- --owner-path
 fi
 dt_confirm merge "$confirmed" "$@" || status=$?
@@ -265,7 +268,7 @@ ma_gates "$view" "$number" "$base_oid"
 head_ref=$(mp_field "$view" headRefName)
 ma_prepare_children
 # Retargeting children is another write: pin and judge the live state again.
-if [ "${DT_UNATTENDED:-0}" = 1 ]; then
+if ma_require_gates; then
   read_live
   require_reviewed
   ma_gates "$view" "$number" "$base_oid"
@@ -360,12 +363,12 @@ if [ "$cross_repo" = true ]; then
 elif [ "$branch" = "$head_ref" ]; then
   printf '\nThis worktree still stands on %s, which has merged.\n' "$head_ref"
   printf 'Switch to %s before deleting it, or drop the whole worktree.\n' "$base_ref"
-elif [ "${DT_UNATTENDED:-0}" != 1 ] && gitr rev-parse --verify --quiet "refs/heads/$head_ref" >/dev/null; then
+elif [ "${DEVTOOLS_UNATTENDED:-0}" != 1 ] && gitr rev-parse --verify --quiet "refs/heads/$head_ref" >/dev/null; then
   git branch -D "$head_ref" >/dev/null 2>&1 &&
     printf 'deleted local %s\n' "$head_ref" || true
 fi
 
-if [ "${DT_UNATTENDED:-0}" = 1 ] && [ "$cross_repo" = false ]; then
+if [ "${DEVTOOLS_UNATTENDED:-0}" = 1 ] && [ "$cross_repo" = false ]; then
   disposable=$(dt_repo_conf disposable_ignored)
   ma_policy cleanup "$base_ref" "$head_ref" "$reviewed_head" "$merge_commit" "$disposable" || printf 'Merged; local cleanup incomplete, inspect retained state.\n' >&2
 fi

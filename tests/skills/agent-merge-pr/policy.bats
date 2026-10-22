@@ -251,3 +251,96 @@ LOCK
   [ "$status" -eq 0 ]
   [ "$(printf '%s' "$output" | jq '.findings|length')" -eq 1 ]
 }
+
+@test "empty policy patterns report the key and refusal reason" {
+  local key config
+  for key in golden_paths loosening_markers gate_config_paths owner_paths disposable_ignored; do
+    config=$(policy_config | jq --arg key "$key" '.[$key] = ""')
+    run uv run --quiet --script "$POLICY" inspect "$BASE_OID" "$HEAD_OID" <<<"$config"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"merge policy unreadable: Policy pattern $key must not be empty"* ]]
+  done
+}
+
+@test "missing policy pattern reports its key" {
+  run uv run --quiet --script "$POLICY" inspect "$BASE_OID" "$HEAD_OID" <<<'{}'
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Policy pattern golden_paths must not be empty"* ]]
+}
+
+@test "top-level policy refusals include the exception message" {
+  run uv run --quiet --script "$POLICY" unknown
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"merge policy unreadable: Unknown policy operation or arguments"* ]]
+}
+
+@test "devtools repository policy protects skill guards" {
+  cp "$ROOT/.agents/agent-skills.conf" .agents/agent-skills.conf
+  git add -- .agents/agent-skills.conf
+  change packages/agents/source/skills/merge-pr/claude/scripts/guard-merge.sh '# guard'
+  run bash "$AGENT/review.sh" 7
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"packages/agents/source/skills/merge-pr/claude/scripts/guard-merge.sh"*"changes a golden file"* ]]
+  [[ "$output" == *"needs-owner"* ]]
+  [[ "$output" != *"merge policy unreadable"* ]]
+}
+
+@test "devtools golden and owner patterns cover only merge enforcement" {
+  cp "$ROOT/.agents/agent-skills.conf" .agents/agent-skills.conf
+  local key pattern path prefix harness skill script
+  local protected=(
+    .agents/agent-skills.conf
+    .agents/review-instructions.md
+    .github/rulesets/main.json
+    .claude/settings.json
+    packages/agents/source/lib/lib.sh
+    packages/agents/source/lib/agent.sh
+  )
+  for harness in shared claude codex; do
+    protected+=("packages/agents/source/skills/commit/$harness/scripts/guard-git.sh")
+    for script in guard-merge.sh merge-agent.sh merge-policy.py; do
+      protected+=("packages/agents/source/skills/merge-pr/$harness/scripts/$script")
+    done
+  done
+  for prefix in packages/agents/{claude,codex}/.apm/skills .{claude,agents}/skills; do
+    for skill in commit merge-pr agent-merge-pr; do
+      for script in guard-git.sh lib.sh agent.sh; do
+        protected+=("$prefix/$skill/scripts/$script")
+      done
+    done
+    for skill in merge-pr agent-merge-pr; do
+      for script in merge-agent.sh merge-policy.py; do
+        protected+=("$prefix/$skill/scripts/$script")
+      done
+    done
+  done
+  local unprotected=(
+    packages/agents/source/skills/pr/shared/scripts/create-pr.sh
+    packages/agents/source/skills/merge-pr/shared/scripts/squash-merge.sh
+    packages/agents/source/lib/other.sh
+    .devtools/tasks/lint.toml
+    .config/mise/conf.d/tools.toml
+    .pre-commit-hooks.yaml
+    mise.toml
+    .github/workflows/ci.yml
+    .claude/settings.json.backup
+    .agents/agent-skills.conf.backup
+    .agents/review-instructions.md.backup
+  )
+  for prefix in packages/agents/{claude,codex}/.apm/skills .{claude,agents}/skills; do
+    unprotected+=("$prefix/pr/scripts/create-pr.sh" "$prefix/pr/scripts/merge-agent.sh"
+      "$prefix/pr/scripts/merge-policy.py" "$prefix/merge-pr/SKILL.md"
+      "$prefix/merge-pr/scripts/merge-agent.sh.backup" "$prefix/commit/scripts/guard-git.sh.backup")
+  done
+  for key in golden_paths owner_paths; do
+    run bash -c 'source "$1/lib.sh"; dt_repo_conf "$2"' _ "$SCRIPTS" "$key"
+    [ "$status" -eq 0 ]
+    pattern=$output
+    for path in "${protected[@]}"; do
+      [[ "$path" =~ $pattern ]] || { echo "$key missed $path"; return 1; }
+    done
+    for path in "${unprotected[@]}"; do
+      [[ ! "$path" =~ $pattern ]] || { echo "$key matched $path"; return 1; }
+    done
+  done
+}

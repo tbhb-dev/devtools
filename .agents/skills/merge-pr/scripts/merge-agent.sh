@@ -10,8 +10,14 @@ set -o pipefail
 # reads some fields directly and the rest through ma_approved and agentrepo.
 readonly MA_GATE_FIELDS=state,isDraft,mergeable,mergeStateStatus,headRefOid,baseRefName,labels,reviews,statusCheckRollup
 
+# Only an explicit operator confirmation may bypass the unattended gates.
+# Preflight and review retain their attended behavior until execution selects it.
+ma_require_gates() {
+  [ "${DEVTOOLS_UNATTENDED:-0}" = 1 ] || [ "${MA_REQUIRE_GATES:-false}" = true ]
+}
+
 ma_context() {
-  [ "${DT_UNATTENDED:-0}" = 1 ] || return 0
+  ma_require_gates || return 0
   dt_agent_context || return $?
   local dirty login
   dirty=$(gitr status --porcelain --untracked-files=all) || return $?
@@ -45,7 +51,7 @@ ma_lint() {
     fi
   fi
   status=0
-  if [ "${DT_UNATTENDED:-0}" = 1 ]; then
+  if [ "${DEVTOOLS_UNATTENDED:-0}" = 1 ]; then
     cmd=$(dt_repo_conf lint_squash_cmd 'mise run lint-squash-msg') || status=$?
     if [ "$status" -eq 0 ] && [ -z "$cmd" ]; then
       rm -rf -- "$tmp"
@@ -110,7 +116,7 @@ ma_identity() {
 
 # Reused before review and again immediately before every merge write.
 ma_gates() {
-  [ "${DT_UNATTENDED:-0}" = 1 ] || return 0
+  ma_require_gates || return 0
   local view=$1 pr=$2 base_oid=$3 final=${4:-false} head base reviewer reviewer_type label ready config key value required default dir st root encoded
   ma_context || return $?
   st=$(dt_state_dir) || return $?
@@ -173,7 +179,7 @@ ma_gates() {
 }
 
 ma_prepare_children() {
-  [ "${DT_UNATTENDED:-0}" = 1 ] || return 0
+  [ "${DEVTOOLS_UNATTENDED:-0}" = 1 ] || return 0
   [ "$cross_repo" = false ] || return 0
   local children child count
   children=$(dt_gh pr list --base "$head_ref" --state open --limit 500 --json number) || return $?
@@ -188,7 +194,7 @@ ma_prepare_children() {
 
 # Verify the remote message before deleting any evidence or branch.
 ma_verify() {
-  [ "${DT_UNATTENDED:-0}" = 1 ] || return 0
+  [ "${DEVTOOLS_UNATTENDED:-0}" = 1 ] || return 0
   local repository wanted actual live_base
   repository=$(dt_gh repo view --json url --jq .url) || return $?
   live_base=$(mp_base_oid "$base_ref") || return $?
@@ -200,7 +206,7 @@ ma_verify() {
 }
 
 ma_report() {
-  [ "${DT_UNATTENDED:-0}" = 1 ] || return 0
+  [ "${DEVTOOLS_UNATTENDED:-0}" = 1 ] || return 0
   local text owners
   owners=$(jq -c '.owner_paths' <<<"$MA_POLICY") || return $?
   text="Merged #$number as $merge_commit. Owner override: ${MA_OWNER_OVERRIDE:-none}. Owner paths: $owners."
@@ -221,4 +227,4 @@ ma_exit() {
   dt_agent_report blocker "${number:-}" "$text" || printf '%s\n' "$text" >&2
   exit "$status"
 }
-if [ "${DT_UNATTENDED:-0}" = 1 ]; then trap 'ma_exit "$?"' EXIT; fi
+if [ "${DEVTOOLS_UNATTENDED:-0}" = 1 ]; then trap 'ma_exit "$?"' EXIT; fi

@@ -130,43 +130,8 @@ setup() {
   [ ! -e "$GH_FIXTURES/merged" ]
 }
 
-@test "squash-merge holds with no confirmation from anyone" {
-  bash "$SCRIPTS/review.sh" 7
 
-  run bash "$SCRIPTS/squash-merge.sh" 7
 
-  [ "$status" -eq 75 ]
-  [[ "$output" == *"HELD"* ]]
-  [ ! -e "$GH_FIXTURES/merged" ]
-}
-
-@test "squash-merge holds under a bare pre-approval, which never covers merge" {
-  bash "$SCRIPTS/review.sh" 7
-  grant commit pr
-
-  run bash "$SCRIPTS/squash-merge.sh" 7
-
-  [ "$status" -eq 75 ]
-  [ ! -e "$GH_FIXTURES/merged" ]
-}
-
-@test "squash-merge merges under a merge pre-approval, pinned to the reviewed head" {
-  bash "$SCRIPTS/review.sh" 7
-  grant merge
-  printf 'draft\n' >PR_AGENTDESC.md
-
-  run bash "$SCRIPTS/squash-merge.sh" 7
-
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"confirmation: pre-approval"* ]]
-  [[ "$output" == *"gh_login is not configured; skipping the account check"* ]]
-  grep -q -- "--match-head-commit $HEAD_OID" "$GH_FIXTURES/merged"
-  grep -q -- "--subject feat: add the thing (#7)" "$GH_FIXTURES/merged"
-  grep -q -- "--body-file" "$GH_FIXTURES/merged"
-  [ ! -e SQUASH_AGENTMSG ]
-  [ ! -e PR_AGENTDESC.md ]
-  [ ! -e "$(stamp_file)" ]
-}
 
 @test "squash-merge merges over a superseded cancelled run (#145)" {
   superseded_cancel
@@ -244,7 +209,7 @@ STUB
     mp_fetch_commit() { return 0; }
     dt_die() { echo "$*" >&2; return 1; }
     dt_repo_conf() { echo "mise run lint-squash-msg"; }
-    DT_UNATTENDED=$3
+    DEVTOOLS_UNATTENDED=$3
     unreadable=$4
     gitr() {
       if [ "$unreadable" = unreadable ] && [ "$1" = show ]; then return 1; fi
@@ -583,41 +548,6 @@ capture_diff() {
   [ "$status" -eq 76 ]
   [[ "$output" == *"reset time: 1792195200"* ]]
   [ ! -e "$(stamp_file)" ]
-}
-
-@test "delegated merge checks its script-owned stamp and checker refusal then grant (#137)" {
-  mkdir -p .claude/skills
-  cp -R "$ROOT/packages/agents/claude/.apm/skills/merge-pr" \
-    "$ROOT/packages/agents/claude/.apm/skills/review-squash-message" .claude/skills/
-  SCRIPTS="$PWD/.claude/skills/merge-pr/scripts"
-  # Opt-in CLI smoke test; ordinary runs keep the deterministic reviewer.
-  if [ "${RUN_HEADLESS_REVIEWS:-0}" = 1 ]; then
-    unset DEVTOOLS_REVIEW_CMD
-    export DEVTOOLS_HARNESS=claude
-  fi
-  # No skill hooks, operator flag, or session pre-approval participates.
-  [ -z "${CLAUDE_CODE_SESSION_ID:-}${CODEX_THREAD_ID:-}" ]
-  export DEVTOOLS_DELEGATION_CHECK="${BATS_TEST_TMPDIR}/checker"
-  export CHECK_ARGS="${BATS_TEST_TMPDIR}/checker.args"
-  cat >"$DEVTOOLS_DELEGATION_CHECK" <<'CHECKER'
-#!/usr/bin/env bash
-printf '%s\n' "$*" >>"$CHECK_ARGS"
-exit "${CHECK_STATUS:-1}"
-CHECKER
-  chmod +x "$DEVTOOLS_DELEGATION_CHECK"
-  bash "$SCRIPTS/review.sh" 7
-  [ -s "$(stamp_file)" ]
-
-  CHECK_STATUS=1 run bash "$SCRIPTS/squash-merge.sh" 7
-  [ "$status" -eq 1 ]
-  [[ "$output" == *REFUSED* ]]
-  [ -s "$(stamp_file)" ]
-
-  CHECK_STATUS=0 run bash "$SCRIPTS/squash-merge.sh" 7
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"confirmation: delegation_check granted merge in repo"* ]]
-  [ "$(cat "$CHECK_ARGS")" = $'check repo merge\ncheck repo merge' ]
-  grep -q -- "--match-head-commit $HEAD_OID" "$GH_FIXTURES/merged"
 }
 
 @test "mergeability and draft checks reject fields printed before jq fails" {

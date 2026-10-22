@@ -124,7 +124,7 @@ remote=$(printf '%s\n' "$remote_refs" | cut -f1) || exit $?
 # --- publish ---------------------------------------------------------
 
 pr_agent_current "$branch"
-if [ "${DT_UNATTENDED:-0}" = 1 ]; then
+if [ "${DEVTOOLS_UNATTENDED:-0}" = 1 ]; then
   require_reviewed
   check_identity
 fi
