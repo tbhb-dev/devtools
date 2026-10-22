@@ -504,3 +504,15 @@ STUB
   if [[ "$output" == *"write-pr-description skill deployed:"* ]]; then return 1; fi
   [[ "$output" == *"review-pr-description skill deployed:"* ]]
 }
+
+@test "PR creation and content edits go through gh-post" {
+  run bash "$SCRIPTS/review.sh"
+  [ "$status" -eq 0 ]
+  run bash "$SCRIPTS/create-pr.sh" --confirmed
+  [ "$status" -eq 0 ]
+  grep -q '^pr create .*--body-file ' "$GH_POST_LOG"
+  export GH_OPEN_PR=1
+  run bash "$SCRIPTS/create-pr.sh" --confirmed
+  [ "$status" -eq 0 ]
+  grep -q '^pr edit 1 .*--title .*--body-file ' "$GH_POST_LOG"
+}

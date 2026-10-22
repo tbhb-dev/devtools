@@ -96,6 +96,14 @@ case "$1 $2" in
 *) exit 0 ;;
 esac
 EOF
+  export GH_POST_LOG="${BATS_TEST_TMPDIR}/gh-post.log"
+  : >"$GH_POST_LOG"
+  cat >"${BATS_TEST_TMPDIR}/bin/gh-post" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >>"$GH_POST_LOG"
+exec gh "$@"
+EOF
+  chmod +x "${BATS_TEST_TMPDIR}/bin/gh-post"
   chmod +x "${BATS_TEST_TMPDIR}/bin/gh"
   export PATH="${BATS_TEST_TMPDIR}/bin:$PATH"
 }
