@@ -21,41 +21,10 @@ name: apm-package
 on:
   push:
     branches: [main]
-    paths:
-      - apm.yml
-      - apm.lock.yaml
-      - packages/agents/**
-      - hooks/**
-      - .claude/rules/**
-      - .claude/skills/**
-      - .claude/hooks/**
-      - .claude/settings.json
-      - .claude/apm-hooks.json
-      - .agents/**
-      - .github/workflows/apm-package.yml
-      - .github/skill-scanner-policy.yaml
-      # The apm pin and its checksums: a bump changes what every step
-      # below runs, so it has to trigger this workflow.
-      - mise.toml
-      - mise.lock
+  # No paths filter: the ruleset requires validate and scan-skills on every
+  # pull request, and a workflow that never starts leaves them pending
+  # forever. The changes job below decides whether they run.
   pull_request:
-    paths:
-      - apm.yml
-      - apm.lock.yaml
-      - packages/agents/**
-      - hooks/**
-      - .claude/rules/**
-      - .claude/skills/**
-      - .claude/hooks/**
-      - .claude/settings.json
-      - .claude/apm-hooks.json
-      - .agents/**
-      - .github/workflows/apm-package.yml
-      - .github/skill-scanner-policy.yaml
-      # The apm pin and its checksums: a bump changes what every step
-      # below runs, so it has to trigger this workflow.
-      - mise.toml
-      - mise.lock
 
 permissions:
   contents: read
@@ -65,8 +34,70 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # The one list of paths that make this workflow relevant. A bump of the
+  # apm pin or its checksums (mise.toml, mise.lock) changes what every step
+  # below runs, so those count too.
+  changes:
+    name: changes
+    runs-on: ubuntu-24.04
+    outputs:
+      relevant: ${{ steps.diff.outputs.relevant }}
+    steps:
+      - name: Harden the runner
+        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Detect relevant changes
+        id: diff
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          paths=(
+            apm.yml
+            apm.lock.yaml
+            packages/agents
+            hooks
+            .claude/rules
+            .claude/skills
+            .claude/hooks
+            .claude/settings.json
+            .claude/apm-hooks.json
+            .agents
+            .github/workflows/apm-package.yml
+            .github/skill-scanner-policy.yaml
+            mise.toml
+            mise.lock
+          )
+          if [ "$EVENT" = pull_request ]; then
+            base=$BASE_SHA
+          else
+            base=$BEFORE_SHA
+          fi
+          # A push with no usable parent (a new branch reports an all-zero
+          # before) has nothing to compare against, so run the gates.
+          relevant=true
+          if git cat-file -e "$base^{commit}" 2>/dev/null; then
+            changed=$(git diff --name-only "$base...HEAD" -- "${paths[@]}")
+            [ -n "$changed" ] || relevant=false
+          fi
+          echo "relevant=$relevant" >> "$GITHUB_OUTPUT"
+          if [ "$relevant" = false ]; then
+            echo "No APM package paths changed; validate and scan-skills are skipped." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
   validate:
     name: validate
+    needs: changes
+    if: needs.changes.outputs.relevant == 'true'
     runs-on: ubuntu-24.04
     steps:
       - name: Harden the runner
@@ -116,6 +147,8 @@ jobs:
 
   scan-skills:
     name: scan-skills
+    needs: changes
+    if: needs.changes.outputs.relevant == 'true'
     permissions:
       contents: read
       actions: read

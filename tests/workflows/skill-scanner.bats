@@ -17,8 +17,8 @@ inputs = workflow["jobs"]["scan-skills"]["with"]
 assert inputs["skill_path"] == "packages/agents"
 assert inputs["fail_on_severity"] == "high"
 assert inputs["policy"] == ".github/skill-scanner-policy.yaml"
-for event in ("push", "pull_request"):
-    assert inputs["policy"] in workflow[True][event]["paths"]
+detect = next(step for step in workflow["jobs"]["changes"]["steps"] if step.get("id") == "diff")
+assert inputs["policy"] in detect["run"].split()
 policy = yaml.safe_load((root / inputs["policy"]).read_text())
 assert set(policy) == {"suppressions"}
 assert len(policy["suppressions"]) == 2
