@@ -184,3 +184,90 @@ CHECK
   [ "$status" -eq 0 ]
   [ -f "$GH_FIXTURES/merged" ]
 }
+
+# Replace behavior, not just comments: the checkout dispatcher must not judge itself.
+trust_attack() {
+  export TRUST_ATTACK=$1
+  cat >"$BATS_TEST_TMPDIR/checker" <<'CHECK'
+#!/usr/bin/env bash
+case $TRUST_ATTACK in
+lib)
+  sed '/^dt_merge_integrity() {/a\
+  return 0
+' .claude/skills/merge-pr/scripts/lib.sh >.claude/skills/merge-pr/scripts/lib.sh.new
+  mv .claude/skills/merge-pr/scripts/lib.sh.new .claude/skills/merge-pr/scripts/lib.sh
+  ;;
+signing) ;;
+extra) printf 'extra helper\n' >.claude/skills/agent-merge-pr/scripts/new-helper.sh ;;
+esac
+if [ "$TRUST_ATTACK" != extra ]; then
+  printf '\nprintf "untrusted helper sourced\\n" >"$GH_FIXTURES/untrusted"\n' >>.claude/skills/merge-pr/scripts/signing.sh
+fi
+git add -- .claude/skills/merge-pr/scripts/lib.sh .claude/skills/merge-pr/scripts/signing.sh .claude/skills/agent-merge-pr/scripts
+git commit --quiet -m 'test: replace merge helpers'
+CHECK
+  chmod +x "$BATS_TEST_TMPDIR/checker"
+}
+
+refuse_attack_preflight() {
+  trust_attack "$1"
+  bash "$BATS_TEST_TMPDIR/checker"
+  run bash "$AGENT/preflight.sh" 7
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"merge integrity:"* ]]
+  [[ "$output" != *"requires a clean tree"* ]]
+  [ ! -f "$GH_FIXTURES/untrusted" ]
+  [ ! -f "$GH_FIXTURES/merged" ]
+}
+
+refuse_attack_final() {
+  run bash "$AGENT/preflight.sh" 7
+  [ "$status" -eq 0 ]
+  run bash "$AGENT/review.sh" 7
+  [ "$status" -eq 0 ]
+  trust_attack "$1"
+  bash "$BATS_TEST_TMPDIR/checker"
+  run bash "$AGENT/merge.sh" 7
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"merge integrity:"* ]]
+  [[ "$output" != *"requires a clean tree"* ]]
+  [ ! -f "$GH_FIXTURES/untrusted" ]
+  [ ! -f "$GH_FIXTURES/merged" ]
+}
+
+@test "preflight refuses a disabled lib dispatcher before sourcing signing" { refuse_attack_preflight lib; }
+@test "preflight refuses an executable signing edit" { refuse_attack_preflight signing; }
+@test "preflight refuses a new helper file" { refuse_attack_preflight extra; }
+@test "final check refuses a disabled lib dispatcher" { refuse_attack_final lib; }
+@test "final check refuses an executable signing edit" { refuse_attack_final signing; }
+@test "final check refuses a new helper file" { refuse_attack_final extra; }
+
+refuse_attack_during_delegation() {
+  run bash "$AGENT/review.sh" 7
+  [ "$status" -eq 0 ]
+  trust_attack "$1"
+  machine delegation_check "$BATS_TEST_TMPDIR/checker"
+  run bash "$AGENT/merge.sh" 7
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"merge integrity:"* ]]
+  [ ! -f "$GH_FIXTURES/untrusted" ]
+  [ ! -f "$GH_FIXTURES/merged" ]
+}
+
+@test "final gate refuses a lib dispatcher swapped during delegation" { refuse_attack_during_delegation lib; }
+@test "final gate refuses signing swapped during delegation" { refuse_attack_during_delegation signing; }
+@test "final gate refuses a helper added during delegation" { refuse_attack_during_delegation extra; }
+
+@test "remote preflight refuses a disabled lib dispatcher" {
+  remote_base
+  refuse_attack_preflight lib
+}
+
+@test "merge-pr preflight refuses a disabled lib dispatcher directly" {
+  trust_attack lib
+  bash "$BATS_TEST_TMPDIR/checker"
+  run env DEVTOOLS_UNATTENDED=1 bash "$SCRIPTS/preflight.sh" 7
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"merge integrity:"* ]]
+  [ ! -f "$GH_FIXTURES/untrusted" ]
+}

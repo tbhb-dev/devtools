@@ -36,7 +36,7 @@ unset CDPATH GH_REPO GH_HOST GREP_OPTIONS
 IFS=$' \t\n'
 
 # shellcheck disable=SC1091 # lib.sh is generated beside this script
-. "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+# @include lib/merge-bootstrap.sh
 # shellcheck disable=SC1091 # generated beside this script
 . "$DT_LIB_DIR/pull-request.sh"
 
@@ -141,7 +141,7 @@ still_as_gathered() {
 
 dt_review_policy "$inputs" "$head" "$head"
 
-criteria=$DT_LIB_DIR/../../review-squash-message/SKILL.md
+criteria=${DT_MERGE_CHECKOUT:-$DT_LIB_DIR}/../../review-squash-message/SKILL.md
 status=0
 dt_review squash "$draft" "$snapshot" "$criteria" "$root" "$inputs" still_as_gathered \
   "pr:$number:$head" \

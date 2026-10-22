@@ -27,7 +27,7 @@ unset CDPATH GH_REPO GH_HOST GREP_OPTIONS
 IFS=$' \t\n'
 
 # shellcheck disable=SC1091 # lib.sh is generated beside this script
-. "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+# @include lib/merge-bootstrap.sh
 # shellcheck disable=SC1091 # generated beside this script
 . "$DT_LIB_DIR/pull-request.sh"
 
@@ -39,7 +39,7 @@ none() { printf '(none)\n'; }
 
 root=$(dt_root)
 cd "$root"
-bash "$(dirname "${BASH_SOURCE[0]}")/worktree-ready.sh"
+bash "$DT_LIB_DIR/worktree-ready.sh"
 ma_context
 
 section "gh"
@@ -199,7 +199,7 @@ elif command -v mise >/dev/null 2>&1 && mise task info lint-squash-msg >/dev/nul
 else
   printf 'mise run lint-squash-msg: ABSENT — stop and tell the operator\n'
 fi
-if [ -f "$DT_LIB_DIR/../../review-squash-message/SKILL.md" ]; then
+if [ -f "${DT_MERGE_CHECKOUT:-$DT_LIB_DIR}/../../review-squash-message/SKILL.md" ]; then
   printf 'review-squash-message skill deployed: yes\n'
 else
   printf 'review-squash-message skill deployed: NO — run apm install\n'

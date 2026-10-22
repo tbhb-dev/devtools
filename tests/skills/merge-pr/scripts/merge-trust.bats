@@ -43,7 +43,8 @@ STUB
   PATH="$BATS_TEST_TMPDIR/bin:$PATH" run env DEVTOOLS_UNATTENDED=1 DEVTOOLS_GH_LOGIN=override bash "$SCRIPTS/preflight.sh" 7
   [ "$status" -ne 0 ]
   [[ "$output" == *"refuses environment variable DEVTOOLS_GH_LOGIN"* ]]
-  sed -i 's/golden_paths = .*/golden_paths = ^$/' .agents/agent-skills.conf
+  sed 's/golden_paths = .*/golden_paths = ^$/' .agents/agent-skills.conf >.agents/agent-skills.conf.new
+  mv .agents/agent-skills.conf.new .agents/agent-skills.conf
   git add -- .agents/agent-skills.conf
   git commit --quiet -m 'test: divergent configuration'
   change golden/result.txt protected
