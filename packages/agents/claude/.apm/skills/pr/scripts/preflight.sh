@@ -329,6 +329,7 @@ else
 fi
 
 section "preconditions"
+dt_require_gh_post || exit $?
 if git check-ignore --quiet "$DRAFT" 2>/dev/null; then
   printf '%s gitignored: yes\n' "$DRAFT"
 else

@@ -6,6 +6,8 @@ description: >-
 
 # Fix a failing pull request
 
+Use `gh-post` for issue and PR content, comments, reviews, comment edits, and release notes. Supply body text through `--body-file` or stdin. If `gh-post` is missing, stop and report the missing command. Never fall back to a direct GitHub content write.
+
 Where the harness provides `update_plan`, track diagnosis, reproduction, fix, commit, description refresh, and push with it. Otherwise work them in order as written. The argument may specify a pull request and the chosen commit strategy.
 
 ## Diagnose and reproduce
