@@ -96,5 +96,5 @@ if [ "$mode" = ci ]; then
 else
   scan 'branch history' "--full-history --diff-merges=first-parent $base_oid..$head_oid" \
     --full-history --diff-merges=first-parent "$base_oid..$head_oid"
-  scan 'staged tree' "--full-history $snapshot_oid" --full-history "$snapshot_oid"
+  scan 'staged tree' "--full-history --root $snapshot_oid" --full-history --root "$snapshot_oid"
 fi

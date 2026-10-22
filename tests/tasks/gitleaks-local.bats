@@ -233,6 +233,15 @@ capture_state() {
   [ "$after" = "$before" ]
 }
 
+@test "AC4 staged secrets are detected when Git hides root patches" {
+  git config log.showRoot false
+  seed
+  git add secret.txt
+  run bash "$SCRIPT" --mode local
+  [ "$status" -eq 1 ]
+  assert_redacted
+}
+
 @test "AC4 partial staging in both directions excludes untracked and deleted bytes" {
   seed
   local secret_line
