@@ -97,6 +97,68 @@ func TestPostAndAudit(t *testing.T) {
 	}
 }
 
+func TestReviewEdit(t *testing.T) {
+	for _, tt := range []struct {
+		name, source, body, login string
+		code                      int
+	}{
+		{"stdin", "", "Public correction\n", "agent", 0},
+		{"explicit stdin", "-", "Public correction\n", "agent", 0},
+		{"file", "file", "Public correction\n\"quoted\"", "agent", 0},
+		{"scan refused", "file", "file:" + "///tmp/report", "agent", 1},
+		{"identity refused", "file", "Public correction\n", "person", 1},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := setup(t)
+			t.Setenv("LOGIN", tt.login)
+			args := []string{"review", "edit", "12", "42", "-R", "owner/repo"}
+			stdin := tt.body
+			if tt.source != "" {
+				path := tt.source
+				if path != "-" {
+					path = filepath.Join(dir, "body")
+					write(t, path, tt.body)
+					stdin = "unused"
+				}
+				args = append(args, "--body-file", path)
+			}
+			code, out, errOut := run(t, stdin, args...)
+			require.Equal(t, tt.code, code, errOut)
+			auditPath := filepath.Join(dir, "state", "devtools", "gh-post.log")
+			if tt.code != 0 {
+				require.Empty(t, out)
+				require.NotEmpty(t, errOut)
+				require.NotContains(t, errOut, tt.body)
+				require.NoFileExists(t, filepath.Join(dir, "payload"))
+				require.NoFileExists(t, auditPath)
+				if tt.name == "scan refused" {
+					require.NoFileExists(t, filepath.Join(dir, "calls"))
+				}
+				return
+			}
+			require.Equal(t, "https://github.com/owner/repo/pull/12\n", out)
+			require.Empty(t, errOut)
+			calls, err := os.ReadFile(filepath.Join(dir, "calls"))
+			require.NoError(t, err)
+			require.Equal(t, "api user --jq .login\n"+
+				"api --method PUT repos/owner/repo/pulls/12/reviews/42 --input - --jq .html_url\n", string(calls))
+			payload, err := os.ReadFile(filepath.Join(dir, "payload"))
+			require.NoError(t, err)
+			var decoded map[string]string
+			require.NoError(t, json.Unmarshal(payload, &decoded))
+			require.Equal(t, map[string]string{"body": tt.body}, decoded)
+			data, err := os.ReadFile(auditPath)
+			require.NoError(t, err)
+			var record auditRecord
+			require.NoError(t, json.Unmarshal(data, &record))
+			require.Equal(t, "review edit", record.Operation)
+			require.Equal(t, strings.TrimSpace(out), record.URL)
+			hash := sha256.Sum256([]byte(tt.body))
+			require.Equal(t, hex.EncodeToString(hash[:]), record.SHA256)
+		})
+	}
+}
+
 func TestPREditBody(t *testing.T) {
 	for _, tt := range []struct {
 		name, body string

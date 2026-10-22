@@ -199,18 +199,23 @@ func post(ctx context.Context, r request, body []byte, identities string, out, e
 }
 
 func (r *request) command(body []byte) ([]string, []byte, error) {
-	if r.operation == commentEdit {
+	if r.operation == commentEdit || r.operation == reviewEdit {
+		method := "PATCH"
 		endpoint := "repos/" + r.repo + "/issues/comments/" + r.operand
 		if r.kind == "review" {
 			endpoint = "repos/" + r.repo + "/pulls/comments/" + r.operand
+		}
+		if r.operation == reviewEdit {
+			method = "PUT"
+			endpoint = "repos/" + r.repo + "/pulls/" + r.operand + "/reviews/" + r.reviewID
 		}
 		input, err := json.Marshal(struct {
 			Body string `json:"body"`
 		}{string(body)})
 		if err != nil {
-			return nil, nil, fmt.Errorf("encode comment: %w", err)
+			return nil, nil, fmt.Errorf("encode body: %w", err)
 		}
-		return []string{apiCommand, "--method", "PATCH", endpoint, "--input", "-", jqFlag, ".html_url"}, input, nil
+		return []string{apiCommand, "--method", method, endpoint, "--input", "-", jqFlag, ".html_url"}, input, nil
 	}
 	args := strings.Fields(r.operation)
 	if r.operand != "" {

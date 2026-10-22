@@ -11,7 +11,7 @@ import (
 )
 
 var errUsage = errors.New(
-	"expected issue create|comment|edit, pr create|edit|comment|review, comment edit, or release create|edit; use --body-file PATH or stdin and only supported flags",
+	"expected issue create|comment|edit, pr create|edit|comment|review, comment edit, review edit, or release create|edit; use --body-file PATH or stdin and only supported flags",
 )
 
 type request struct {
@@ -19,6 +19,7 @@ type request struct {
 	repo      string
 	bodyFile  string
 	operand   string
+	reviewID  string
 	kind      string
 	flags     []string
 	text      []string
@@ -29,6 +30,7 @@ const (
 	issueCreate    = "issue create"
 	prCreate       = "pr create"
 	commentEdit    = "comment edit"
+	reviewEdit     = "review edit"
 	draftFlag      = "--draft"
 	operationWords = 2
 )
@@ -76,6 +78,10 @@ func (r *request) take(args []string, values, switches map[string]bool) (int, er
 }
 
 func (r *request) addOperand(value string) error {
+	if r.operation == reviewEdit && r.operand != "" && r.reviewID == "" {
+		r.reviewID = value
+		return nil
+	}
 	if r.operand != "" || r.operation == issueCreate || r.operation == prCreate {
 		return errUsage
 	}
@@ -136,6 +142,7 @@ func allowed(operation string) (map[string]bool, map[string]bool, bool) {
 		switches = []string{"--approve", "--comment", "--request-changes"}
 	case commentEdit:
 		values = append(values, "--kind")
+	case reviewEdit:
 	case "release create":
 		values = append(values, strings.Fields("--title --target")...)
 		switches = []string{draftFlag, "--prerelease", "--verify-tag"}
@@ -156,13 +163,8 @@ func allowed(operation string) (map[string]bool, map[string]bool, bool) {
 }
 
 func (r *request) validate() error {
-	needsOperand := r.operation != issueCreate && r.operation != prCreate
-	if needsOperand && r.operand == "" {
-		return errUsage
-	}
-	if needsOperand && !strings.HasPrefix(r.operation, "release ") &&
-		!regexp.MustCompile(`^[1-9][0-9]*$`).MatchString(r.operand) {
-		return errUsage
+	if err := r.validateOperands(); err != nil {
+		return err
 	}
 	if r.operation == commentEdit && r.kind != "issue" && r.kind != "review" {
 		return errUsage
@@ -174,6 +176,21 @@ func (r *request) validate() error {
 		if !slices.Contains(r.flags, "--title") {
 			return errUsage
 		}
+	}
+	return nil
+}
+
+func (r *request) validateOperands() error {
+	needsOperand := r.operation != issueCreate && r.operation != prCreate
+	if needsOperand && r.operand == "" {
+		return errUsage
+	}
+	if needsOperand && !strings.HasPrefix(r.operation, "release ") &&
+		!regexp.MustCompile(`^[1-9][0-9]*$`).MatchString(r.operand) {
+		return errUsage
+	}
+	if r.operation == reviewEdit && !regexp.MustCompile(`^[1-9][0-9]*$`).MatchString(r.reviewID) {
+		return errUsage
 	}
 	return nil
 }

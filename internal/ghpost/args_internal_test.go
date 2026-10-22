@@ -119,6 +119,20 @@ func TestCommentEdits(t *testing.T) {
 	}
 }
 
+func TestReviewEditCommand(t *testing.T) {
+	t.Parallel()
+	r, err := parse([]string{"review", "edit", "12", "--repo=owner/repo", "42", "--body-file", "-"})
+	require.NoError(t, err)
+	args, input, err := r.command([]byte("body\n\"quoted\""))
+	require.NoError(t, err)
+	require.Equal(t, []string{
+		"api", "--method", "PUT", "repos/owner/repo/pulls/12/reviews/42", "--input", "-", "--jq", ".html_url",
+	}, args)
+	var payload map[string]string
+	require.NoError(t, json.Unmarshal(input, &payload))
+	require.Equal(t, map[string]string{"body": "body\n\"quoted\""}, payload)
+}
+
 func TestRejectArguments(t *testing.T) {
 	t.Parallel()
 	for _, args := range [][]string{
@@ -147,6 +161,17 @@ func TestRejectArguments(t *testing.T) {
 		{"pr", "edit", "https://github.com/other/repo/pull/1"},
 		{"comment", "edit", "1"},
 		{"comment", "edit", "1", "--kind", "other"},
+		{"review", "edit"},
+		{"review", "edit", "12"},
+		{"review", "edit", "12", "42", "extra"},
+		{"review", "edit", "0", "42"},
+		{"review", "edit", "12", "0"},
+		{"review", "edit", "12", "-1"},
+		{"review", "edit", "12", "reviews/42"},
+		{"review", "edit", "pr", "42"},
+		{"review", "edit", "12", "42", "--kind", "review"},
+		{"review", "edit", "12", "42", "--body", "text"},
+		{"review", "edit", "12", "42", "--approve"},
 	} {
 		t.Run(
 			strings.Join(args, " "),

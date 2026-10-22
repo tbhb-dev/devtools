@@ -50,12 +50,15 @@ gh-post pr create -R owner/project --head topic --base main \
   --title 'feat: add the example' --body-file description.md
 gh-post issue comment 42 -R owner/project --body-file comment.md
 gh-post pr review 42 -R owner/project --approve --body-file review.md
+gh-post review edit 42 789 -R owner/project --body-file correction.md
 gh-post comment edit 123 -R owner/project --kind issue --body-file correction.md
 gh-post comment edit 456 -R owner/project --kind review --body-file correction.md
 gh-post release edit v1.0.0 -R owner/project --body-file notes.md
 ```
 
-Supported operations are `issue create|comment|edit`, `pr create|edit|comment|review`, `comment edit`, and `release create|edit`. Issue and PR targets are numeric IDs. Comment edits require `--kind issue` for issue comments or `--kind review` for review comments. Both use REST `PATCH` endpoints. Release operations translate body input to GitHub's notes-file flag. Creation requires an explicit title for issues and pull requests. Reviews require exactly one of `--approve`, `--comment`, or `--request-changes`.
+Supported operations are `issue create|comment|edit`, `pr create|edit|comment|review`, `review edit`, `comment edit`, and `release create|edit`. Issue and PR targets are numeric IDs. Comment edits require `--kind issue` for issue comments or `--kind review` for inline review comments. Both use REST `PATCH` endpoints. Release operations translate body input to GitHub's notes-file flag. Creation requires an explicit title for issues and pull requests. New reviews require exactly one of `--approve`, `--comment`, or `--request-changes`.
+
+Use `review edit <pr> <review-id>` to replace a submitted pull request review's body. Both IDs must be positive integers. It sends the scanned body as JSON through `PUT /repos/{owner}/{repo}/pulls/{pull_number}/reviews/{review_id}` with the same identity guard and audit record as other posts. It accepts the shared repository and body-file flags. `comment edit --kind review` edits an inline review comment.
 
 Use `-R owner/project` or `--repo owner/project` to select the target. Otherwise the command resolves the checkout's origin remote. Ambient `GH_REPO` and `GH_HOST` don't redirect it. The built-in checks cover local file URLs, home paths with a name segment, GitHub tokens, private-key headers, and secret-manager references. Placeholders such as `/Users/<name>/` and `/home/<name>/` pass. The command matches private literals without regard to case. Findings print only a category and line number, with line numbers local to each text field.
 
