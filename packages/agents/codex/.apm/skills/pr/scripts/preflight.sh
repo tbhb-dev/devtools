@@ -247,9 +247,11 @@ default branch: {{.defaultBranchRef.name}}
 ' || exit $?
   printf '\nlabels:\n'
   owner_review_label=$(dt_owner_review_label) || exit $?
+  owner_review_label=$(printf '%s' "$owner_review_label" | tr '[:upper:]' '[:lower:]')
   available_labels=$(dt_gh label list --limit 100 --json name --jq '.[].name') || exit $?
   while IFS= read -r label; do
-    if [ "$label" != "$owner_review_label" ]; then printf '%s\n' "$label"; fi
+    label_identity=$(printf '%s' "$label" | tr '[:upper:]' '[:lower:]')
+    if [ "$label_identity" != "$owner_review_label" ]; then printf '%s\n' "$label"; fi
   done <<EOF
 $available_labels
 EOF
