@@ -5,7 +5,7 @@ setup() {
 }
 
 app_no() {
-  pr '.reviews[0] += {body:"Loosens: no",lastEditedAt:null} | .reviews[0].author.__typename="Bot"'
+  pr ".reviews[0] += {body:\"Reviewed head: $HEAD_OID\n\nLoosens: no\",lastEditedAt:null} | .reviews[0].author.__typename=\"Bot\""
 }
 
 evaluate_policy() {
@@ -89,11 +89,19 @@ evaluate_policy() {
   done
 }
 
-@test "AC4 missing ambiguous duplicate and non-no statements require owner" {
+@test "AC4 invalid headers and statements require owner" {
   change golden/result.txt baseline
   app_no
-  local body
-  for body in '' 'Loosens: yes' 'Loosens: NO' ' Loosens: no' 'Loosens: no or yes' $'Loosens: no\nLoosens: no'; do
+  local body header="Reviewed head: $HEAD_OID"
+  for body in '' 'Loosens: no' "Reviewed head: invalid" $'Review.\n\nLoosens: no' \
+    "$header"$'\nLoosens: yes' "$header"$'\nLoosens: NO' \
+    "$header"$'\n Loosens: no' "$header"$'\nLoosens: no \t' \
+    "$header"$'\nLoosens: no or yes' "$header"$'\nLoosens: no\n\nLoosens: no' \
+    "$header"$'\nLoosens: no\n\nLoosens: yes' \
+    "$header"$'\nModel: model\nModel: model\nLoosens: no' \
+    "$header"$'\nModel: model/invalid\nLoosens: no' \
+    "$header"$'\nLoosens: no\ntext' \
+    "$header"$'\nLoosens: no\n---'; do
     pr ".reviews[0].body=$(jq -n --arg body "$body" '$body')"
     run evaluate_policy
     [ "$status" -eq 0 ]
@@ -101,15 +109,39 @@ evaluate_policy() {
   done
 }
 
-@test "AC4 standalone paragraph accepts trailing whitespace and closed code" {
+@test "AC4 plain header accepts optional SHA backticks Model and CRLF" {
   change golden/result.txt baseline
   app_no
-  local body
-  for body in $'Review.\n\nLoosens: no' $'Loosens: no \t' $'`closed`\n\nLoosens: no' $'```\n`code\n```\n\nLoosens: no'; do
-    pr ".reviews[0].body=$(jq -n --arg body "$body" '$body')"
+  local sha model body
+  for sha in "$HEAD_OID" "\`$HEAD_OID\`"; do
+    for model in '' $'Model: codex gpt-6.1_sol\n\n'; do
+      body="Reviewed head: $sha"$'\n\n'"$model"'Loosens: no'
+      pr ".reviews[0].body=$(jq -n --arg body "$body" '$body')"
+      run evaluate_policy
+      [ "$status" -eq 0 ]
+      jq -e '.owner_required == false' <<<"$output"
+      pr '.reviews[0].body += "\n\n> Ignored review text\n\t```" | .reviews[0].body |= gsub("\n"; "\r\n")'
+      run evaluate_policy
+      [ "$status" -eq 0 ]
+      jq -e '.owner_required == false' <<<"$output"
+    done
+  done
+  pr ".reviews[0].body=\"Reviewed head: $HEAD_OID\nModel: model\nLoosens: no\n\""
+  run evaluate_policy
+  [ "$status" -eq 0 ]
+  jq -e '.owner_required == false' <<<"$output"
+}
+
+@test "AC4 invalid characters anywhere in the body require owner" {
+  change golden/result.txt baseline
+  app_no
+  local character
+  for character in '\u00a0' '\u000c' '\u0000' '\r' '\u007f' '\u00e9'; do
+    app_no
+    pr ".reviews[0].body += \"\\n\\n$character\""
     run evaluate_policy
     [ "$status" -eq 0 ]
-    jq -e '.owner_required == false' <<<"$output"
+    jq -e '.owner_required == true' <<<"$output"
   done
 }
 
@@ -133,10 +165,17 @@ import pathlib
 import sys
 text = pathlib.Path(sys.argv[1]).read_text()
 assert "Loosens: yes|no" in text
-assert "The line must start at column 0 with exactly `Loosens: no`, allowing trailing whitespace." in text
-assert "It must be the first line or follow a blank line." in text
-assert "The statement must lie outside fenced code blocks." in text
-assert "The text before it must have an even number of backtick characters outside fences." in text
+assert "Normalize carriage return plus line feed (`CRLF`) to line feed (`LF`) before checking the body." in text
+assert "Every character in the whole body must belong to printable `ASCII` (`0x20` through `0x7E`), or be a tab or `LF`." in text
+assert "Unicode whitespace, form feed, `NUL`, and an unpaired carriage return require the owner." in text
+assert "The body must begin with `Reviewed head: <40 lowercase hex digits>`." in text
+assert "Review authors may put the SHA inside one pair of backticks." in text
+assert "An optional `Model: <letters, digits, dot, dash, underscore, space>` line may follow." in text
+assert "Empty lines may separate these header lines and the statement." in text
+assert "The first line after this header block must be exactly `Loosens: no`. Surrounding whitespace or extra text requires the owner." in text
+assert "The following line must be empty, or the body must end." in text
+assert "Ignore later text except for the whole-body character check and duplicate statement check." in text
+assert "The App review brief must place `Loosens: no` in this header position." in text
 assert "Missing, duplicated, or ambiguous statements fail closed and require the owner." in text
 assert "constitutional_paths" in text
 assert "quoted" in text and "fenced" in text and "edited" in text
@@ -168,46 +207,33 @@ PY
   jq -e '.owner_rule == "owner approval" and .owner_override == "owner"' "$(git rev-parse --absolute-git-dir)/agent-skills/merge.result.json"
 }
 
-@test "AC7 quoted statement cannot waive owner" {
+@test "AC7 bypass bodies from independent reviews require owner" {
   change golden/result.txt baseline
   app_no
-  pr '.reviews[0].body="> Loosens: no"'
-  run evaluate_policy
-  [ "$status" -eq 0 ]
-  jq -e '.owner_required == true' <<<"$output"
-}
-
-@test "AC7 fenced statement cannot waive owner" {
-  change golden/result.txt baseline
-  app_no
-  local body
-  for body in $'```text\nLoosens: no\n```' $'~~~\nLoosens: no\n~~~' $'    Loosens: no' $'> quote\nLoosens: no' $'<pre>\n\nLoosens: no\n</pre>' $'```\n```invalid\nLoosens: no\n```'; do
+  local body header="Reviewed head: $HEAD_OID"
+  for body in $'> Loosens: no' \
+    $'- > quoted\nLoosens: no' $'1. > quoted\nLoosens: no' \
+    $'> quoted\nLoosens: no' $'`quoted\n\nLoosens: no\n`' \
+    $'``quoted\n\nLoosens: no\n``' \
+    $'> quoted\n\u00a0\nLoosens: no' $'- > quoted\n\u00a0\nLoosens: no' \
+    $'1. > quoted\n\u00a0\nLoosens: no' \
+    $'``quoted\n\u00a0\nLoosens: no\n``' \
+    $'text <!--\n\u00a0\nLoosens: no\n-->' \
+    $'> quoted\n\f\nLoosens: no' $'text <!--\n\nLoosens: no\n-->' \
+    $'Loosens: no\n---' $'```text\nLoosens: no\n```' \
+    $'~~~\nLoosens: no\n~~~' $'    Loosens: no' \
+    $'Loosens: no trailing text' $'Loosens\uff1a no' \
+    $'Loosens:\u00a0no'; do
+    pr ".reviews[0].body=$(jq -n --arg body "$body" '$body')"
+    run evaluate_policy
+    [ "$status" -eq 0 ]
+    jq -e '.owner_required == true' <<<"$output"
+    body="$header"$'\n\n'"$body"
     pr ".reviews[0].body=$(jq -n --arg body "$body" '$body')"
     run evaluate_policy
     [ "$status" -eq 0 ]
     jq -e '.owner_required == true' <<<"$output"
   done
-}
-
-@test "AC7 list quotes and lazy quote continuations require owner" {
-  change golden/result.txt baseline
-  app_no
-  local body
-  for body in $'- > quoted\nLoosens: no' $'1. > quoted\nLoosens: no' $'> quoted\nLoosens: no'; do
-    pr ".reviews[0].body=$(jq -n --arg body "$body" '$body')"
-    run evaluate_policy
-    [ "$status" -eq 0 ]
-    jq -e '.owner_required == true' <<<"$output"
-  done
-}
-
-@test "AC7 multiline inline code cannot waive owner" {
-  change golden/result.txt baseline
-  app_no
-  pr '.reviews[0].body="`quoted\n\nLoosens: no\n`"'
-  run evaluate_policy
-  [ "$status" -eq 0 ]
-  jq -e '.owner_required == true' <<<"$output"
 }
 
 @test "AC7 review edited after head moved cannot waive owner" {

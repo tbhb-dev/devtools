@@ -346,32 +346,20 @@ def inspect(base: str, head: str, config: dict[str, str]) -> dict[str, object]:
 
 
 def states_no(body: str) -> bool:
-    """Accept an unambiguous literal paragraph outside code."""
+    """Accept only the literal statement immediately after a plain review header."""
+    body = body.replace("\r\n", "\n")
+    if not re.fullmatch(r"[\x20-\x7e\t\n]*", body):
+        return False
     if len(re.findall(r"loosens\s*:", body, re.IGNORECASE)) != 1:
         return False
-    if re.search(r"(?m)^ {0,3}<", body):
-        return False
-    fence = ""
-    previous_blank = True
-    backticks = 0
-    for line in body.split("\n"):
-        marker = re.match(r"^ {0,3}(`{3,}|~{3,})", line)
-        if marker:
-            value = marker.group(1)
-            if not fence:
-                fence = value
-            elif (
-                value[0] == fence[0]
-                and len(value) >= len(fence)
-                and not line[marker.end() :].strip()
-            ):
-                fence = ""
-        if line.rstrip() == "Loosens: no":
-            return not fence and previous_blank and backticks % 2 == 0
-        if not fence and not marker:
-            backticks += line.count("`")
-        previous_blank = not line.strip()
-    return False
+    return bool(
+        re.match(
+            r"\AReviewed head: (?:[0-9a-f]{40}|`[0-9a-f]{40}`)\n\n*"
+            r"(?:Model: [A-Za-z0-9. _-]+\n\n*)?"
+            r"Loosens: no(?:\n(?:\n|\Z)|\Z)",
+            body,
+        )
+    )
 
 
 def evaluate(
