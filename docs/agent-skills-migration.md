@@ -6,6 +6,8 @@ The package includes generated `agent-commit`, `agent-pr`, and `agent-merge-pr` 
 
 Move the supported settings and machine authorities before replacing local skills. The generated merge skill requires `uv` for its pinned YAML reader and `agentrepo checks evaluate` for check judgement.
 
+Before deploying the Go verdict parser, install an `agentrepo` that supplies `review verdict --file PATH`, then pin the harness package and run `apm install`. Review stamping now requires that command. A missing or failing parser prevents review stamping.
+
 For avirt and the other existing consumers, pin the harness package containing the replacement skill, then install it. Remove each replaced local skill's APM dependency and `apm.yml`. Delete its local scripts and Bats suite under `.agents/skills/agent-commit/`, `.agents/skills/agent-pr/`, `.agents/skills/agent-merge-pr/`, and their `.claude/skills/` counterparts as applicable, allowing APM to deploy the generated copies. In avirt, remove the replaced commit, publication, and merge suites from `test-skills`. Remove that task and its call from `check` only when no consumer tests remain. Other consumers remove the same replaced suites from their test tasks. devtools runs the shared regression coverage through `mise run test`. Consumers keep tests for their own hooks and repository settings.
 
 Keep a local commit skill if its delegation checker requires protected-path arguments or its workflow requires external reports: the commit delivery doesn't support those settings yet. Publication now supports both owner-path delegation and reporting.

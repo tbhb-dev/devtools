@@ -4,6 +4,7 @@
 package agentrepo
 
 import (
+	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
@@ -30,5 +31,29 @@ func reviewCommand(code *int) *cobra.Command {
 	}
 	run.Flags().DurationVar(&timeout, "timeout", 0, "Positive deadline, e.g. 900s (required)")
 	group.AddCommand(run)
+	var file string
+	verdict := &cobra.Command{
+		Use:   "verdict --file PATH",
+		Short: "Classify a reviewer reply as pass, changes, or unreadable",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			f, err := os.Open(file)
+			if err != nil {
+				return fmt.Errorf("open reviewer reply: %w", err)
+			}
+			defer f.Close()
+			result, err := review.Verdict(f)
+			if err != nil {
+				return fmt.Errorf("classify reviewer reply: %w", err)
+			}
+			_, err = fmt.Fprintln(cmd.OutOrStdout(), result)
+			if err != nil {
+				return fmt.Errorf("write verdict: %w", err)
+			}
+			return nil
+		},
+	}
+	verdict.Flags().StringVar(&file, "file", "", "Reviewer reply file (required)")
+	group.AddCommand(verdict)
 	return group
 }
