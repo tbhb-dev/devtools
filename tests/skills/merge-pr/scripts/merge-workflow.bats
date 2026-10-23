@@ -22,7 +22,8 @@ setup() {
 
 @test "dependent PR retargeting uses gh-post and stops when it refuses" {
   printf '[{"number":7},{"number":8},{"number":9}]\n' >"$GH_FIXTURES/children.json"
-  export DEVTOOLS_GH_LOGIN=agent
+  mkdir -p "$XDG_CONFIG_HOME/devtools"
+  echo "gh_login = agent" >"$XDG_CONFIG_HOME/devtools/devtools.conf"
   cat >"$BATS_TEST_TMPDIR/bin/gh-post" <<'STUB'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >>"$GH_FIXTURES/post.log"
@@ -189,7 +190,8 @@ STUB
 
 @test "squash-merge refuses when gh is signed in as another account" {
   bash "$SCRIPTS/review.sh" 7
-  export DEVTOOLS_GH_LOGIN=owner
+  mkdir -p "$XDG_CONFIG_HOME/devtools"
+  echo "gh_login = owner" >"$XDG_CONFIG_HOME/devtools/devtools.conf"
 
   run bash "$SCRIPTS/squash-merge.sh" --confirmed 7
 
@@ -241,7 +243,7 @@ STUB
     source "$1/merge-agent.sh"
     mp_fetch_commit() { return 0; }
     dt_die() { echo "$*" >&2; return 1; }
-    dt_repo_conf() { echo "mise run lint-squash-msg"; }
+    ma_repo_conf() { echo "mise run lint-squash-msg"; }
     DEVTOOLS_UNATTENDED=$3
     unreadable=$4
     gitr() {

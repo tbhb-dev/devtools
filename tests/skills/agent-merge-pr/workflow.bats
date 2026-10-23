@@ -44,15 +44,15 @@ setup() {
 }
 
 @test "machine identity and exact head reviewer approval are mandatory" {
-  unset DEVTOOLS_GH_LOGIN
+  machine gh_login ""
   run bash "$AGENT/review.sh" 7
   [ "$status" -ne 0 ]
   [[ "$output" == *gh_login* ]]
-  export DEVTOOLS_GH_LOGIN=other
+  machine gh_login other
   run bash "$AGENT/review.sh" 7
   [ "$status" -ne 0 ]
   [[ "$output" == *"signed in as"* ]]
-  export DEVTOOLS_GH_LOGIN=agent
+  machine gh_login agent
   pr '.reviews[0].commit.oid="old"'
   run bash "$AGENT/review.sh" 7
   [ "$status" -ne 0 ]
@@ -93,9 +93,14 @@ RULE
 exit 1
 READY
   chmod +x "$BATS_TEST_TMPDIR/ready"
+  git checkout --quiet main
   printf '\nmerge_ready_cmd = %s\n' "$BATS_TEST_TMPDIR/ready" >>.agents/agent-skills.conf
   git add -- .agents/agent-skills.conf
   git commit --quiet -m 'test: readiness'
+  BASE_OID=$(git rev-parse HEAD)
+  base_at "$BASE_OID"
+  git checkout --quiet topic
+  git merge --quiet --no-edit main
   HEAD_OID=$(git rev-parse HEAD)
   git push --quiet origin topic
   pr ".headRefOid=\"$HEAD_OID\" | .reviews[0].commit.oid=\"$HEAD_OID\""
@@ -117,7 +122,7 @@ mv "$GH_FIXTURES/next.json" "$GH_FIXTURES/pr.json"
 exit 0
 CHECK
   chmod +x "$BATS_TEST_TMPDIR/checker"
-  export DEVTOOLS_DELEGATION_CHECK="$BATS_TEST_TMPDIR/checker"
+  machine delegation_check "$BATS_TEST_TMPDIR/checker"
   run bash "$AGENT/merge.sh" 7
   [ "$status" -ne 0 ]
   [ ! -f "$GH_FIXTURES/merged" ]
@@ -182,7 +187,7 @@ printf '%s\n' "$*" >"$GH_FIXTURES/delegation"
 exit 1
 CHECK
   chmod +x "$BATS_TEST_TMPDIR/checker"
-  export DEVTOOLS_DELEGATION_CHECK="$BATS_TEST_TMPDIR/checker"
+  machine delegation_check "$BATS_TEST_TMPDIR/checker"
   run bash "$AGENT/merge.sh" 7
   [ "$status" -ne 0 ]
   grep -q -- '--owner-path' "$GH_FIXTURES/delegation"

@@ -36,7 +36,7 @@ unset CDPATH GH_REPO GH_HOST GREP_OPTIONS
 IFS=$' \t\n'
 
 # shellcheck disable=SC1091 # lib.sh is generated beside this script
-. "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+# @include lib/merge-bootstrap.sh
 # shellcheck disable=SC1091 # generated beside this script
 . "$DT_LIB_DIR/pull-request.sh"
 
@@ -88,9 +88,10 @@ mp_require_reviews "$view" "$number"
 head=$(mp_field "$view" headRefOid)
 base=$(mp_field "$view" baseRefName)
 [ -n "$head" ] && [ -n "$base" ] || dt_die "#$number names no head or no base."
-if [ "${DEVTOOLS_UNATTENDED:-0}" = 1 ]; then ma_lint "$head"; fi
 base_oid=$(mp_base_oid "$base") || exit $?
 [ -n "$base_oid" ] || dt_die "Could not read where $base points."
+ma_trust "$base_oid"
+if [ "${DEVTOOLS_UNATTENDED:-0}" = 1 ]; then ma_lint "$head"; fi
 ma_gates "$view" "$number" "$base_oid"
 
 snapshot=$inputs/SQUASH_AGENTMSG
@@ -140,7 +141,7 @@ still_as_gathered() {
 
 dt_review_policy "$inputs" "$head" "$head"
 
-criteria=$DT_LIB_DIR/../../review-squash-message/SKILL.md
+criteria=${DT_MERGE_CHECKOUT:-$DT_LIB_DIR}/../../review-squash-message/SKILL.md
 status=0
 dt_review squash "$draft" "$snapshot" "$criteria" "$root" "$inputs" still_as_gathered \
   "pr:$number:$head" \
