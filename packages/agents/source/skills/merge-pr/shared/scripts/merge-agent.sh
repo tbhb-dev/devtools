@@ -280,10 +280,12 @@ ma_exit() {
   local status=$1 text
   [ "${BASH_SUBSHELL:-0}" -eq 0 ] || return "$status"
   trap - EXIT
-  [ "$status" -ne 0 ] || return 0
   set +e
-  text="Merge workflow for #${number:-unknown} held with status $status. Inspect the preserved draft, review, and merge result before retrying."
-  dt_agent_report blocker "${number:-}" "$text" || printf '%s\n' "$text" >&2
+  if [ "$status" -ne 0 ]; then
+    text="Merge workflow for #${number:-unknown} held with status $status. Inspect the preserved draft, review, and merge result before retrying."
+    dt_agent_report blocker "${number:-}" "$text" || printf '%s\n' "$text" >&2
+  fi
+  [ -z "${MERGE_SNAPSHOT:-}" ] || rm -rf -- "$MERGE_SNAPSHOT"
   exit "$status"
 }
 if [ "${DEVTOOLS_UNATTENDED:-0}" = 1 ]; then trap 'ma_exit "$?"' EXIT; fi

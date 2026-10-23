@@ -271,3 +271,26 @@ refuse_attack_during_delegation() {
   [[ "$output" == *"merge integrity:"* ]]
   [ ! -f "$GH_FIXTURES/untrusted" ]
 }
+
+@test "successful unattended preflight removes its bootstrap snapshots" {
+  local entry scratch=$BATS_TEST_TMPDIR/snapshots
+  mkdir "$scratch"
+  for entry in "$SCRIPTS" "$AGENT"; do
+    run env TMPDIR="$scratch" DEVTOOLS_UNATTENDED=1 bash "$entry/preflight.sh" 7
+    [ "$status" -eq 0 ]
+    [ -z "$(find "$scratch" -name 'devtools-merge.*' -print)" ]
+  done
+}
+
+@test "held unattended preflight removes its bootstrap snapshots and preserves status" {
+  local entry scratch=$BATS_TEST_TMPDIR/snapshots
+  mkdir "$scratch"
+  pr '.reviewDecision="REVIEW_REQUIRED"'
+  for entry in "$SCRIPTS" "$AGENT"; do
+    run env TMPDIR="$scratch" DEVTOOLS_UNATTENDED=1 bash "$entry/preflight.sh" 7
+    [ "$status" -eq 75 ]
+    [[ "$output" == *WAITING_REVIEW* ]]
+    [[ "$output" == *"held with status 75"* ]]
+    [ -z "$(find "$scratch" -name 'devtools-merge.*' -print)" ]
+  done
+}
