@@ -56,7 +56,8 @@ evaluate_policy() {
 }
 
 @test "AC3 constitutional key is accepted and duplicate and unknown keys are rejected" {
-  sed -i '/^constitutional_paths = /d' .agents/agent-skills.conf
+  sed '/^constitutional_paths = /d' .agents/agent-skills.conf >.agents/agent-skills.conf.tmp
+  mv .agents/agent-skills.conf.tmp .agents/agent-skills.conf
   printf '\nconstitutional_paths = ^constitution.txt$\n' >>.agents/agent-skills.conf
   run bash -c 'source "$1/lib.sh"; dt_repo_conf constitutional_paths' _ "$SCRIPTS"
   [ "$status" -eq 0 ]
@@ -92,11 +93,23 @@ evaluate_policy() {
   change golden/result.txt baseline
   app_no
   local body
-  for body in '' 'Loosens: yes' 'Loosens: NO' ' Loosens: no' 'Loosens: no ' 'Loosens: no or yes' $'Loosens: no\nLoosens: no'; do
+  for body in '' 'Loosens: yes' 'Loosens: NO' ' Loosens: no' 'Loosens: no or yes' $'Loosens: no\nLoosens: no'; do
     pr ".reviews[0].body=$(jq -n --arg body "$body" '$body')"
     run evaluate_policy
     [ "$status" -eq 0 ]
     jq -e '.owner_required == true' <<<"$output"
+  done
+}
+
+@test "AC4 standalone paragraph accepts trailing whitespace and closed code" {
+  change golden/result.txt baseline
+  app_no
+  local body
+  for body in $'Review.\n\nLoosens: no' $'Loosens: no \t' $'`closed`\n\nLoosens: no' $'```\n`code\n```\n\nLoosens: no'; do
+    pr ".reviews[0].body=$(jq -n --arg body "$body" '$body')"
+    run evaluate_policy
+    [ "$status" -eq 0 ]
+    jq -e '.owner_required == false' <<<"$output"
   done
 }
 
@@ -120,7 +133,11 @@ import pathlib
 import sys
 text = pathlib.Path(sys.argv[1]).read_text()
 assert "Loosens: yes|no" in text
-assert "fail closed" in text
+assert "The line must start at column 0 with exactly `Loosens: no`, allowing trailing whitespace." in text
+assert "It must be the first line or follow a blank line." in text
+assert "The statement must lie outside fenced code blocks." in text
+assert "The text before it must have an even number of backtick characters outside fences." in text
+assert "Missing, duplicated, or ambiguous statements fail closed and require the owner." in text
 assert "constitutional_paths" in text
 assert "quoted" in text and "fenced" in text and "edited" in text
 PY
@@ -170,6 +187,27 @@ PY
     [ "$status" -eq 0 ]
     jq -e '.owner_required == true' <<<"$output"
   done
+}
+
+@test "AC7 list quotes and lazy quote continuations require owner" {
+  change golden/result.txt baseline
+  app_no
+  local body
+  for body in $'- > quoted\nLoosens: no' $'1. > quoted\nLoosens: no' $'> quoted\nLoosens: no'; do
+    pr ".reviews[0].body=$(jq -n --arg body "$body" '$body')"
+    run evaluate_policy
+    [ "$status" -eq 0 ]
+    jq -e '.owner_required == true' <<<"$output"
+  done
+}
+
+@test "AC7 multiline inline code cannot waive owner" {
+  change golden/result.txt baseline
+  app_no
+  pr '.reviews[0].body="`quoted\n\nLoosens: no\n`"'
+  run evaluate_policy
+  [ "$status" -eq 0 ]
+  jq -e '.owner_required == true' <<<"$output"
 }
 
 @test "AC7 review edited after head moved cannot waive owner" {

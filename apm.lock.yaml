@@ -230,7 +230,7 @@ dependencies:
     .claude/skills/merge-pr/scripts/lib.sh: sha256:3e2dbe6f1b77ae5bce81335b688050e4bd33283eea2bbe1fe4933b42ef25e00c
     .claude/skills/merge-pr/scripts/lint-squash-msg.sh: sha256:910879475b0b3ae890734b0879a6e7c2298e8ff35335fc64efae600bc23ec199
     .claude/skills/merge-pr/scripts/merge-agent.sh: sha256:254a6be14e70887146e39f064613836b0d1fd6f3844e78ff44ac8a18d8507786
-    .claude/skills/merge-pr/scripts/merge-policy.py: sha256:ecaddd90b686adc2447fa8c2a6a1db6edc52f7769bbf1f504bf9b68f0c48dd29
+    .claude/skills/merge-pr/scripts/merge-policy.py: sha256:4ff03d29485a227984bbc2456b875afc1b9e0863dd52e6b8cb7de2e4991550f8
     .claude/skills/merge-pr/scripts/populate-description.sh: sha256:ed9688d83433ff7e1700255ae02e3dc912faf34dc34bdd9edb22eb02b8032d3a
     .claude/skills/merge-pr/scripts/preflight.sh: sha256:1e8c899e7db05cad6cd6acdba440ac2472c6d491b757770a8e391113a29b98cc
     .claude/skills/merge-pr/scripts/pull-request.sh: sha256:24d1aea50d24fb0ca9f27b0d73d12964ffb247a99dfe9d43dad9287c9009fead
@@ -239,7 +239,7 @@ dependencies:
     .claude/skills/merge-pr/scripts/squash-merge.sh: sha256:37a7b24217a2df11eaf347296634eab9e91735a7b96a84597c4c1815b0c23d8f
     .claude/skills/merge-pr/scripts/squash-message.sh: sha256:9b512745a0ef14ab52cb6625460556ac62f2cf80afec89d021885679b674c683
     .claude/skills/merge-pr/scripts/worktree-ready.sh: sha256:8323a36ec25731a8a9f99dde74b8d24c1d6f536d8ebebe29b53dcfab4b51fc44
-    .claude/skills/merge-pr/tokens.json: sha256:401bf72bf02edf76f04ce4dfb8580610a12568751191e2dc5f3336ec3ee1f0c6
+    .claude/skills/merge-pr/tokens.json: sha256:7c6714eaf7af0d0438787df2b4a8906cae182e5d0ea0c2ea85a2dbfa0918ee07
     .claude/skills/pr/SKILL.md: sha256:a7e249724ca336da9e1d8c97fe48c041821983ae687879f41b8538829ed63b9c
     .claude/skills/pr/scripts/agent.sh: sha256:4b7c9f5661c5651a8849de3348830982109384a0a69fa7a27766dde521911658
     .claude/skills/pr/scripts/check.sh: sha256:447a4f1808090a20ac22750050c4f9fc05fd130d5bfe8e2621ff23957492677e
@@ -507,7 +507,7 @@ dependencies:
     .agents/skills/merge-pr/scripts/lib.sh: sha256:3e2dbe6f1b77ae5bce81335b688050e4bd33283eea2bbe1fe4933b42ef25e00c
     .agents/skills/merge-pr/scripts/lint-squash-msg.sh: sha256:910879475b0b3ae890734b0879a6e7c2298e8ff35335fc64efae600bc23ec199
     .agents/skills/merge-pr/scripts/merge-agent.sh: sha256:254a6be14e70887146e39f064613836b0d1fd6f3844e78ff44ac8a18d8507786
-    .agents/skills/merge-pr/scripts/merge-policy.py: sha256:ecaddd90b686adc2447fa8c2a6a1db6edc52f7769bbf1f504bf9b68f0c48dd29
+    .agents/skills/merge-pr/scripts/merge-policy.py: sha256:4ff03d29485a227984bbc2456b875afc1b9e0863dd52e6b8cb7de2e4991550f8
     .agents/skills/merge-pr/scripts/populate-description.sh: sha256:ed9688d83433ff7e1700255ae02e3dc912faf34dc34bdd9edb22eb02b8032d3a
     .agents/skills/merge-pr/scripts/preflight.sh: sha256:1e8c899e7db05cad6cd6acdba440ac2472c6d491b757770a8e391113a29b98cc
     .agents/skills/merge-pr/scripts/pull-request.sh: sha256:24d1aea50d24fb0ca9f27b0d73d12964ffb247a99dfe9d43dad9287c9009fead
@@ -516,7 +516,7 @@ dependencies:
     .agents/skills/merge-pr/scripts/squash-merge.sh: sha256:37a7b24217a2df11eaf347296634eab9e91735a7b96a84597c4c1815b0c23d8f
     .agents/skills/merge-pr/scripts/squash-message.sh: sha256:9b512745a0ef14ab52cb6625460556ac62f2cf80afec89d021885679b674c683
     .agents/skills/merge-pr/scripts/worktree-ready.sh: sha256:8323a36ec25731a8a9f99dde74b8d24c1d6f536d8ebebe29b53dcfab4b51fc44
-    .agents/skills/merge-pr/tokens.json: sha256:fb4c4de74774b17ad52961dfa8fb81ff01f87945e6208e1affbaf696152ee7e2
+    .agents/skills/merge-pr/tokens.json: sha256:e5581195ffbdcf26eb4420b4bb023cc41afe6165b9bc55c8ac3d1286fea7c9a0
     .agents/skills/pr/SKILL.md: sha256:d9c5c61ea19ee746d0534ca88710fa2db04476a45b555ab12300176bfe7545ba
     .agents/skills/pr/scripts/agent.sh: sha256:4b7c9f5661c5651a8849de3348830982109384a0a69fa7a27766dde521911658
     .agents/skills/pr/scripts/check.sh: sha256:447a4f1808090a20ac22750050c4f9fc05fd130d5bfe8e2621ff23957492677e
@@ -1208,7 +1208,7 @@ deployments:
   owners:
   - ./packages/agents/codex
   active_owner: ./packages/agents/codex
-  content_hash: sha256:ecaddd90b686adc2447fa8c2a6a1db6edc52f7769bbf1f504bf9b68f0c48dd29
+  content_hash: sha256:4ff03d29485a227984bbc2456b875afc1b9e0863dd52e6b8cb7de2e4991550f8
 - kind: project-relative
   target: antigravity
   value: .agents/skills/merge-pr/scripts/populate-description.sh
@@ -1289,7 +1289,7 @@ deployments:
   owners:
   - ./packages/agents/codex
   active_owner: ./packages/agents/codex
-  content_hash: sha256:fb4c4de74774b17ad52961dfa8fb81ff01f87945e6208e1affbaf696152ee7e2
+  content_hash: sha256:e5581195ffbdcf26eb4420b4bb023cc41afe6165b9bc55c8ac3d1286fea7c9a0
 - kind: project-relative
   target: antigravity
   value: .agents/skills/pr
@@ -2540,7 +2540,7 @@ deployments:
   owners:
   - ./packages/agents/claude
   active_owner: ./packages/agents/claude
-  content_hash: sha256:ecaddd90b686adc2447fa8c2a6a1db6edc52f7769bbf1f504bf9b68f0c48dd29
+  content_hash: sha256:4ff03d29485a227984bbc2456b875afc1b9e0863dd52e6b8cb7de2e4991550f8
 - kind: project-relative
   target: claude
   value: .claude/skills/merge-pr/scripts/populate-description.sh
@@ -2621,7 +2621,7 @@ deployments:
   owners:
   - ./packages/agents/claude
   active_owner: ./packages/agents/claude
-  content_hash: sha256:401bf72bf02edf76f04ce4dfb8580610a12568751191e2dc5f3336ec3ee1f0c6
+  content_hash: sha256:7c6714eaf7af0d0438787df2b4a8906cae182e5d0ea0c2ea85a2dbfa0918ee07
 - kind: project-relative
   target: claude
   value: .claude/skills/pr

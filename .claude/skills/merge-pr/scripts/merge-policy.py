@@ -346,13 +346,14 @@ def inspect(base: str, head: str, config: dict[str, str]) -> dict[str, object]:
 
 
 def states_no(body: str) -> bool:
-    """Accept one literal line outside fenced code and quoted paragraphs."""
+    """Accept an unambiguous literal paragraph outside code."""
     if len(re.findall(r"loosens\s*:", body, re.IGNORECASE)) != 1:
         return False
     if re.search(r"(?m)^ {0,3}<", body):
         return False
     fence = ""
-    quoted = False
+    previous_blank = True
+    backticks = 0
     for line in body.split("\n"):
         marker = re.match(r"^ {0,3}(`{3,}|~{3,})", line)
         if marker:
@@ -365,13 +366,11 @@ def states_no(body: str) -> bool:
                 and not line[marker.end() :].strip()
             ):
                 fence = ""
-        if not line.strip():
-            quoted = False
-        elif re.match(r"^ {0,3}>", line):
-            # Lazy blockquote continuations are ambiguous too.
-            quoted = True
-        if line == "Loosens: no":
-            return not fence and not quoted
+        if line.rstrip() == "Loosens: no":
+            return not fence and previous_blank and backticks % 2 == 0
+        if not fence and not marker:
+            backticks += line.count("`")
+        previous_blank = not line.strip()
     return False
 
 
