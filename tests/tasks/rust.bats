@@ -9,6 +9,10 @@ setup() {
 	cp -R "$ROOT/.devtools/tasks" "$ROOT/.devtools/scripts" "$WORK/.devtools/"
 	cp -R "$ROOT/tests/tasks/fixtures/rust/." "$WORK/"
 	cd "$WORK" || return
+	sed '/^set -euo pipefail$/a\
+export PATH="$DEVTOOLS_DIR/../bin:$PATH"
+' .devtools/scripts/rust.sh >rust.sh
+	mv rust.sh .devtools/scripts/rust.sh
 	export DEVTOOLS_DIR="$WORK/.devtools" MISE_TRUSTED_CONFIG_PATHS="$WORK"
 	export CALLS="$WORK/calls"
 	cat >mise.toml <<'TOML'
