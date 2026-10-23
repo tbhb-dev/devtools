@@ -82,6 +82,8 @@ After creating a linked worktree, inspect its configuration and run `mise trust`
 
 The test task includes Go, Python, hook Bats, and leak Bats suites. Run `mise run test-hooks` or `mise run test-leaks` for the shell suites. CI runs them in `test-bats (ubuntu-24.04)` and `test-bats (macos-15)`. See the [task and CI routing guide](AGENTS.md#tasks) for the check names `fix-pr` recognizes.
 
+`test-hooks` runs every Bats file under `tests/` with one worker per CPU, capped at eight workers to bound process and memory use. Tests within a file run serially and use Bats temporary directories outside the repository. The empty `serialFiles` list in `cmd/test-hooks/run.go` lists files that need serial execution. Each entry must explain a demonstrated conflict. Those files run after the parallel group, even if that group fails. Run `mise install` to install the pinned rush scheduler.
+
 ### Review and delegated runs
 
 Commit messages, PR descriptions, and squash messages pass script-owned independent reviews. Repositories can supply [review policy](AGENTS.md#repository-review-policy) in `.agents/review-instructions.md` on origin’s trusted default branch. Policy changes need ordinary review before later branches can use them, and policy can't waive credential checks or select a reviewer.

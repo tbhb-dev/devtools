@@ -133,6 +133,8 @@ apm = "0.33.0"
 # does not.
 ast-grep = "0.50.0"
 jq = "1.8.2"
+# Bats uses rush to schedule parallel test files.
+rush = "0.11.0"
 shfmt = "3.14.1"
 
 # --- Setup ---
@@ -574,11 +576,10 @@ run = "bats .devtools/scripts/check-leaks.bats"
 
 [tasks.test-hooks]
 description = "Run the bats suites for the shell scripts under scripts/ and tools/"
-usage = 'arg "<path>" default="tests"'
 # Exercise the binary from this tree, not the released toolchain pin.
 run = [
   "go build -o bin/agentrepo ./cmd/agentrepo",
-  'env PATH="$PWD/bin:$PATH" bats --recursive $usage_path',
+  'env PATH="$PWD/bin:$PATH" go run ./cmd/test-hooks',
 ]
 
 # Serial by default so a failing run prints a clean, ordered trace; pass
