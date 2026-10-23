@@ -21,7 +21,7 @@ dt_repo_conf() {
         sub(/=.*/, "", key)
         gsub(/^[ \t]+|[ \t]+$/, "", key)
         if (!index($0, "=") || seen[key]++ ||
-            key !~ /^(lint_commit_cmd|required_hooks|hook_marker|review_max_rounds|pr_template|lint_pr_cmd|pr_log_entry|pr_related_pattern|pr_title_check_cmd|owner_paths|mail_cmd|mail_to|mail_from|lint_squash_cmd|owner_review_label|ruleset_dir|golden_paths|loosening_markers|gate_config_paths|disposable_ignored|merge_ready_cmd)$/) {
+            key !~ /^(lint_commit_cmd|required_hooks|hook_marker|review_max_rounds|pr_template|lint_pr_cmd|pr_log_entry|pr_related_pattern|pr_title_check_cmd|owner_paths|mail_cmd|mail_to|mail_from|lint_squash_cmd|owner_review_label|ruleset_dir|golden_paths|constitutional_paths|loosening_markers|gate_config_paths|disposable_ignored|merge_ready_cmd)$/) {
           print "Invalid or duplicate repository setting: " key > "/dev/stderr"
           bad = 1
         }
@@ -34,6 +34,14 @@ dt_repo_conf() {
     fi
   fi
   printf '%s\n' "${2:-}"
+}
+
+# Publishers and mergers reserve the same label, including its default.
+dt_owner_review_label() {
+  local label
+  label=$(dt_repo_conf owner_review_label owner-review) || return $?
+  [ -n "$label" ] || dt_die "owner_review_label must not be empty"
+  printf '%s\n' "$label"
 }
 
 dt_agent_context() {

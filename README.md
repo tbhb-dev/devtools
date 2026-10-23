@@ -7,10 +7,10 @@ Shared agent tooling for tbhb repositories. The repo provides Go command-line to
 Repositories across tbhb install the shared primitives with the [APM CLI](https://microsoft.github.io/apm/quickstart/):
 
 ```bash
-apm install tbhb-dev/devtools#v0.14.2
+apm install tbhb-dev/devtools#v0.16.0
 ```
 
-A consumer can also select a sub-package, such as `apm install tbhb-dev/devtools/packages/agents/claude#v0.14.2`. The pin tasks support both forms.
+A consumer can also select a sub-package, such as `apm install tbhb-dev/devtools/packages/agents/claude#v0.16.0`. The pin tasks support both forms.
 
 The package deploys these primitives from sub-packages under [`packages/agents/`](packages/agents/): `claude` contains the skills below plus the `guard-markdown` hook declaration, `codex` contains the Codex skill variants, and `common` contains the harness-neutral `worktree-wip` instructions.
 
@@ -21,7 +21,7 @@ The package deploys these primitives from sub-packages under [`packages/agents/`
 | `worktree-wip` | instructions | Stash and work-in-progress rules for repos that run more than one agent worktree session. |
 | `guard-markdown` | hook | `PreToolUse` gate on `Write` and `Edit` that refuses Markdown whose paragraphs span more than one line. |
 
-Pinning the bare repo (`apm install tbhb-dev/devtools#v0.14.2`) resolves the root workspace manifest, whose dependencies on the four sub-packages under `packages/agents/` are local paths that a remote consumer's `apm` resolves transitively, filtering each sub-package by its own targets. For a claude-only consumer, the bare pin gives exactly what the `claude` and `common` pins deliver. APM filters the other packages by their declared targets. This repo installs its own package the way a consumer does: `apm install` deploys the primitives into the local harness layout, and CI rejects drift between the `packages/agents/*/.apm/` sources and the deployed copies.
+Pinning the bare repo (`apm install tbhb-dev/devtools#v0.16.0`) resolves the root workspace manifest, whose dependencies on the four sub-packages under `packages/agents/` are local paths that a remote consumer's `apm` resolves transitively, filtering each sub-package by its own targets. For a claude-only consumer, the bare pin gives exactly what the `claude` and `common` pins deliver. APM filters the other packages by their declared targets. This repo installs its own package the way a consumer does: `apm install` deploys the primitives into the local harness layout, and CI rejects drift between the `packages/agents/*/.apm/` sources and the deployed copies.
 
 ## Checks
 
@@ -38,7 +38,7 @@ A check is one rule enforced everywhere it matters. Because all three callers ru
 ```yaml
 repos:
   - repo: https://github.com/tbhb-dev/devtools
-    rev: v0.14.2
+    rev: v0.16.0
     hooks:
       - id: guard-markdown
 ```
@@ -54,6 +54,7 @@ Pass `--fix` to collapse paragraphs someone already wrapped.
 Each tool under [`cmd/`](cmd/) builds as a standalone binary:
 
 - [`agentrepo`](docs/checks-evaluator.md) evaluates saved GitHub checks. This binary owns repository transactions, signing, and delegation as they move into Go.
+- `agy-otel hook <event>` silently records Antigravity hook events in a local spool.
 - `agenthooks` manages shared agent hooks.
 - `agentstore` stores shared agent state.
 - `agentcontext` assembles shared agent context.
@@ -67,6 +68,15 @@ Install one directly:
 ```bash
 go install github.com/tbhb-dev/devtools/cmd/agenthooks@latest
 ```
+
+The next minor release includes `agy-otel`. After that tag exists, pin the recorder through mise:
+
+```toml
+[tools]
+"go:github.com/tbhb-dev/devtools/cmd/agy-otel" = "v0.15.0"
+```
+
+The current v0.14.2 release doesn't contain this command. Hook registration remains an operator task. The recorder stores events under `$XDG_STATE_HOME/agy-otel`, falling back to `~/.local/state/agy-otel`.
 
 Or build everything from a checkout:
 

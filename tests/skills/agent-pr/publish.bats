@@ -107,3 +107,22 @@ HOOK
   [ "$(jq -r .number .git/agent-skills/pr.result.json)" -eq 1 ]
   grep -q 'pr list --head 123 --state open --json number,url' "$GH_LOG"
 }
+
+@test "description and property edits reuse test and lint on publish dry runs (#555)" {
+  export DEVTOOLS_REVIEW_CMD='cat >/dev/null; echo review >>"$GATE_LOG"; echo "VERDICT: PASS"'
+  bash "$SCRIPTS/review.sh"
+  bash "$SCRIPTS/publish.sh" --dry-run
+  for change in description properties; do
+    case "$change" in
+    description) printf '\nEdited description.\n' >>PR_AGENTDESC.md ;;
+    properties) replace_text PR_AGENTDESC.md 'labels: [enhancement]' 'labels: [enhancement, bug]' ;;
+    esac
+    bash "$SCRIPTS/review.sh"
+    : >"$GATE_LOG"
+    run bash "$SCRIPTS/publish.sh" --dry-run
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"mise run lint passed at"*"(reused)"* ]]
+    [[ "$output" == *"mise run test passed at"*"(reused)"* ]]
+    [ "$(cat "$GATE_LOG")" = $'lint-pr-description\ndevtools:lint-leaks\ndevtools:gitleaks\nreview' ]
+  done
+}

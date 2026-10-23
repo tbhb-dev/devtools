@@ -1,0 +1,23 @@
+{
+  "conversationId": "b2e89a91-a010-4d64-bb4d-010203040506",
+  "rootConversationId": "root-fixture-id",
+  "parentConversationId": "parent-fixture-id",
+  "modelName": "fixture-model",
+  "agentName": "fixture-agent",
+  "executionId": "fixture-execution",
+  "workspacePaths": ["EXCLUDED_WORKSPACE"],
+  "transcriptPath": "EXCLUDED_TRANSCRIPT",
+  "artifactDirectoryPath": "EXCLUDED_ARTIFACT",
+  "lastUserInput": "EXCLUDED_INPUT",
+  "modelOutput": "EXCLUDED_OUTPUT",
+  "modelThinking": "EXCLUDED_THINKING",
+  "finalModelOutput": "EXCLUDED_FINAL",
+  "futureField": "EXCLUDED_FUTURE",
+  "stepIdx": 0,
+  "toolCall": {
+    "name": "run_command",
+    "args": {
+      "CommandLine": "EXCLUDED_ARGS"
+    }
+  }
+}

@@ -246,7 +246,15 @@ if [ "$gh_state" = ok ]; then
 default branch: {{.defaultBranchRef.name}}
 ' || exit $?
   printf '\nlabels:\n'
-  dt_gh label list --limit 100 || exit $?
+  owner_review_label=$(dt_owner_review_label) || exit $?
+  owner_review_label=$(printf '%s' "$owner_review_label" | tr '[:upper:]' '[:lower:]')
+  available_labels=$(dt_gh label list --limit 100 --json name --jq '.[].name') || exit $?
+  while IFS= read -r label; do
+    label_identity=$(printf '%s' "$label" | tr '[:upper:]' '[:lower:]')
+    if [ "$label_identity" != "$owner_review_label" ]; then printf '%s\n' "$label"; fi
+  done <<EOF
+$available_labels
+EOF
   printf '\nopen milestones:\n'
   milestones=$(dt_gh_repo "query(\$owner:String!,\$name:String!){repository(owner:\$owner,name:\$name){milestones(first:100,states:OPEN){nodes{title} pageInfo{hasNextPage}}}}" --jq '.data.repository.milestones | if .pageInfo.hasNextPage then error("more than 100 open milestones") else .nodes[].title end') || exit $?
   if [ -n "$milestones" ]; then printf '%s\n' "$milestones"; else none; fi
