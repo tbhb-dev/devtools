@@ -253,7 +253,7 @@ apm.lock.yaml rebase-resolve=regenerate
 **/skills/*/tokens.json rebase-resolve=regenerate
 ```
 
-A path marked that way resolves by taking one side whole, because the generator overwrites it afterwards. `.gitattributes` also marks every generated skill directory, both packages and both deployed copies, one line per migrated skill. Once the rebase finishes, run `mise run generate-skills`, then `mise run skill-tokens`, then `apm install`, in that order. Generating writes the skills under `packages/agents/*/.apm/skills/` from their sources. Measuring then writes the token counts beside them, and installing deploys them and records their hashes. Each step reads what the one before it wrote. Run them in any other order and a file ends up describing content that changed after the step read it. Commit what the three of them rewrite.
+A path marked that way resolves by taking one side whole, because the generator overwrites it afterwards. `.gitattributes` also marks every generated skill directory, both packages and both deployed copies, one line per migrated skill. Once the rebase finishes, run `mise run regen-generated`. It measures the generated skill copies before deploying them. Each step reads what the one before it wrote. Commit what the command rewrites.
 
 `conflict-markers=documented` is the companion attribute, for a file whose lines resembling conflict markers are its subject rather than its damage. The resolve skill's own `SKILL.md` has a built-in exemption, so consumers don't see that false alarm.
 

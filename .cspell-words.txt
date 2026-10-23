@@ -302,6 +302,7 @@ pyrefly
 pytest
 recompiles
 recvcheck
+regen
 relint
 relitigates
 relpath
