@@ -85,13 +85,50 @@ func TestBatsFileIsolationAndResults(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Bats runs on Linux and macOS in test-bats")
 	}
+	binDir := t.TempDir()
+	// Model Bats' file directories and output without requiring Bats or its scheduler.
+	stub := `#!/bin/sh
+set -eu
+[ "$1" = --jobs ]
+jobs=$2
+shift 2
+if [ "$jobs" -gt 1 ]; then
+	[ "$1" = --no-parallelize-within-files ]
+	[ "$2" = --parallel-binary-name ]
+	[ "$3" = rush ]
+	shift 3
+fi
+printf '%s' "$jobs" >"$RECORD_DIR/jobs"
+printf '1..%s\n' "$#"
+result=0
+number=0
+for file do
+	number=$((number + 1))
+	BATS_FILE_TMPDIR=$(mktemp -d "$RECORD_DIR/file.XXXXXX")
+	export BATS_FILE_TMPDIR
+	name=${file##*/}
+	name=${name%.bats}
+	if /bin/sh "$file"; then
+		printf 'ok %s isolated %s\n' "$number" "$name"
+	else
+		printf 'not ok %s fails\n' "$number"
+		result=1
+	fi
+done
+exit "$result"
+`
+	stubPath := filepath.Join(binDir, "bats")
+	require.NoError(t, os.WriteFile(stubPath, []byte(stub), 0o600))
+	//nolint:gosec // The temporary Bats stub must be executable to test command lookup.
+	require.NoError(t, os.Chmod(stubPath, 0o700))
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	for _, cpuCount := range []int{1, 4, 8} {
 		t.Run(strconv.Itoa(cpuCount), func(t *testing.T) {
 			root := t.TempDir()
 			require.NoError(t, os.Mkdir(filepath.Join(root, "tests"), 0o750))
-			// Each file records its Bats-owned directory outside the source tree.
+			// Each fixture records its file directory outside the source tree.
 			for _, name := range []string{"a", "b"} {
-				body := "@test 'isolated " + name + "' {\n [ ! -e \"$BATS_FILE_TMPDIR/owner\" ]\n echo " + name + " >\"$BATS_FILE_TMPDIR/owner\"\n printf '%s' \"$BATS_FILE_TMPDIR\" >\"$RECORD_DIR/" + name + "\"\n}\n"
+				body := "set -eu\n[ ! -e \"$BATS_FILE_TMPDIR/owner\" ]\necho " + name + " >\"$BATS_FILE_TMPDIR/owner\"\nprintf '%s' \"$BATS_FILE_TMPDIR\" >\"$RECORD_DIR/" + name + "\"\n"
 				require.NoError(t, os.WriteFile(filepath.Join(root, "tests", name+".bats"), []byte(body), 0o600))
 			}
 			recordDir := t.TempDir()
@@ -110,6 +147,9 @@ func TestBatsFileIsolationAndResults(t *testing.T) {
 			require.Contains(t, string(output), "1..2")
 			require.Contains(t, string(output), "ok 1 isolated a")
 			require.Contains(t, string(output), "ok 2 isolated b")
+			jobs, err := os.ReadFile(filepath.Join(recordDir, "jobs"))
+			require.NoError(t, err)
+			require.Equal(t, strconv.Itoa(cpuCount), string(jobs))
 			a, err := os.ReadFile(filepath.Join(recordDir, "a"))
 			require.NoError(t, err)
 			b, err := os.ReadFile(filepath.Join(recordDir, "b"))
@@ -119,7 +159,7 @@ func TestBatsFileIsolationAndResults(t *testing.T) {
 			require.NotContains(t, string(b), root)
 			require.NoError(
 				t,
-				os.WriteFile(filepath.Join(root, "tests/fail.bats"), []byte("@test 'fails' { false; }\n"), 0o600),
+				os.WriteFile(filepath.Join(root, "tests/fail.bats"), []byte("exit 1\n"), 0o600),
 			)
 			require.Error(t, runSuite(root, cpuCount, nil, run))
 			require.Contains(t, string(output), "1..3")
