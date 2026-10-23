@@ -345,21 +345,20 @@ def inspect(base: str, head: str, config: dict[str, str]) -> dict[str, object]:
     return {"findings": findings, "owner_paths": owner_paths}
 
 
-def states_no(body: str) -> bool:
+def states_no(body: str, head: str) -> bool:
     """Accept only the literal statement immediately after a plain review header."""
     body = body.replace("\r\n", "\n")
     if not re.fullmatch(r"[\x20-\x7e\t\n]*", body):
         return False
     if len(re.findall(r"loosens\s*:", body, re.IGNORECASE)) != 1:
         return False
-    return bool(
-        re.match(
-            r"\AReviewed head: (?:[0-9a-f]{40}|`[0-9a-f]{40}`)\n\n*"
-            r"(?:Model: [A-Za-z0-9. _-]+\n\n*)?"
-            r"Loosens: no(?:\n(?:\n|\Z)|\Z)",
-            body,
-        )
+    match = re.match(
+        r"\AReviewed head: ([0-9a-f]{40}|`[0-9a-f]{40}`)\n\n*"
+        r"(?:Model: [A-Za-z0-9. _-]+\n\n*)?"
+        r"Loosens: no(?:\n(?:\n|\Z)|\Z)",
+        body,
     )
+    return bool(match and match.group(1).strip("`") == head)
 
 
 def evaluate(
@@ -395,7 +394,7 @@ def evaluate(
         and sum(item.get("submittedAt") == review["submittedAt"] for item in decisive)
         == 1
         and isinstance(body, str)
-        and states_no(body)
+        and states_no(body, head)
     )
     return policy | {
         "owner_required": bool(findings) and not waived,

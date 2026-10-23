@@ -109,6 +109,20 @@ evaluate_policy() {
   done
 }
 
+@test "AC4 mismatched plain and backticked header SHAs require owner" {
+  change golden/result.txt baseline
+  app_no
+  local sha body failed=0
+  for sha in '0000000000000000000000000000000000000000' '`0000000000000000000000000000000000000000`'; do
+    body="Reviewed head: $sha"$'\n\nLoosens: no'
+    pr ".reviews[0].body=$(jq -n --arg body "$body" '$body')"
+    run evaluate_policy
+    [ "$status" -eq 0 ]
+    jq -e '.owner_required == true' <<<"$output" || failed=1
+  done
+  [ "$failed" -eq 0 ]
+}
+
 @test "AC4 plain header accepts optional SHA backticks Model and CRLF" {
   change golden/result.txt baseline
   app_no
@@ -170,6 +184,7 @@ assert "Every character in the whole body must belong to printable `ASCII` (`0x2
 assert "Unicode whitespace, form feed, `NUL`, and an unpaired carriage return require the owner." in text
 assert "The body must begin with `Reviewed head: <40 lowercase hex digits>`." in text
 assert "Review authors may put the SHA inside one pair of backticks." in text
+assert "The header SHA must equal the merge review's pinned head. A mismatch requires the owner." in text
 assert "An optional `Model: <letters, digits, dot, dash, underscore, space>` line may follow." in text
 assert "Empty lines may separate these header lines and the statement." in text
 assert "The first line after this header block must be exactly `Loosens: no`. Surrounding whitespace or extra text requires the owner." in text
