@@ -126,7 +126,7 @@ Where the branch runs long enough for a mid-history break to matter, the thoroug
 git -c rebase.updateRefs=false rebase --exec 'mise run lint' <base>
 ```
 
-The script also lists any path the repository declares generated through `rebase-resolve=regenerate`. The resolution took one side of those whole, on the understanding that the generator would overwrite it. Run the generator now, and commit what it changes.
+The script also lists any path the repository declares generated through `rebase-resolve=regenerate`. The resolution took one side of those whole, on the understanding that the generator would overwrite it. In the devtools checkout, run `mise run regen-generated`. In any other repository, run that repository's own regeneration steps for generated skill files. Commit what it changes.
 
 ## Step 6: report
 

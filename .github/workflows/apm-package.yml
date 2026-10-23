@@ -23,7 +23,7 @@ on:
     branches: [main]
   # No paths filter: the ruleset requires validate and scan-skills on every
   # pull request, and a workflow that never starts leaves them pending
-  # forever. The changes job below decides whether validate runs.
+  # forever. The changes job below decides whether validation steps run.
   pull_request:
 
 permissions:
@@ -97,24 +97,25 @@ jobs:
           fi
           echo "relevant=$relevant" >> "$GITHUB_OUTPUT"
           if [ "$relevant" = false ]; then
-            echo "No APM package paths changed; validate is skipped." >> "$GITHUB_STEP_SUMMARY"
+            echo "No APM package paths changed; validation steps are skipped." >> "$GITHUB_STEP_SUMMARY"
           fi
 
   validate:
     name: validate
     needs: changes
-    # Skip only when the detector succeeded and reported nothing relevant.
-    # A failed detector leaves its output empty, and skipping validate then
-    # would pass the required check without running it.
-    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.relevant == 'true') }}
+    # Always report a result, even if detection fails. Skip the steps only
+    # when the detector succeeded and reported nothing relevant.
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
     steps:
       - name: Harden the runner
+        if: ${{ needs.changes.result != 'success' || needs.changes.outputs.relevant == 'true' }}
         uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
         with:
           egress-policy: audit
 
       - name: Checkout
+        if: ${{ needs.changes.result != 'success' || needs.changes.outputs.relevant == 'true' }}
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -125,6 +126,7 @@ jobs:
       # action appends --locked on its own once it sees mise.lock, and
       # its shims reach PATH, so the steps below call apm directly.
       - name: Set up mise
+        if: ${{ needs.changes.result != 'success' || needs.changes.outputs.relevant == 'true' }}
         uses: jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8 # v5.1.2
         with:
           # renovate: datasource=github-releases depName=jdx/mise
@@ -137,15 +139,19 @@ jobs:
       # no APM content and fails. Validate mode writes nothing, which is
       # what keeps the drift check below meaningful.
       - name: Run frozen install
+        if: ${{ needs.changes.result != 'success' || needs.changes.outputs.relevant == 'true' }}
         run: apm install --frozen
 
       - name: Validate primitives
+        if: ${{ needs.changes.result != 'success' || needs.changes.outputs.relevant == 'true' }}
         run: apm compile --validate
 
       - name: Audit deployed state
+        if: ${{ needs.changes.result != 'success' || needs.changes.outputs.relevant == 'true' }}
         run: apm audit --ci
 
       - name: Check deployed copies for drift
+        if: ${{ needs.changes.result != 'success' || needs.changes.outputs.relevant == 'true' }}
         run: |
           status=$(git status --porcelain)
           if [ -n "$status" ]; then

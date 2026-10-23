@@ -88,3 +88,4 @@ printf 'scaffolded %s from %s\n' "$DRAFT" "$TEMPLATE"
 printf 'Sections came from the template, so they match it exactly.\n'
 printf 'The title and the labels are placeholders that fail the validator\n'
 printf 'until something fills them.\n'
+printf 'The owner-review label belongs to the owner-approval route, so omit it.\n'

@@ -463,6 +463,10 @@ run = "bash tools/check-versions.sh"
 description = "Write each harness's copy of the skills that have a source"
 run = "bash tools/generate-skills.sh"
 
+[tasks.regen-generated]
+description = "Regenerate skills, measure tokens, and deploy APM output in order"
+run = ["mise run generate-skills", "mise run skill-tokens", "apm install"]
+
 [tasks.check-generated-skills]
 description = "Fail when a generated skill differs from what its source writes"
 run = "bash tools/generate-skills.sh --check"
@@ -556,6 +560,15 @@ run = "mise run devtools:test-go"
 # from -race builds; for ad-hoc local runs use this task.
 [tasks.test-go-race]
 run = "mise run devtools:test-go-race"
+
+# Keep wall-time assertions out of ordinary, coverage, and race runs.
+[tasks.test-agy-otel-latency]
+description = "Check the CI hook latency regression ceiling without instrumentation"
+run = "go test -count=1 -v -tags agy_otel_latency -run TestHookLatency ./cmd/agy-otel/..."
+
+[tasks.agy-otel-latency]
+description = "Measure hook latency on an agent host and enforce warm p99 at 20 ms"
+run = "uv run python tools/agy_otel_latency.py"
 
 # The shell scripts under scripts/ and tools/ answer to bats rather than
 # to `go test`, so they get a third suite alongside the two language
