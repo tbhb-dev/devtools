@@ -21,6 +21,9 @@ const (
 var (
 	scissors            = regexp.MustCompile(`^[#;] *-+ *>8 *-+ *$`)
 	headerPattern       = regexp.MustCompile(`^([a-z]+)(\([^)]+\))?(!)?: (.+)$`)
+	mergeSubjectPattern = regexp.MustCompile(
+		`^Merge (branch '[^'[:space:]]+'( of [^[:space:]]+)?|remote-tracking branch '[^'[:space:]]+'|commit '[0-9a-f]+')( into [^[:space:]]+)?$`,
+	)
 	trailerPattern      = regexp.MustCompile(`^([A-Za-z0-9][A-Za-z0-9-]*|BREAKING[ -]CHANGE): .+$`)
 	continuationPattern = regexp.MustCompile(`^[[:space:]]+[^[:space:]]`)
 	signoffPattern      = regexp.MustCompile(`^Signed-off-by: .+$`)
@@ -33,6 +36,7 @@ type Message struct {
 	Raw         []string
 	Lines       []string
 	FooterStart int
+	merge       bool
 }
 
 // Parse removes git scaffolding and classifies the final trailer block.
@@ -127,11 +131,13 @@ func checkShape(m Message, c Config) []string {
 	if length > c.HeaderMaxLength {
 		report("subject is too long (%d > %d): \"%s\"", length, c.HeaderMaxLength, header)
 	}
-	match := headerPattern.FindStringSubmatch(header)
-	if match == nil {
-		report("subject must follow Conventional Commits: <type>(<scope>)?(!)?: <description>")
-	} else if !slices.Contains(c.Types, match[1]) {
-		report("unknown type \"%s\"; allowed: %s", match[1], strings.Join(c.Types, ", "))
+	if !m.merge || !mergeSubjectPattern.MatchString(header) {
+		match := headerPattern.FindStringSubmatch(header)
+		if match == nil {
+			report("subject must follow Conventional Commits: <type>(<scope>)?(!)?: <description>")
+		} else if !slices.Contains(c.Types, match[1]) {
+			report("unknown type \"%s\"; allowed: %s", match[1], strings.Join(c.Types, ", "))
+		}
 	}
 	if len(m.Lines) > 1 && m.Lines[1] != "" {
 		report("the subject must be separated from the body by a blank line")

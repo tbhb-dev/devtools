@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # pylint: disable=duplicate-code
 # The generator copies this helper beside each deployed shared library.
-"""Run a gate and retain short-lived passes only for unchanged clean trees."""
+"""Run a gate and retain passes only for unchanged clean trees."""
 
 from __future__ import annotations
 
@@ -13,9 +13,6 @@ import sys
 import tempfile
 import time
 from pathlib import Path
-from typing import cast
-
-PASS_TTL = 3600
 
 
 def output(*args: str) -> bytes:
@@ -89,13 +86,7 @@ def main() -> int:
         saved = json.loads(record.read_text())
     except (FileNotFoundError, ValueError) as _error:
         saved = {"key": [], "passed": 0.0}
-    age = time.time() - cast("float", saved.get("passed", 0.0))
-    if (
-        rerun != "true"
-        and before
-        and saved.get("key") == list(before)
-        and 0 <= age < PASS_TTL
-    ):
+    if rerun != "true" and before and saved.get("key") == list(before):
         sys.stdout.write(f"gates: {' '.join(command)} passed at {before[0]} (reused)\n")
         sys.stdout.flush()
         return 0

@@ -74,7 +74,7 @@ ma_policy() { uv run --quiet --script "$DT_LIB_DIR/merge-policy.py" "$@"; }
 ma_reviews() {
   local number=$1 view=$2 head
   head=$(mp_field "$view" headRefOid) || return $?
-  dt_gh_repo "query(\$owner:String!,\$name:String!,\$number:Int!,\$endCursor:String){repository(owner:\$owner,name:\$name){pullRequest(number:\$number){headRefOid reviews(first:100,after:\$endCursor){nodes{author{__typename login} state submittedAt commit{oid}} pageInfo{hasNextPage endCursor}}}}}" \
+  dt_gh_repo "query(\$owner:String!,\$name:String!,\$number:Int!,\$endCursor:String){repository(owner:\$owner,name:\$name){pullRequest(number:\$number){headRefOid reviews(first:100,after:\$endCursor){nodes{author{__typename login} state submittedAt body lastEditedAt commit{oid}} pageInfo{hasNextPage endCursor}}}}}" \
     -F "number=$number" --paginate --slurp >"$view.reviews" || return $?
   jq -e --arg head "$head" --slurpfile pages "$view.reviews" '
     if ($pages[0] | length > 0 and all(.[]; .data.repository.pullRequest.headRefOid == $head)) then
@@ -133,23 +133,23 @@ ma_gates() {
   *) dt_die "required_reviewer_type must be Bot or User when set" ;;
   esac
   ma_approved "$view" "$reviewer" "$head" "$reviewer_type" || dt_die "WAITING_REVIEW: $reviewer must approve the current head"
-  label=$(dt_repo_conf owner_review_label owner-review) || return $?
-  [ -n "$label" ] || dt_die "owner_review_label must not be empty"
+  label=$(dt_owner_review_label) || return $?
   if jq -e --arg label "$label" '.labels | any(.name == $label)' "$view" >/dev/null; then
     dt_die "needs-owner: the PR has the owner-review label"
   fi
   if [ "$final" != true ]; then
     mp_local_diff "$base_oid" "$head" "$st" || return $?
     config='{}'
-    for key in golden_paths loosening_markers gate_config_paths owner_paths disposable_ignored; do
+    for key in golden_paths constitutional_paths loosening_markers gate_config_paths owner_paths disposable_ignored; do
       value=$(dt_repo_conf "$key") || return $?
       config=$(printf '%s' "$config" | jq --arg key "$key" --arg value "$value" '. + {($key):$value}') || return $?
     done
     ma_policy inspect "$base_oid" "$head" <<<"$config" >"$st/merge.policy.json" || return $?
   fi
   if [ "$final" != true ]; then MA_POLICY=$(cat "$st/merge.policy.json") || return $?; fi
+  MA_POLICY=$(ma_policy evaluate "$reviewer" "$head" "$view" <<<"$MA_POLICY") || return $?
   MA_OWNER_OVERRIDE=''
-  if jq -e '.findings | length > 0' <<<"$MA_POLICY" >/dev/null; then
+  if jq -e '.owner_required' <<<"$MA_POLICY" >/dev/null; then
     jq -r '.findings[] | @json' <<<"$MA_POLICY" >&2
     value=$(ma_login merge_owner) || return $?
     ma_approved "$view" "$value" "$head" || dt_die "needs-owner: golden files or loosened gates require merge_owner approval on the current head"
@@ -208,9 +208,10 @@ ma_verify() {
 ma_report() {
   [ "${DEVTOOLS_UNATTENDED:-0}" = 1 ] || return 0
   local text owners
-  owners=$(jq -c '.owner_paths' <<<"$MA_POLICY") || return $?
-  text="Merged #$number as $merge_commit. Owner override: ${MA_OWNER_OVERRIDE:-none}. Owner paths: $owners."
-  jq --arg owner "${MA_OWNER_OVERRIDE:-}" --argjson paths "$owners" '. + {owner_override:$owner,owner_paths:$paths}' "$result" >"$result.next" || return $?
+  owners=$(jq -c '{owner_paths,owner_rule}' <<<"$MA_POLICY") || return $?
+  text=$(jq -r --arg number "$number" --arg commit "$merge_commit" --arg owner "${MA_OWNER_OVERRIDE:-none}" '
+    "Merged #\($number) as \($commit). Owner override: \($owner). Owner paths: \(.owner_paths). Owner rule: \(.owner_rule)."' <<<"$owners") || return $?
+  jq --arg owner "${MA_OWNER_OVERRIDE:-}" --argjson paths "$owners" '. + {owner_override:$owner} + $paths' "$result" >"$result.next" || return $?
   mv "$result.next" "$result"
   dt_agent_report fixed "$number" "$text" || return $?
   printf '%s\n' "$text"

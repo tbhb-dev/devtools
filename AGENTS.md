@@ -79,7 +79,7 @@ Machine configuration supplies allowed posting identities and private strings fo
 
 ## Pull requests
 
-Publication checks the description before leak scans, lint, the independent review, and tests. Use `create-pr.sh --check-description` to run only description checks. PR and commit workflows can use gate passes from a clean committed tree for an hour when the command matches and the gate definitions and tool versions match. Description gates also bind the draft. Records stay under the Git directory. The scripts print each cached pass they use, and `--rerun-gates` forces fresh checks. Leak scans and independent reviews always run.
+Publication checks the description before leak scans, lint, the independent review, and tests. Use `create-pr.sh --check-description` to run only description checks. PR and commit workflows can use gate passes from a clean committed tree while the cache key is unchanged: the tree, command, gate definitions, and tool versions must match. Description gates also bind the draft. Records stay under the Git directory. The scripts print each cached pass they use, and `--rerun-gates` forces fresh checks. Leak scans and independent reviews always run.
 
 Run the `pr` skill. It drafts the description and publishes it after a review, and it routes what follows to three sibling skills. This section only summarizes them.
 
@@ -253,7 +253,7 @@ apm.lock.yaml rebase-resolve=regenerate
 **/skills/*/tokens.json rebase-resolve=regenerate
 ```
 
-A path marked that way resolves by taking one side whole, because the generator overwrites it afterwards. `.gitattributes` also marks every generated skill directory, both packages and both deployed copies, one line per migrated skill. Once the rebase finishes, run `mise run generate-skills`, then `mise run skill-tokens`, then `apm install`, in that order. Generating writes the skills under `packages/agents/*/.apm/skills/` from their sources. Measuring then writes the token counts beside them, and installing deploys them and records their hashes. Each step reads what the one before it wrote. Run them in any other order and a file ends up describing content that changed after the step read it. Commit what the three of them rewrite.
+A path marked that way resolves by taking one side whole, because the generator overwrites it afterwards. `.gitattributes` also marks every generated skill directory, both packages and both deployed copies, one line per migrated skill. Once the rebase finishes, run `mise run regen-generated`. It measures the generated skill copies before deploying them. Each step reads what the one before it wrote. Commit what the command rewrites.
 
 `conflict-markers=documented` is the companion attribute, for a file whose lines resembling conflict markers are its subject rather than its damage. The resolve skill's own `SKILL.md` has a built-in exemption, so consumers don't see that false alarm.
 
@@ -349,7 +349,7 @@ Probe it with a throwaway project instead of reasoning about it:
 
 1. Create a scratch project under a temporary path with its own `.claude/settings.json`.
 2. Register a small logging hook on the events in question. Have it read stdin and append `hook_event_name` plus the fields you care about to a log file.
-3. Drive it headless: `claude -p "<prompt that triggers the tools>" --permission-mode bypassPermissions --model haiku < /dev/null`.
+3. Drive it headless: `claude -p "<prompt that triggers the tools>" --permission-mode bypassPermissions --model claude-haiku-5-5 < /dev/null`.
 4. Read the log to see what fired.
 
 The preceding probe settled a question for this repo's hook: `PostToolUse` fires once per tool call and includes `tool_input.file_path`, while `PostToolBatch` fires once per batch (one call still counts as a batch) and has no per-tool fields.

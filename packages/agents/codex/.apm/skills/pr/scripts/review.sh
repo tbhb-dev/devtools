@@ -64,6 +64,7 @@ pr_agent_context
 branch=$(gitr symbolic-ref --short HEAD)
 draft=$root/PR_AGENTDESC.md
 [ -s "$draft" ] || dt_die "PR_AGENTDESC.md is missing or empty. Draft the description first."
+bash "$DT_LIB_DIR/validate-description.sh" "$draft"
 gitr symbolic-ref -q HEAD >/dev/null || dt_die "HEAD is detached. Check out the branch to review."
 current_head=$(dt_head) || exit $?
 [ "$current_head" != unborn ] || dt_die "The branch has no commit yet."
