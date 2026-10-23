@@ -13,11 +13,12 @@ import shutil
 import string
 import subprocess
 import sys
+from operator import itemgetter
 from pathlib import Path, PurePosixPath
-from typing import NoReturn
+from typing import NoReturn, cast
 
 LockRecord = dict[str, str | list[str] | None]
-
+Review = dict[str, object]
 GIT = shutil.which("git")
 if GIT is None:
     sys.exit("git is required")
@@ -270,13 +271,14 @@ def inline_comment(text: str) -> str:
 
 def inspect(base: str, head: str, config: dict[str, str]) -> dict[str, object]:
     """Return reasons needing an owner and the owner paths for reporting."""
-    golden, markers, configs, owners = [
+    golden, markers, configs, owners, constitutional = [
         regex(config.get(key, ""), key)
         for key in (
             "golden_paths",
             "loosening_markers",
             "gate_config_paths",
             "owner_paths",
+            "constitutional_paths",
         )
     ]
     # Validate cleanup policy before any irreversible write as well.
@@ -305,6 +307,8 @@ def inspect(base: str, head: str, config: dict[str, str]) -> dict[str, object]:
         # Configuration changes cannot waive their own policy.
         if path == ".agents/agent-skills.conf":
             findings.append([path, "changes merge policy"])
+        if constitutional.search(path):
+            findings.append([path, "changes a constitutional file"])
         if remote_path(path, owned):
             continue
         if golden.search(path):
@@ -339,6 +343,77 @@ def inspect(base: str, head: str, config: dict[str, str]) -> dict[str, object]:
             ):
                 findings.append([path, "removes a hook or gate"])
     return {"findings": findings, "owner_paths": owner_paths}
+
+
+def states_no(body: str) -> bool:
+    """Accept one literal line outside fenced code and quoted paragraphs."""
+    if len(re.findall(r"loosens\s*:", body, re.IGNORECASE)) != 1:
+        return False
+    if re.search(r"(?m)^ {0,3}<", body):
+        return False
+    fence = ""
+    quoted = False
+    for line in body.split("\n"):
+        marker = re.match(r"^ {0,3}(`{3,}|~{3,})", line)
+        if marker:
+            value = marker.group(1)
+            if not fence:
+                fence = value
+            elif (
+                value[0] == fence[0]
+                and len(value) >= len(fence)
+                and not line[marker.end() :].strip()
+            ):
+                fence = ""
+        if not line.strip():
+            quoted = False
+        elif re.match(r"^ {0,3}>", line):
+            # Lazy blockquote continuations are ambiguous too.
+            quoted = True
+        if line == "Loosens: no":
+            return not fence and not quoted
+    return False
+
+
+def evaluate(
+    policy: dict[str, object], reviewer: str, head: str, view: dict[str, object]
+) -> dict[str, object]:
+    """Only the required App's current approval can waive golden findings."""
+    reviews = cast("list[Review]", view["reviews"])
+    if not isinstance(reviews, list):
+        fail("Invalid reviews")
+    decisive: list[Review] = [
+        review
+        for review in reviews
+        if cast("dict[str, str]", review.get("author", {})).get("login") == reviewer
+        and review.get("state") in {"APPROVED", "CHANGES_REQUESTED", "DISMISSED"}
+    ]
+    decisive.sort(key=itemgetter("submittedAt"))
+    review: Review = decisive[-1] if decisive else {}
+    body = review.get("body")
+    findings = policy["findings"]
+    if not isinstance(findings, list):
+        fail("Invalid findings")
+    waived = bool(
+        findings
+        and all(finding[1] == "changes a golden file" for finding in findings)
+        and reviewer
+        and view.get("headRefOid") == head
+        and review.get("state") == "APPROVED"
+        and cast("dict[str, str]", review.get("commit", {})).get("oid") == head
+        and cast("dict[str, str]", review.get("author", {})).get("__typename") == "Bot"
+        and "lastEditedAt" in review
+        and review["lastEditedAt"] is None
+        and review.get("submittedAt")
+        and sum(item.get("submittedAt") == review["submittedAt"] for item in decisive)
+        == 1
+        and isinstance(body, str)
+        and states_no(body)
+    )
+    return policy | {
+        "owner_required": bool(findings) and not waived,
+        "owner_rule": "App review states Loosens: no" if waived else "owner approval",
+    }
 
 
 def ref_matches(pattern: str, branch: str, default: str) -> bool:
@@ -527,6 +602,17 @@ def main() -> None:
     match mode, args:
         case "inspect", [base, head]:
             print(json.dumps(inspect(base, head, json.loads(sys.stdin.read()))))
+        case "evaluate", [reviewer, head, view]:
+            print(
+                json.dumps(
+                    evaluate(
+                        json.loads(sys.stdin.read()),
+                        reviewer,
+                        head,
+                        json.loads(Path(view).read_text(encoding="utf-8")),
+                    )
+                )
+            )
         case "required", [base, branch, default, directory]:
             required(base, branch, default, directory, sys.stdin.read())
         case "cleanup", [base, branch, expected, merge, disposable]:
