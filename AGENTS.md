@@ -349,7 +349,7 @@ Probe it with a throwaway project instead of reasoning about it:
 
 1. Create a scratch project under a temporary path with its own `.claude/settings.json`.
 2. Register a small logging hook on the events in question. Have it read stdin and append `hook_event_name` plus the fields you care about to a log file.
-3. Drive it headless: `claude -p "<prompt that triggers the tools>" --permission-mode bypassPermissions --model haiku < /dev/null`.
+3. Drive it headless: `claude -p "<prompt that triggers the tools>" --permission-mode bypassPermissions --model claude-haiku-5-5 < /dev/null`.
 4. Read the log to see what fired.
 
 The preceding probe settled a question for this repo's hook: `PostToolUse` fires once per tool call and includes `tool_input.file_path`, while `PostToolBatch` fires once per batch (one call still counts as a batch) and has no per-tool fields.
