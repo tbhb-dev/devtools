@@ -4,6 +4,30 @@ setup() {
   ROOT=$(cd "$BATS_TEST_DIRNAME/../.." && pwd)
 }
 
+@test "validate reports success for irrelevant changes and validates after detector failure" {
+  run uv run python - "$ROOT" <<'PY'
+from pathlib import Path
+import sys
+
+import yaml
+
+root = Path(sys.argv[1])
+workflow = yaml.safe_load((root / ".github/workflows/apm-package.yml").read_text())
+validate = workflow["jobs"]["validate"]
+assert validate["needs"] == "changes"
+assert validate["if"] == "${{ !cancelled() }}"
+assert not validate.get("continue-on-error", False)
+assert [step["name"] for step in validate["steps"]] == [
+    "Harden the runner", "Checkout", "Set up mise", "Run frozen install",
+    "Validate primitives", "Audit deployed state", "Check deployed copies for drift",
+]
+for step in validate["steps"]:
+    assert step["if"] == "${{ needs.changes.result != 'success' || needs.changes.outputs.relevant == 'true' }}", step["name"]
+    assert not step.get("continue-on-error", False), step["name"]
+PY
+  [ "$status" -eq 0 ]
+}
+
 @test "skill scanner exceptions retain the high gate and match only writer manifests" {
   run uv run python - "$ROOT" <<'PY'
 from pathlib import Path
