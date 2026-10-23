@@ -16,13 +16,61 @@ ma_require_gates() {
   [ "${DEVTOOLS_UNATTENDED:-0}" = 1 ] || [ "${MA_REQUIRE_GATES:-false}" = true ]
 }
 
+# Resolve gate settings from the pinned base, through the shared validator.
+ma_repo_conf() {
+  local file tree status root
+  [ -n "${MA_PINNED_BASE:-}" ] || dt_die "Merge configuration requires a pinned base"
+  if agentrepo config merge-machine --help >/dev/null 2>&1; then
+    agentrepo config repository --base "$MA_PINNED_BASE" -- "$@"
+    return $?
+  fi
+  root=$(dt_root) || return $?
+  file=$(mktemp "${TMPDIR:-/tmp}/devtools-merge-config.XXXXXX") || return $?
+  tree=$(gitr ls-tree "$MA_PINNED_BASE" -- .agents/agent-skills.conf) || {
+    rm -f -- "$file"
+    return 1
+  }
+  case $tree in
+  '') ;;
+  '100644 blob '* | '100755 blob '*)
+    gitr show "$MA_PINNED_BASE:.agents/agent-skills.conf" >"$file" || {
+      rm -f -- "$file"
+      return 1
+    }
+    ;;
+  *)
+    rm -f -- "$file"
+    dt_die "Repository configuration must be a regular file at pinned base"
+    ;;
+  esac
+  if [ -e "$root/.agents/agent-skills.conf" ] || [ -n "$tree" ]; then
+    if ! cmp -s "$file" "$root/.agents/agent-skills.conf"; then
+      printf 'Merge configuration differs from pinned base; ignoring checkout .agents/agent-skills.conf\n' >&2
+    fi
+  fi
+  status=0
+  dt_repo_conf_file "$file" "$@" || status=$?
+  rm -f -- "$file"
+  return "$status"
+}
+
+# Run before executing repository gates and repeat after any external command.
+ma_trust() {
+  ma_require_gates || return 0
+  MA_PINNED_BASE=$1
+  dt_merge_conf gh_login >/dev/null || return $?
+  mp_fetch_commit "$MA_PINNED_BASE" || return $?
+  dt_merge_integrity "$MA_PINNED_BASE" || return $?
+  ma_repo_conf golden_paths >/dev/null || return $?
+}
+
 ma_context() {
   ma_require_gates || return 0
   dt_agent_context || return $?
   local dirty login
   dirty=$(gitr status --porcelain --untracked-files=all) || return $?
   [ -z "$dirty" ] || dt_die "Commit the work first; unattended merging requires a clean tree."
-  login=$(dt_conf gh_login) || return $?
+  login=$(dt_merge_conf gh_login) || return $?
   [ -n "$login" ] || dt_die "gh_login must be configured on the machine"
   command -v uv >/dev/null || dt_die "uv is required for the YAML policy reader"
   command -v agentrepo >/dev/null || dt_die "agentrepo is required for check judgement"
@@ -51,8 +99,8 @@ ma_lint() {
     fi
   fi
   status=0
-  if [ "${DEVTOOLS_UNATTENDED:-0}" = 1 ]; then
-    cmd=$(dt_repo_conf lint_squash_cmd 'mise run lint-squash-msg') || status=$?
+  if ma_require_gates; then
+    cmd=$(ma_repo_conf lint_squash_cmd 'mise run lint-squash-msg') || status=$?
     if [ "$status" -eq 0 ] && [ -z "$cmd" ]; then
       rm -rf -- "$tmp"
       dt_die "lint_squash_cmd must not be empty"
@@ -88,7 +136,7 @@ ma_reviews() {
 # Machine authorities use GraphQL logins, not the REST Bot suffix.
 ma_login() {
   local key=$1 login
-  login=$(dt_conf "$key") || return $?
+  login=$(dt_merge_conf "$key") || return $?
   case $login in
   *'[bot]') dt_die "$key must use the GraphQL login ${login%\[bot\]}, without [bot]" ;;
   esac
@@ -108,7 +156,7 @@ ma_approved() {
 
 ma_identity() {
   local want actual
-  want=$(dt_conf gh_login) || return $?
+  want=$(dt_merge_conf gh_login) || return $?
   [ -n "$want" ] || dt_die "gh_login must be configured on the machine"
   actual=$(dt_gh_login) || return $?
   [ "$want" = "$actual" ] || dt_die "gh is signed in as $actual, not $want"
@@ -118,6 +166,7 @@ ma_identity() {
 ma_gates() {
   ma_require_gates || return 0
   local view=$1 pr=$2 base_oid=$3 final=${4:-false} head base reviewer reviewer_type label ready config key value required default dir st root encoded
+  ma_trust "$base_oid" || return $?
   ma_context || return $?
   st=$(dt_state_dir) || return $?
   root=$(dt_root) || return $?
@@ -127,13 +176,13 @@ ma_gates() {
   ma_identity || return $?
   reviewer=$(ma_login required_reviewer) || return $?
   [ -n "$reviewer" ] || dt_die "required_reviewer must be configured on the machine"
-  reviewer_type=$(dt_conf required_reviewer_type) || return $?
+  reviewer_type=$(dt_merge_conf required_reviewer_type) || return $?
   case $reviewer_type in
   '' | Bot | User) ;;
   *) dt_die "required_reviewer_type must be Bot or User when set" ;;
   esac
   ma_approved "$view" "$reviewer" "$head" "$reviewer_type" || dt_die "WAITING_REVIEW: $reviewer must approve the current head"
-  label=$(dt_repo_conf owner_review_label owner-review) || return $?
+  label=$(ma_repo_conf owner_review_label owner-review) || return $?
   [ -n "$label" ] || dt_die "owner_review_label must not be empty"
   if jq -e --arg label "$label" '.labels | any(.name == $label)' "$view" >/dev/null; then
     dt_die "needs-owner: the PR has the owner-review label"
@@ -142,7 +191,11 @@ ma_gates() {
     mp_local_diff "$base_oid" "$head" "$st" || return $?
     config='{}'
     for key in golden_paths loosening_markers gate_config_paths owner_paths disposable_ignored; do
-      value=$(dt_repo_conf "$key") || return $?
+      if [ "$key" = disposable_ignored ]; then
+        value=$(dt_repo_conf "$key") || return $?
+      else
+        value=$(ma_repo_conf "$key") || return $?
+      fi
       config=$(printf '%s' "$config" | jq --arg key "$key" --arg value "$value" '. + {($key):$value}') || return $?
     done
     ma_policy inspect "$base_oid" "$head" <<<"$config" >"$st/merge.policy.json" || return $?
@@ -157,7 +210,7 @@ ma_gates() {
     printf 'owner override: %s approved %s\n' "$value" "$head"
   fi
   if [ "$final" != true ]; then
-    dir=$(dt_repo_conf ruleset_dir .github/rulesets) || return $?
+    dir=$(ma_repo_conf ruleset_dir .github/rulesets) || return $?
     default=$(dt_gh repo view --json defaultBranchRef --jq .defaultBranchRef.name) || return $?
     encoded=$(jq -nr --arg base "$base" '$base|@uri') || return $?
     dt_gh api "repos/{owner}/{repo}/rules/branches/$encoded" >"$st/merge.rules.json" || return $?
@@ -170,7 +223,7 @@ ma_gates() {
   set -- checks evaluate --file "$view" --expected-head "$head"
   while IFS= read -r value; do set -- "$@" --required "$value"; done <<<"$required"
   agentrepo "$@" || return $?
-  ready=$(dt_repo_conf merge_ready_cmd) || return $?
+  ready=$(ma_repo_conf merge_ready_cmd) || return $?
   if [ "$final" != true ] && [ -n "$ready" ]; then
     ready=$(dt_path "$ready") || return $?
     [ -x "$ready" ] || dt_die "merge_ready_cmd must name an executable"
@@ -221,10 +274,12 @@ ma_exit() {
   local status=$1 text
   [ "${BASH_SUBSHELL:-0}" -eq 0 ] || return "$status"
   trap - EXIT
-  [ "$status" -ne 0 ] || return 0
   set +e
-  text="Merge workflow for #${number:-unknown} held with status $status. Inspect the preserved draft, review, and merge result before retrying."
-  dt_agent_report blocker "${number:-}" "$text" || printf '%s\n' "$text" >&2
+  if [ "$status" -ne 0 ]; then
+    text="Merge workflow for #${number:-unknown} held with status $status. Inspect the preserved draft, review, and merge result before retrying."
+    dt_agent_report blocker "${number:-}" "$text" || printf '%s\n' "$text" >&2
+  fi
+  [ -z "${MERGE_SNAPSHOT:-}" ] || rm -rf -- "$MERGE_SNAPSHOT"
   exit "$status"
 }
 if [ "${DEVTOOLS_UNATTENDED:-0}" = 1 ]; then trap 'ma_exit "$?"' EXIT; fi

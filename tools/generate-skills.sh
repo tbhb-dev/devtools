@@ -75,8 +75,8 @@ render() {
   local line
   while IFS= read -r line || [ -n "$line" ]; do
     case $line in
-    "@include "*)
-      local part=${line#@include }
+    "@include "* | "# @include "*)
+      local part=${line#*include }
       [ -f "$2/$part" ] || {
         printf 'generate-skills: %s includes %s, which does not exist\n' "$1" "$part" >&2
         exit 1
@@ -106,9 +106,13 @@ build() {
       parent=$(dirname "$out/$rel") || return
       mkdir -p "$parent"
       cp -p "$f" "$out/$rel"
+      if grep -q '^# @include lib/merge-bootstrap.sh$' "$f"; then
+        render "$f" "$SOURCE" >"$out/$rel"
+      fi
     done <<<"$source_files"
   done
-  if [ -d "$out/scripts" ] && grep -rqF 'lib.sh' "$out/scripts"; then
+  # Agent merge wrappers verify and call their sibling; they never load a library.
+  if [ "${src##*/}" != agent-merge-pr ] && [ -d "$out/scripts" ] && grep -rqF 'lib.sh' "$out/scripts"; then
     cp -p "$LIB" "$out/scripts/lib.sh"
     cp -p "$SOURCE/lib/gates.py" "$out/scripts/gates.py"
     cp -p "$SOURCE/lib/agent.sh" "$SOURCE/lib/signing.sh" "$out/scripts/"

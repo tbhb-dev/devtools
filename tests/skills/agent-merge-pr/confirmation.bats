@@ -2,6 +2,7 @@
 setup() {
   source "${BATS_TEST_DIRNAME}/test_helper.bash"
   agent_setup
+  unset DEVTOOLS_UNATTENDED DT_UNATTENDED
 }
 
 confirmation_source() {
@@ -9,9 +10,9 @@ confirmation_source() {
   operator) MERGE_ARGS=(--confirmed 7) ;;
   preapproval) grant merge; MERGE_ARGS=(7) ;;
   delegation)
-    export DEVTOOLS_DELEGATION_CHECK="$BATS_TEST_TMPDIR/checker"
-    printf '#!/usr/bin/env bash\nexit 0\n' >"$DEVTOOLS_DELEGATION_CHECK"
-    chmod +x "$DEVTOOLS_DELEGATION_CHECK"
+    machine delegation_check "$BATS_TEST_TMPDIR/checker"
+    printf '#!/usr/bin/env bash\nexit 0\n' >"$BATS_TEST_TMPDIR/checker"
+    chmod +x "$BATS_TEST_TMPDIR/checker"
     MERGE_ARGS=(7)
     ;;
   esac
@@ -214,14 +215,14 @@ merge_gate_case() {
   fi
   # No skill hooks, operator flag, or session pre-approval participates.
   [ -z "${CLAUDE_CODE_SESSION_ID:-}${CODEX_THREAD_ID:-}" ]
-  export DEVTOOLS_DELEGATION_CHECK="${BATS_TEST_TMPDIR}/checker"
+  machine delegation_check "${BATS_TEST_TMPDIR}/checker"
   export CHECK_ARGS="${BATS_TEST_TMPDIR}/checker.args"
-  cat >"$DEVTOOLS_DELEGATION_CHECK" <<'CHECKER'
+  cat >"$BATS_TEST_TMPDIR/checker" <<'CHECKER'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >>"$CHECK_ARGS"
 exit "${CHECK_STATUS:-1}"
 CHECKER
-  chmod +x "$DEVTOOLS_DELEGATION_CHECK"
+  chmod +x "$BATS_TEST_TMPDIR/checker"
   bash "$SCRIPTS/review.sh" 7
   [ -s "$(stamp_file)" ]
 
