@@ -79,7 +79,7 @@ Machine configuration supplies allowed posting identities and private strings fo
 
 ## Pull requests
 
-Publication checks the description before leak scans, lint, the independent review, and tests. Use `create-pr.sh --check-description` to run only description checks. PR and commit workflows can use gate passes from a clean committed tree for an hour when the command matches and the gate definitions and tool versions match. Description gates also bind the draft. Records stay under the Git directory. The scripts print each cached pass they use, and `--rerun-gates` forces fresh checks. Leak scans and independent reviews always run.
+Publication checks the description before leak scans, lint, the independent review, and tests. Use `create-pr.sh --check-description` to run only description checks. PR and commit workflows can use gate passes from a clean committed tree while the cache key is unchanged: the tree, command, gate definitions, and tool versions must match. Description gates also bind the draft. Records stay under the Git directory. The scripts print each cached pass they use, and `--rerun-gates` forces fresh checks. Leak scans and independent reviews always run.
 
 Run the `pr` skill. It drafts the description and publishes it after a review, and it routes what follows to three sibling skills. This section only summarizes them.
 
