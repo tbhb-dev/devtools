@@ -143,6 +143,7 @@ if [ -n "$open_number" ]; then
     local item
     while IFS= read -r item; do
       [ -n "$item" ] || continue
+      if [ "$2" = --remove-label ] && [ "$item" = "$owner_review_label" ]; then continue; fi
       printf '%s\n' "$3" | grep -qxF -- "$item" ||
         dt_gh_post pr edit "$open_number" "$2" "$item" </dev/null >/dev/null
     done <<EOF
@@ -157,6 +158,7 @@ $3
 EOF
   }
 
+  owner_review_label=$(dt_owner_review_label) || exit $?
   current_labels=$(printf '%s' "$current" | jq -r '.labels[].name') || exit $?
   reconcile --add-label --remove-label "$labels" "$current_labels"
   current_reviewers=$(printf '%s' "$current" | jq -r '.reviewRequests[].login // empty') || exit $?

@@ -274,6 +274,16 @@ if contains "$fm_keys" labels; then
       "the pull request carries no label; preflight printed the repository's label set"
     ;;
   esac
+  owner_review_label=$(dt_owner_review_label) || exit $?
+  draft_labels=$(pr_sequence "$fm_labels") || exit $?
+  while IFS= read -r label; do
+    if [ "$label" = "$owner_review_label" ]; then
+      report "$fm_labels_line" owner-review-label \
+        "${label} is applied only by the owner-approval route once the pull request is approved at its head, green and mergeable"
+    fi
+  done <<EOF
+$draft_labels
+EOF
 fi
 
 # A base naming no ref fails at creation time, and a base equal to the

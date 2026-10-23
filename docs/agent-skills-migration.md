@@ -105,6 +105,8 @@ The public source is the [avirt local skill family](https://github.com/tbhb-dev/
 | Review finding bound | Persistent shared counter that remains for unpublished drafts and resets on success |
 | Reporting | Local output and a structured result, with optional configured transport |
 
+Publishers must omit `owner_review_label` from draft frontmatter. The setting defaults to `owner-review`, as it does for merges. Preflight excludes it from label choices. Only the owner-approval route applies the label after approval at the current head, green checks, and a mergeable state. Updates preserve an existing owner-review label while reconciling other labels normally. Regenerate and reinstall the skills to use this rule.
+
 A successful publication records `pr.result.json` under the worktree's Git `agent-skills` directory, containing the PR number, URL, full head, base, draft state, and push kind. Final output reports the URL, head, and draft state. Inspect a failed or uncertain GitHub write before retrying. After publication, the skill stops.
 
 ## Merge policy and authority
