@@ -133,36 +133,39 @@
     },
 
     // One review surface for a devtools release, across every manager
-    // that sees one of its nine pin sites: `github-actions` for the four
-    // reusable-workflow callers, `pre-commit` for the hook `rev:`,
-    // `vendir` for the two payload refs, and the two custom managers
-    // below for `apm.yml` and the preset `extends`.
+    // that sees one of its thirteen pin sites (when all four Go tools
+    // are declared): `github-actions` for the four reusable-workflow
+    // callers, `pre-commit` for the hook `rev:`, `vendir` for the two
+    // payload refs, the two custom managers below for `apm.yml` and the
+    // preset `extends`, and `mise` for guard-markdown, commit-lint,
+    // agentrepo, and gh-post.
     //
     // Grouping by manager alone put those nine into at least three
     // uncoordinated pull requests, with the apm pin in none of them
     // because nothing tracked it — so a release half-applied itself by
     // default, and the four workflow pins arrived bundled with unrelated
     // third-party actions. A consumer's `devtools:check-pins` asserts
-    // the nine agree, and this is what makes that assertion reachable.
+    // the declared sites agree, and this makes that assertion reachable.
     //
     // THIS RULE MUST STAY LAST. `groupName` resolves to the last
-    // matching rule, verified in both directions against Renovate 44.7.1:
-    // placed after the three manager groups it takes all nine sites,
-    // and placed before them it silently loses the workflow and
-    // pre-commit pins back to `github-actions` and `pre-commit-hooks`
-    // while still looking like it applied.
+    // matching rule. Before the manager groups it silently loses the
+    // workflow and pre-commit pins to `github-actions` and
+    // `pre-commit-hooks`. The local grouping fixture against Renovate
+    // 44.138.0 verifies all thirteen sites in the final devtools branch.
     //
-    // The two `depName` forms are what the managers actually emit, read
-    // off a local run rather than guessed: `github-actions`, `pre-commit`,
-    // and both custom managers report the bare `tbhb-dev/devtools`, while
-    // `vendir` reports the clone URL. A `go:` pin on devtools' own
-    // binaries would introduce a third form and belongs here when one
-    // lands.
+    // `matchPackageNames` uses `packageName`, falling back to `depName`.
+    // A local run of the pinned image confirms: `github-actions`,
+    // `pre-commit`, and both custom managers emit `tbhb-dev/devtools`;
+    // `vendir` emits `https://github.com/tbhb-dev/devtools`. For Go tools,
+    // `mise` emits `depName` with `go:` but `packageName` without it:
+    // `github.com/tbhb-dev/devtools/cmd/<tool>`. Every cmd binary shares
+    // the devtools release, so the glob also covers future tools.
     {
       groupName: "devtools",
       matchPackageNames: [
         "tbhb-dev/devtools",
         "https://github.com/tbhb-dev/devtools",
+        "github.com/tbhb-dev/devtools/cmd/*",
       ],
     },
   ],
