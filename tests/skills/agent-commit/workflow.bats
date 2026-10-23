@@ -296,3 +296,8 @@ grant() {
   run bash "$SCRIPTS/commit.sh"
   [ "$status" -eq 0 ]
 }
+
+@test "AC1 to AC9 commit redesign preserves the bound and rejected drafts" {
+  source "${BATS_TEST_DIRNAME}/../redesign.bash"
+  redesign_flow commit COMMIT_AGENTMSG "$SCRIPTS/review.sh"
+}

@@ -517,6 +517,12 @@ dt_review() {
     printf 'review: %s is not the text prepared for review; gather it again\n' "$(basename "$draft")" >&2
     return 5
   fi
+  if [ "${DEVTOOLS_UNATTENDED:-0}" = 1 ]; then
+    dt_agent_context || return $?
+    dt_agent_rounds "$kind" "$subject" check "$before" || return $?
+    repo_digest=$(dt_repo_digest) || return $?
+    set -- "$@" repo_config "$repo_digest"
+  fi
   verdict_record=$state/$kind.verdict
   if [ -f "$verdict_record" ] &&
     grep -Fqx "subject $subject" "$verdict_record" &&
@@ -524,12 +530,6 @@ dt_review() {
     grep -Fqx 'verdict changes' "$verdict_record"; then
     printf 'BLOCKED: this byte-identical draft already has CHANGES REQUIRED for the same review subject. Change the draft or ask the operator.\n' >&2
     return 3
-  fi
-  if [ "${DEVTOOLS_UNATTENDED:-0}" = 1 ]; then
-    dt_agent_context || return $?
-    dt_agent_rounds "$kind" "$subject" || return $?
-    repo_digest=$(dt_repo_digest) || return $?
-    set -- "$@" repo_config "$repo_digest"
   fi
   if [ -f "$inputs/review-policy-report.txt" ]; then
     cat "$inputs/review-policy-report.txt"
@@ -578,7 +578,7 @@ dt_review() {
     printf 'subject %s\ndraft %s\nverdict changes\n' "$subject" "$before" >"$verdict_record"
     cat "$reply"
     if [ "${DEVTOOLS_UNATTENDED:-0}" = 1 ]; then
-      dt_agent_rounds "$kind" "$subject" finding || return $?
+      dt_agent_rounds "$kind" "$subject" finding "$before" || return $?
     fi
     return 2
     ;;
