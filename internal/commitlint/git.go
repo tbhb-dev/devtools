@@ -10,14 +10,16 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
 const (
 	prePushFieldCount  = 4
 	identityTailFields = 2
-	commitFieldCount   = 5
+	commitFieldCount   = 6
 	identityPairSize   = 2
 )
 
@@ -37,6 +39,7 @@ type gitCommit struct {
 	author    string
 	committer string
 	message   string
+	merge     bool
 }
 
 func checkPrePush(config Config, rules, remote string, in io.Reader, errOut io.Writer, dir string) int {
@@ -47,8 +50,10 @@ func checkPrePush(config Config, rules, remote string, in io.Reader, errOut io.W
 	}
 	found := false
 	for _, commit := range commits {
+		message := Parse(commit.message)
+		message.merge = commit.merge
 		findings := CheckWithIdentities(
-			Parse(commit.message),
+			message,
 			config,
 			rules,
 			[]string{commit.author, commit.committer},
@@ -188,7 +193,7 @@ func revisionIdentities(dir, revision string) ([]string, error) {
 }
 
 func readCommit(dir, oid string) (gitCommit, error) {
-	format := "%h%x00%s%x00%an <%ae>%x00%cn <%ce>%x00%B"
+	format := "%h%x00%s%x00%an <%ae>%x00%cn <%ce>%x00%P%x00%B"
 	data, err := gitBytes(dir, "show", "-s", "--format="+format, oid)
 	if err != nil {
 		return gitCommit{}, err
@@ -202,8 +207,22 @@ func readCommit(dir, oid string) (gitCommit, error) {
 		subject:   string(parts[1]),
 		author:    string(parts[2]),
 		committer: string(parts[3]),
-		message:   strings.TrimSuffix(string(parts[4]), "\n"),
+		merge:     len(strings.Fields(string(parts[4]))) > 1,
+		message:   strings.TrimSuffix(string(parts[5]), "\n"),
 	}, nil
+}
+
+func pendingMerge(dir string) bool {
+	path, err := gitOutput(dir, "rev-parse", "--git-path", "MERGE_HEAD")
+	if err != nil {
+		// Standalone message lint also runs outside Git repositories.
+		return false
+	}
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(dir, path)
+	}
+	_, err = os.Stat(path)
+	return err == nil
 }
 
 func gitLines(dir string, args ...string) ([]string, error) {

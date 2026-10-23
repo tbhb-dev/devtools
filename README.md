@@ -163,6 +163,8 @@ Declare agent dependencies in `apm.yml`. The pin tasks accept the bare `tbhb-dev
 
 Run `mise run devtools:apm-sync` for the first deployment and after changing agent dependencies. It clears `.hooks` in Claude and Codex settings, `.apm` in the shared agent hook file and the generated hook manifests, then runs `apm install` and audits the result. Settings outside those keys remain unchanged. Those hook keys belong to APM. Keep custom hooks in package declarations so reconciliation can restore them. A failed install or audit fails the task.
 
+The commit and rebase skills use rebase to bring branches current. Consumers that bring pull request branches current by merging can keep Git's generated subjects: `Merge branch '<b>'[ of <url>][ into <b>]`, `Merge remote-tracking branch '<r>'[ into <b>]`, and `Merge commit '<sha>'[ into <b>]`. The `shape` rule accepts these forms only when `MERGE_HEAD` exists for the pending commit or the outgoing commit has more than one parent. Other merge subjects and all non-merge subjects still require Conventional Commits syntax. Length, body, trailer, and leak checks still apply. Repository rules still forbid merge commits on main.
+
 Set `DEVTOOLS_LOCK_PLATFORMS` in the root mise environment to the project's supported platform list. Run `mise lock --platform <list>` and commit both mise lockfiles along with the payload and APM deployment. Updates warn and leave lockfiles alone without that variable.
 
 ### Pin forms
