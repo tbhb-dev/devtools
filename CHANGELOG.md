@@ -5,6 +5,47 @@ All notable changes to this project will be documented in this file. See [conven
 - - -
 <!-- release -->
 
+## [v0.16.0](https://github.com/tbhb-dev/devtools/compare/226a50c0b33c0b2733b2886dec2d72d711e362de..v0.16.0) - 2026-10-23
+
+### Features
+
+- (**merge**) accept App review for golden changes (#609) - ([ec4d928](https://github.com/tbhb-dev/devtools/commit/ec4d928328332e2aa6b3000d0731f7a4ffc0407e)) - tbhb.dev Agent
+- (**skills**) regenerate skill output in dependency order (#606) - ([8ac6f85](https://github.com/tbhb-dev/devtools/commit/8ac6f8536065ca3359472f002c910f472653eed3)) - tbhb.dev Agent
+
+### Bug Fixes
+
+- (**ci**) report success for unrelated package changes (#596) - ([5424558](https://github.com/tbhb-dev/devtools/commit/5424558690e603499960aaf5dea314437be14b37)) - tbhb.dev Agent
+- (**skills**) reserve the owner-review label for its approval route (#617) - ([e312baf](https://github.com/tbhb-dev/devtools/commit/e312bafe5325600cc96edb3410d06e91219e7679)) - tbhb.dev Agent
+- (**skills**) honor the repository owner-review label (#613) - ([6f80265](https://github.com/tbhb-dev/devtools/commit/6f8026597df3464619678a53d34d4541d7b07a68)) - tbhb.dev Agent
+- (**skills**) keep gate passes while inputs match (#572) - ([226a50c](https://github.com/tbhb-dev/devtools/commit/226a50c0b33c0b2733b2886dec2d72d711e362de)) - tbhb.dev Agent
+- (**tests**) keep host tools from invalidating task checks (#604) - ([eed7cd8](https://github.com/tbhb-dev/devtools/commit/eed7cd8bf55ece5d01ba96556554f058c9ecbac0)) - tbhb.dev Agent
+
+- - -
+
+<!-- release -->
+
+## [v0.15.0](https://github.com/tbhb-dev/devtools/compare/1228a3fea10bf36ab61d5056831ccd5637203b72..v0.15.0) - 2026-10-22
+
+### Features
+
+- (**gh-post**) scan GitHub content before publication (#436) - ([09cf26c](https://github.com/tbhb-dev/devtools/commit/09cf26c31af3f8834bd2f896702ed1082cc09119)) - tbhb.dev Agent
+
+### Bug Fixes
+
+- (**merge**) enforce delegated gates and configure repository policy (#434) - ([8585616](https://github.com/tbhb-dev/devtools/commit/8585616dcea31a452362560e0babe58cd52add81)) - tbhb.dev Agent
+
+### Continuous Integration
+
+- (**apm-package**) report required checks on every pull request (#526) - ([06b68e5](https://github.com/tbhb-dev/devtools/commit/06b68e5b5555e4f32db3ce9a183b67cd0f3982bf)) - tbhb.dev Agent
+
+### Refactoring
+
+- (**skills**) resolve shared configuration through agentrepo (#385) - ([1228a3f](https://github.com/tbhb-dev/devtools/commit/1228a3fea10bf36ab61d5056831ccd5637203b72)) - tbhb.dev Agent
+
+- - -
+
+<!-- release -->
+
 ## [v0.14.2](https://github.com/tbhb-dev/devtools/compare/f92ca96f4054d41f08adf948f9087ac82c9fd186..v0.14.2) - 2026-10-21
 
 ### Bug Fixes

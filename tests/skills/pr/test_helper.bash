@@ -17,6 +17,7 @@ pr_setup() {
   export DEVTOOLS_REVIEW_CMD='cat >/dev/null; echo "VERDICT: PASS"'
   export GH_LOG="${BATS_TEST_TMPDIR}/gh.log"
   export GH_LABELS=$'enhancement\nbug' GH_MILESTONES=v1 GH_ISSUES="12" GH_USER=agent GH_OPEN_PR=""
+  export GH_PR_STATE='{"baseRefName":"main","isDraft":false,"labels":[{"name":"bug"}],"reviewRequests":[],"assignees":[],"milestone":null}'
   : >"$GH_LOG"
   stub_gh
 
@@ -88,7 +89,7 @@ case "$1 $2" in
     case $number in *[!0-9]*) number=1 ;; esac
     printf '%s\thttps://example.com/pull/%s\n' "$number" "$number" ;;
   *url*) printf 'https://example.com/pull/%s\n' "$3" ;;
-  *) printf '{"baseRefName":"main","isDraft":false,"labels":[{"name":"bug"}],"reviewRequests":[],"assignees":[],"milestone":null}\n' ;;
+  *) printf '%s\n' "$GH_PR_STATE" ;;
   esac
   ;;
 "pr create") printf 'https://example.com/pull/1\n' ;;

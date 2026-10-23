@@ -5,6 +5,30 @@ setup() {
   agent_setup
 }
 
+@test "devtools configured owner-review label stops unattended merging" {
+  local label config
+  run bash -c 'source "$1/lib.sh"; cd "$2"; dt_repo_conf owner_review_label owner-review' _ "$SCRIPTS" "$ROOT"
+  [ "$status" -eq 0 ]
+  label=$output
+  config=$(cat .agents/agent-skills.conf)
+  change .agents/agent-skills.conf "$config"$'\n'"owner_review_label = $label"
+  approve_owner
+  bash "$AGENT/review.sh" 7
+  grant merge
+
+  pr '.labels=[{name:"merge:owner-review"}]'
+  run bash "$AGENT/merge.sh" 7
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"needs-owner: the PR has the owner-review label"* ]]
+  [ ! -e "$GH_FIXTURES/merged" ]
+
+  [ "$label" = merge:owner-review ]
+  pr '.labels=[]'
+  run bash "$AGENT/merge.sh" 7
+  [ "$status" -eq 0 ]
+  [ -f "$GH_FIXTURES/merged" ]
+}
+
 @test "App review uses GraphQL author type and login" {
   export DEVTOOLS_REQUIRED_REVIEWER=review-app DEVTOOLS_REQUIRED_REVIEWER_TYPE=Bot
   pr '.reviews[0].author={__typename:"Bot",login:"review-app"}'
@@ -206,7 +230,7 @@ LOCK
 
 @test "merge policy preserves POSIX classes and newline paths" {
   change $'owned/line\nname' content
-  run bash -c 'jq -n '\''{golden_paths:"^$",loosening_markers:"nolint",gate_config_paths:"^$",owner_paths:"^owned/line[[:space:]]name$",disposable_ignored:"^cache/"}'\'' | uv run --quiet --script "$1" inspect "$2" "$3"' _ "$POLICY" "$BASE_OID" "$HEAD_OID"
+  run bash -c 'jq -n '\''{golden_paths:"^$",constitutional_paths:"^$",loosening_markers:"nolint",gate_config_paths:"^$",owner_paths:"^owned/line[[:space:]]name$",disposable_ignored:"^cache/"}'\'' | uv run --quiet --script "$1" inspect "$2" "$3"' _ "$POLICY" "$BASE_OID" "$HEAD_OID"
   [ "$status" -eq 0 ]
   [ "$(printf '%s' "$output" | jq '.owner_paths|length')" -eq 1 ]
 }
@@ -254,7 +278,7 @@ LOCK
 
 @test "empty policy patterns report the key and refusal reason" {
   local key config
-  for key in golden_paths loosening_markers gate_config_paths owner_paths disposable_ignored; do
+  for key in golden_paths constitutional_paths loosening_markers gate_config_paths owner_paths disposable_ignored; do
     config=$(policy_config | jq --arg key "$key" '.[$key] = ""')
     run uv run --quiet --script "$POLICY" inspect "$BASE_OID" "$HEAD_OID" <<<"$config"
     [ "$status" -eq 1 ]
