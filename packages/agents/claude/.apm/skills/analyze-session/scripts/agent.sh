@@ -36,6 +36,14 @@ dt_repo_conf() {
   printf '%s\n' "${2:-}"
 }
 
+# Publishers and mergers reserve the same label, including its default.
+dt_owner_review_label() {
+  local label
+  label=$(dt_repo_conf owner_review_label owner-review) || return $?
+  [ -n "$label" ] || dt_die "owner_review_label must not be empty"
+  printf '%s\n' "$label"
+}
+
 dt_agent_context() {
   local dir marker
   dir=$(dt_git_dir) || return $?

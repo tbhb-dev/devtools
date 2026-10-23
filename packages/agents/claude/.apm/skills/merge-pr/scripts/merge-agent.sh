@@ -133,8 +133,7 @@ ma_gates() {
   *) dt_die "required_reviewer_type must be Bot or User when set" ;;
   esac
   ma_approved "$view" "$reviewer" "$head" "$reviewer_type" || dt_die "WAITING_REVIEW: $reviewer must approve the current head"
-  label=$(dt_repo_conf owner_review_label owner-review) || return $?
-  [ -n "$label" ] || dt_die "owner_review_label must not be empty"
+  label=$(dt_owner_review_label) || return $?
   if jq -e --arg label "$label" '.labels | any(.name == $label)' "$view" >/dev/null; then
     dt_die "needs-owner: the PR has the owner-review label"
   fi

@@ -1,5 +1,6 @@
 # Keep scratch repositories independent of the invoking Git environment.
 isolate_git() {
+  # Scratch workflows select their mode through their own entry points.
   unset DEVTOOLS_UNATTENDED DT_UNATTENDED
   local name
   for name in ${!GIT_CONFIG_@} ${!GIT_AUTHOR_@} ${!GIT_COMMITTER_@}; do
