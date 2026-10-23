@@ -18,6 +18,14 @@ Install the sibling `commit`, `pr`, `merge-pr`, and review skills from the same 
 
 Their interfaces remain available for the later `agentrepo` port.
 
+## Cached gate passes
+
+Pin the harness package containing this change and run `apm install`. Saved passes remain reusable while their cache key is unchanged. This also applies to message and description lint passes. The key still requires a clean committed tree and matching commands, tool versions, and gate inputs. Message and description lint also bind their drafts. Use `--rerun-gates` to force fresh runs.
+
+## Generated skill conflicts
+
+Pin the harness package containing the updated rebase skills and run `apm install`. In the devtools checkout, run `mise run regen-generated` after resolving generated files during a rebase, then commit what it rewrites.
+
 ## Repository configuration
 
 The file accepts `key = value` lines, blank lines, and full-line comments. Its reader never sources it as shell. Unknown keys, duplicates, and symlinks fail. Commands execute only at their configured gate. Other values remain data. Review stamps bind the configuration bytes. Commit the repository configuration before reviewing a branch.
@@ -40,13 +48,14 @@ lint_squash_cmd = mise run lint-squash-msg
 owner_review_label = owner-review
 ruleset_dir = .github/rulesets
 golden_paths = ^$
+constitutional_paths = ^$
 loosening_markers = nolint|shellcheck disable|vale (off|disable)
 gate_config_paths = ^(lint|hooks)\.(yaml|toml)$
 disposable_ignored = ^cache/
 merge_ready_cmd =
 ```
 
-The commit and publication values preceding are defaults. Merge requires explicit nonempty `golden_paths`, `loosening_markers`, `gate_config_paths`, `owner_paths`, and `disposable_ignored` patterns. Use `^$` for a deliberately empty set. The merge examples are placeholders for consumer policy, not built-in protected paths. The round bound accepts integers from 1 to 9. Success resets the corresponding finding counter. Reaching the bound blocks further reviews even after preflight or a new commit.
+The commit and publication values preceding are defaults. Merge requires explicit nonempty `golden_paths`, `constitutional_paths`, `loosening_markers`, `gate_config_paths`, `owner_paths`, and `disposable_ignored` patterns. Use `^$` for a deliberately empty set. The merge examples are placeholders for consumer policy, not built-in protected paths. The round bound accepts integers from 1 to 9. Success resets the corresponding finding counter. Reaching the bound blocks further reviews even after preflight or a new commit.
 
 devtools defines its own patterns in `.agents/agent-skills.conf`. They protect the published payload and hooks, workflows, rule sets, gate configuration, and skill guards. Cleanup permits known build and cache output and preserves local settings, notes, dependency directories, and other worktrees. Consumers must choose patterns for their own trees. Policy refusals print the exception message. An empty pattern reports its key.
 
@@ -75,7 +84,7 @@ Reports print locally unless both `mail_cmd` and `mail_to` are nonempty. The com
 | `review_cmd`, `review_model`, `review_effort`, `delegation_check`, `gh_login`, `required_reviewer`, `required_reviewer_type`, `merge_owner` | Machine configuration under `~/.config/devtools/` or corresponding `DEVTOOLS_` variables |
 | `review_commit_criteria`, `review_pr_criteria`, `review_squash_criteria` | Installed review skills plus the existing trusted repository review policy |
 | `lint_squash_cmd`, `owner_review_label`, `ruleset_dir`, `merge_ready_cmd` | Repository configuration. Readiness can refuse but can't grant authority |
-| `golden_paths`, `loosening_markers`, `gate_config_paths`, `disposable_ignored` | Repository configuration. Inspect patterns before migration |
+| `golden_paths`, `constitutional_paths`, `loosening_markers`, `gate_config_paths`, `disposable_ignored` | Repository configuration. Inspect patterns before migration |
 | `merge_verify_tries` | Retired: shared merge execution reads the result once and never retries the write |
 
 Repository configuration can't select a reviewer, GitHub account, or delegation checker. Unattended publication requires a nonempty machine `gh_login` with no built-in account default. It rejects `--confirmed`. Either session pre-approval or machine delegation must grant the action, and neither skill prompts or grants itself authority.
@@ -97,6 +106,8 @@ The public source is the [avirt local skill family](https://github.com/tbhb-dev/
 | Review finding bound | Persistent shared counter that remains for unpublished drafts and resets on success |
 | Reporting | Local output and a structured result, with optional configured transport |
 
+Publishers must omit `owner_review_label` from draft frontmatter. The setting defaults to `owner-review`, as it does for merges. Preflight excludes it from label choices. Only the owner-approval route applies the label after approval at the current head, green checks, and a mergeable state. Updates preserve an existing owner-review label while reconciling other labels normally. Regenerate and reinstall the skills to use this rule.
+
 A successful publication records `pr.result.json` under the worktree's Git `agent-skills` directory, containing the PR number, URL, full head, base, draft state, and push kind. Final output reports the URL, head, and draft state. Inspect a failed or uncertain GitHub write before retrying. After publication, the skill stops.
 
 ## Merge policy and authority
@@ -105,7 +116,17 @@ Machine configuration must name `gh_login` and `required_reviewer`. The latest d
 
 Golden-file changes and detected gate loosening require an APPROVED review from optional machine `merge_owner` on the same exact head. Configure it through `dt_conf`, such as `merge_owner` in machine configuration or `DEVTOOLS_MERGE_OWNER`. Use its GraphQL login without `[bot]` too. Keep `merge_owner` a person, since an App owner override can approve its own golden-file waivers. The reviewer type setting applies only to `required_reviewer`. Repository configuration can't name that login. A push invalidates approval.
 
-Reports record whether execution used an override and the approving login. The owner-review label still holds a PR for the owner, and the override doesn't waive it or any other merge gate.
+Golden findings alone can proceed without owner approval when the required App's latest decisive review approves the exact current head and supplies the header-position statement below. The format is `Loosens: yes|no`. Only `no` permits the waiver.
+
+Normalize carriage return plus line feed (`CRLF`) to line feed (`LF`) before checking the body. Every character in the whole body must belong to printable `ASCII` (`0x20` through `0x7E`), or be a tab or `LF`. Unicode whitespace, form feed, `NUL`, and an unpaired carriage return require the owner.
+
+The body must begin with `Reviewed head: <40 lowercase hex digits>`. Review authors may put the SHA inside one pair of backticks. The header SHA must equal the merge review's pinned head. A mismatch requires the owner. An optional `Model: <letters, digits, dot, dash, underscore, space>` line may follow. Empty lines may separate these header lines and the statement. The first line after this header block must be exactly `Loosens: no`. Surrounding whitespace or extra text requires the owner. The following line must be empty, or the body must end. Ignore later text except for the whole-body character check and duplicate statement check. The App review brief must place `Loosens: no` in this header position.
+
+Missing, duplicated, or ambiguous statements fail closed and require the owner. Any value other than `no` or a statement outside this header position requires the owner. Only the permitted header lines can precede the statement, so quoted, list-nested, code-span, comment, fenced, or indented text can't supply it. A review by another login, a non-App author, a stale head, or an edited review can't supply the waiver. Missing edit metadata also requires the owner. The policy reads the live review again before merging, so editing an old review after a push can't revive its authority. Reviewers receive their code-review instructions outside this repository.
+
+Consumers adopting this version must set `constitutional_paths` to an explicit regular expression before merging. These paths always require the owner, even with `Loosens: no` or remote APM ownership. devtools protects its merge policy configuration, repository review instructions, rule sets, CODEOWNERS, Claude settings, and merge authority sources and generated copies: `merge-policy.py`, `merge-agent.sh`, `signing.sh`, and `lib.sh`. Detected gate loosening also always requires the owner. These protections prevent the changed policy from waiving its own owner check.
+
+Reports include the rule used: `owner approval` or `App review states Loosens: no`. They also record whether execution used an override and the approving login. The App approval, required checks, independent review, and write authority still apply. The owner-review label still holds a PR for the owner, and neither rule waives it or any other merge gate.
 
 The scan skips full comment lines. It recognizes exclusion keys instead of matching words inside values and ignores suppression text inside quoted values. Non-local APM deployments come from `apm.lock.yaml` at the pinned base commit. Local deployment overrides stay in scope. A missing lockfile means no deployment exemptions. Malformed ownership data refuses the scan. A PR can't grant itself an exemption by editing its lockfile. Changes to `.agents/agent-skills.conf` always require the owner approval so a policy edit can't waive its own check. The scan is a backstop and doesn't replace review.
 

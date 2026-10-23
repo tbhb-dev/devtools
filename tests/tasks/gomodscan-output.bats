@@ -50,7 +50,7 @@ scan() {
   local task=$1
   local command
   command=$(
-    python3 - "$ROOT/.devtools/tasks/go.toml" "$task" <<'PY'
+    uv run --project "$ROOT" --no-sync python - "$ROOT/.devtools/tasks/go.toml" "$task" <<'PY'
 import sys
 import tomllib
 with open(sys.argv[1], "rb") as source:
@@ -143,7 +143,7 @@ PY
   scanner_source=$(cd "$ROOT" && "$REAL_GO" list -mod=mod -f '{{.Dir}}' github.com/proofhouse/gomodscan/cmd/gomodscan)
   cp -R "$scanner_source/../.." "$BATS_TEST_TMPDIR/scanner-source"
   chmod -R u+w "$BATS_TEST_TMPDIR/scanner-source"
-  python3 - "$scanner_source/main.go" "$BATS_TEST_TMPDIR" <<'PY'
+  uv run --project "$ROOT" --no-sync python - "$scanner_source/main.go" "$BATS_TEST_TMPDIR" <<'PY'
 import pathlib
 import sys
 
