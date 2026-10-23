@@ -230,7 +230,7 @@ LOCK
 
 @test "merge policy preserves POSIX classes and newline paths" {
   change $'owned/line\nname' content
-  run bash -c 'jq -n '\''{golden_paths:"^$",loosening_markers:"nolint",gate_config_paths:"^$",owner_paths:"^owned/line[[:space:]]name$",disposable_ignored:"^cache/"}'\'' | uv run --quiet --script "$1" inspect "$2" "$3"' _ "$POLICY" "$BASE_OID" "$HEAD_OID"
+  run bash -c 'jq -n '\''{golden_paths:"^$",constitutional_paths:"^$",loosening_markers:"nolint",gate_config_paths:"^$",owner_paths:"^owned/line[[:space:]]name$",disposable_ignored:"^cache/"}'\'' | uv run --quiet --script "$1" inspect "$2" "$3"' _ "$POLICY" "$BASE_OID" "$HEAD_OID"
   [ "$status" -eq 0 ]
   [ "$(printf '%s' "$output" | jq '.owner_paths|length')" -eq 1 ]
 }
@@ -278,7 +278,7 @@ LOCK
 
 @test "empty policy patterns report the key and refusal reason" {
   local key config
-  for key in golden_paths loosening_markers gate_config_paths owner_paths disposable_ignored; do
+  for key in golden_paths constitutional_paths loosening_markers gate_config_paths owner_paths disposable_ignored; do
     config=$(policy_config | jq --arg key "$key" '.[$key] = ""')
     run uv run --quiet --script "$POLICY" inspect "$BASE_OID" "$HEAD_OID" <<<"$config"
     [ "$status" -eq 1 ]
