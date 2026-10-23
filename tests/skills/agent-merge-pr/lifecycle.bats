@@ -101,13 +101,11 @@ if [ "$count" -eq 3 ]; then
 fi
 READY
   chmod +x "$BATS_TEST_TMPDIR/ready"
+  git checkout --quiet main
   printf '\nmerge_ready_cmd = %s\n' "$BATS_TEST_TMPDIR/ready" >>.agents/agent-skills.conf
-  echo protected >constitution.txt
-  git add -- .agents/agent-skills.conf constitution.txt
-  git commit --quiet -m 'test: readiness drift'
-  HEAD_OID=$(git rev-parse HEAD)
-  git push --quiet origin topic
-  pr ".headRefOid=\"$HEAD_OID\" | .reviews[0].commit.oid=\"$HEAD_OID\""
+  pin_base_config
+  change golden/result.txt protected
+  change constitution.txt protected
   approve_owner
   run bash "$AGENT/review.sh" 7
   [ "$status" -eq 0 ]
@@ -139,12 +137,10 @@ state=$(git rev-parse --absolute-git-dir)/agent-skills
 printf 'unreviewed replacement\n' >"$state/merge.body"
 READY
   chmod +x "$BATS_TEST_TMPDIR/ready"
+  git checkout --quiet main
   printf '\nmerge_ready_cmd = %s\n' "$BATS_TEST_TMPDIR/ready" >>.agents/agent-skills.conf
-  git add -- .agents/agent-skills.conf
-  git commit --quiet -m 'test: readiness message drift'
-  HEAD_OID=$(git rev-parse HEAD)
-  git push --quiet origin topic
-  pr ".headRefOid=\"$HEAD_OID\" | .reviews[0].commit.oid=\"$HEAD_OID\""
+  pin_base_config
+  change golden/result.txt protected
   approve_owner
   run bash "$AGENT/review.sh" 7
   [ "$status" -eq 0 ]

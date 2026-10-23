@@ -67,7 +67,11 @@ Repository configuration supplies squash lint, readiness, ruleset location, owne
 
 devtools keeps its merge patterns in `.agents/agent-skills.conf`. They protect the published payload, workflows, rule sets, gate definitions, and skill guards. Cleanup permits build and cache output and preserves local settings and agent worktrees. Policy errors include the refusal reason and specify any empty pattern.
 
-Golden files and detected gate loosening require an exact-head APPROVED review by machine `merge_owner`, also available as `DEVTOOLS_MERGE_OWNER`. Use the GraphQL login without `[bot]` for `merge_owner` too. Keep this authority a person: an App owner override can approve its own golden-file waivers. Repositories can't choose this authority, and pushing invalidates approval.
+Golden files and detected gate loosening require an exact-head APPROVED review by machine `merge_owner`. Use the GraphQL login without `[bot]` for `merge_owner` too. Keep this authority a person: an App owner override can approve its own golden-file waivers. Repositories can't choose this authority, and pushing invalidates approval.
+
+Merge authority comes only from machine configuration files. Setting a `DEVTOOLS_` variable for `merge_owner`, `required_reviewer`, `required_reviewer_type`, `delegation_check`, or `gh_login` refuses the merge and names that variable. Commit and PR workflows keep their environment overrides.
+
+Merge gates read settings from `.agents/agent-skills.conf` at the pinned base commit. They report and ignore a differing checkout copy. Before running gates, the merge verifies both skill directories against the pinned base. It repeats the check before writing the merge. Remote packages use lock hashes. Local packages use base blobs. Extra files refuse too. To merge a skill re-pin, run from a checkout of the base commit. Its deployed scripts match the base lock.
 
 When using an override, the merge report specifies the approving login. It doesn't waive the owner-review label, required checks, independent review, or write authority.
 

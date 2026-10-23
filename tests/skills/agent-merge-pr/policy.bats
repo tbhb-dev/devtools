@@ -30,7 +30,8 @@ setup() {
 }
 
 @test "App review uses GraphQL author type and login" {
-  export DEVTOOLS_REQUIRED_REVIEWER=review-app DEVTOOLS_REQUIRED_REVIEWER_TYPE=Bot
+  machine required_reviewer review-app
+  machine required_reviewer_type Bot
   pr '.reviews[0].author={__typename:"Bot",login:"review-app"}'
   run bash "$AGENT/review.sh" 7
   [ "$status" -eq 0 ]
@@ -38,7 +39,7 @@ setup() {
 }
 
 @test "User review cannot satisfy required Bot reviewer" {
-  export DEVTOOLS_REQUIRED_REVIEWER_TYPE=Bot
+  machine required_reviewer_type Bot
   pr '.reviews[0].author.__typename="User"'
   run bash "$AGENT/review.sh" 7
   [ "$status" -ne 0 ]
@@ -46,7 +47,7 @@ setup() {
 }
 
 @test "Bot review cannot satisfy required User reviewer" {
-  export DEVTOOLS_REQUIRED_REVIEWER_TYPE=User
+  machine required_reviewer_type User
   pr '.reviews[0].author.__typename="Bot"'
   run bash "$AGENT/review.sh" 7
   [ "$status" -ne 0 ]
@@ -54,14 +55,14 @@ setup() {
 }
 
 @test "User reviewer passes when its configured type matches" {
-  export DEVTOOLS_REQUIRED_REVIEWER_TYPE=User
+  machine required_reviewer_type User
   pr '.reviews[0].author.__typename="User"'
   run bash "$AGENT/review.sh" 7
   [ "$status" -eq 0 ]
 }
 
 @test "typed reviewer fails closed when its author type is missing" {
-  export DEVTOOLS_REQUIRED_REVIEWER_TYPE=Bot
+  machine required_reviewer_type Bot
   run bash "$AGENT/review.sh" 7
   [ "$status" -ne 0 ]
   [[ "$output" == *WAITING_REVIEW* ]]
@@ -75,14 +76,14 @@ setup() {
 }
 
 @test "invalid reviewer type is rejected" {
-  export DEVTOOLS_REQUIRED_REVIEWER_TYPE=App
+  machine required_reviewer_type App
   run bash "$AGENT/review.sh" 7
   [ "$status" -ne 0 ]
   [[ "$output" == *"required_reviewer_type must be Bot or User"* ]]
 }
 
 @test "REST bot reviewer login names the GraphQL form" {
-  export DEVTOOLS_REQUIRED_REVIEWER='review-app[bot]'
+  machine required_reviewer 'review-app[bot]'
   run bash "$AGENT/review.sh" 7
   [ "$status" -ne 0 ]
   [[ "$output" == *"required_reviewer must use the GraphQL login review-app"* ]]
@@ -91,7 +92,7 @@ setup() {
 @test "REST bot owner login names the GraphQL form" {
   change golden/result.txt baseline
   approve_owner
-  export DEVTOOLS_MERGE_OWNER='owner-app[bot]'
+  machine merge_owner 'owner-app[bot]'
   run bash "$AGENT/review.sh" 7
   [ "$status" -ne 0 ]
   [[ "$output" == *"merge_owner must use the GraphQL login owner-app"* ]]
@@ -100,7 +101,7 @@ setup() {
 @test "owner approval uses its own login independently of required reviewer type" {
   change golden/result.txt baseline
   approve_owner
-  export DEVTOOLS_REQUIRED_REVIEWER_TYPE=Bot
+  machine required_reviewer_type Bot
   pr '.reviews[0].author.__typename="Bot" | .reviews[1].author.__typename="User"'
   run bash "$AGENT/review.sh" 7
   [ "$status" -eq 0 ]
@@ -333,8 +334,9 @@ LOCK
 }
 
 @test "devtools repository policy protects skill guards" {
+  git checkout --quiet main
   cp "$ROOT/.agents/agent-skills.conf" .agents/agent-skills.conf
-  git add -- .agents/agent-skills.conf
+  pin_base_config
   change packages/agents/source/skills/merge-pr/claude/scripts/guard-merge.sh '# guard'
   run bash "$AGENT/review.sh" 7
   [ "$status" -ne 0 ]
