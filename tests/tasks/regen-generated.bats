@@ -49,6 +49,12 @@ SH
 		[ "$status" -eq 0 ]
 		run grep -E 'mise run generate-skills.*mise run skill-tokens' "$ROOT/$path"
 		[ "$status" -eq 1 ]
+		if [ "$path" != AGENTS.md ]; then
+			run grep -F 'the devtools checkout, run `mise run regen-generated`' "$ROOT/$path"
+			[ "$status" -eq 0 ]
+			run grep -F "In any other repository, run that repository's own regeneration steps for generated skill files." "$ROOT/$path"
+			[ "$status" -eq 0 ]
+		fi
 	done
 }
 
