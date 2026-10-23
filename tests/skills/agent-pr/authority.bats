@@ -131,7 +131,7 @@ CHECKER
   done
   bash "$SCRIPTS/preflight.sh"
   grep -q 'draft marker' PR_AGENTDESC.md
-  grep -q '^rounds 3$' .git/agent-skills/pr.rounds
+  [ "$(grep -c '^finding ' .git/agent-skills/pr.rounds)" = 3 ]
   run bash "$SCRIPTS/review.sh"
   [ "$status" -eq 3 ]
 }
@@ -161,4 +161,9 @@ CHECKER
   [ "$status" -eq 1 ]
   [[ "$output" == *'Invalid owner_paths'* ]]
   [ -z "$(remote_topic)" ]
+}
+
+@test "AC1 to AC9 pr redesign preserves the bound and rejected drafts" {
+  source "${BATS_TEST_DIRNAME}/../redesign.bash"
+  redesign_flow pr PR_AGENTDESC.md "$SCRIPTS/review.sh"
 }

@@ -324,3 +324,8 @@ STUB
   [ "$status" -eq 0 ]
   [ "$(cat "$SCOPE_LOG")" = "$(printf 'devtools:lint-leaks staged %s\nlint staged %s' "$expected" "$expected")" ]
 }
+
+@test "AC1 to AC9 commit redesign preserves the bound and rejected drafts" {
+  source "${BATS_TEST_DIRNAME}/../redesign.bash"
+  redesign_flow commit COMMIT_AGENTMSG "$SCRIPTS/review.sh"
+}
