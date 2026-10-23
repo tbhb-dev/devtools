@@ -561,6 +561,15 @@ run = "mise run devtools:test-go"
 [tasks.test-go-race]
 run = "mise run devtools:test-go-race"
 
+# Keep wall-time assertions out of ordinary, coverage, and race runs.
+[tasks.test-agy-otel-latency]
+description = "Check the CI hook latency regression ceiling without instrumentation"
+run = "go test -count=1 -v -tags agy_otel_latency -run TestHookLatency ./cmd/agy-otel/..."
+
+[tasks.agy-otel-latency]
+description = "Measure hook latency on an agent host and enforce warm p99 at 20 ms"
+run = "uv run python tools/agy_otel_latency.py"
+
 # The shell scripts under scripts/ and tools/ answer to bats rather than
 # to `go test`, so they get a third suite alongside the two language
 # ones. It joins the `test` aggregate because the commit-message gates

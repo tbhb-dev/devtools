@@ -20,6 +20,7 @@ RUSTDOCFLAGS
 Sprintf
 TSSDK
 Tricolon
+USERPROFILE
 Uncomparables
 Worktree
 Worktrees

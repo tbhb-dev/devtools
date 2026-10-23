@@ -54,6 +54,7 @@ Pass `--fix` to collapse paragraphs someone already wrapped.
 Each tool under [`cmd/`](cmd/) builds as a standalone binary:
 
 - [`agentrepo`](docs/checks-evaluator.md) evaluates saved GitHub checks. This binary owns repository transactions, signing, and delegation as they move into Go.
+- `agy-otel hook <event>` silently records Antigravity hook events in a local spool.
 - `agenthooks` manages shared agent hooks.
 - `agentstore` stores shared agent state.
 - `agentcontext` assembles shared agent context.
@@ -67,6 +68,15 @@ Install one directly:
 ```bash
 go install github.com/tbhb-dev/devtools/cmd/agenthooks@latest
 ```
+
+The next minor release includes `agy-otel`. After that tag exists, pin the recorder through mise:
+
+```toml
+[tools]
+"go:github.com/tbhb-dev/devtools/cmd/agy-otel" = "v0.15.0"
+```
+
+The current v0.14.2 release doesn't contain this command. Hook registration remains an operator task. The recorder stores events under `$XDG_STATE_HOME/agy-otel`, falling back to `~/.local/state/agy-otel`.
 
 Or build everything from a checkout:
 
