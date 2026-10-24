@@ -9,6 +9,7 @@ EDITMSG
 ENV
 Equalf
 Errorf
+GORACE
 Honnef
 JUnit
 Magika
@@ -25,6 +26,7 @@ Uncomparables
 Worktree
 Worktrees
 addopts
+afakt
 agentcontext
 agenthooks
 agentrepo
@@ -34,6 +36,7 @@ argjson
 argparse
 asasalint
 asciicheck
+atexit
 autobuild
 autostash
 avirt

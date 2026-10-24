@@ -58,6 +58,7 @@ Each tool under [`cmd/`](cmd/) builds as a standalone binary:
 - `agenthooks` manages shared agent hooks.
 - `agentstore` stores shared agent state.
 - `agentcontext` assembles shared agent context.
+- [`metrics`](docs/metrics.md) appends work events to a local journal without network access.
 - `guard-markdown` refuses Markdown whose paragraphs span more than one line.
 - [`commit-lint`](docs/commit-lint.md) checks Conventional Commits and attribution trailers.
 - [`gh-post`](docs/gh-post.md) scans GitHub content before posting under an allowed identity.
