@@ -35,7 +35,7 @@ scan_mode = all
 
 Exported `DEVTOOLS_PRIVATE_STRINGS` is a comma-separated list, overriding the reference and `none` policy. It isn't a mode switch. Posting stops if an exported list is empty and a reference or `required` policy requires values. An optional list without configuration permits the built-in checks alone. A configured reference that fails or returns no values stops posting. Provider tokens and output aren't printed. The provider requires service-account authentication and doesn't use an interactive login.
 
-The identity guard reads `gh api user`. When `GH_TOKEN` holds an App installation token and that endpoint fails, it reads the GraphQL viewer login instead. Configure the exact returned login in `post_identities`.
+The identity guard reads `gh api user`. When that endpoint fails, it reads the GraphQL viewer login instead, including for App installation credentials in `GH_CONFIG_DIR`. Configure the exact returned login in `post_identities`.
 
 ## Post
 
