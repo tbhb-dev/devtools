@@ -224,6 +224,19 @@ func TestSkipped(t *testing.T) {
 			skipped:  []string{"validate"},
 		},
 		{
+			name:     "required skipped beside a missing required check",
+			entries:  []checks.Entry{run("validate", "SKIPPED")},
+			required: []string{"validate", "test"},
+			want:     checks.MissingRequired,
+			skipped:  []string{"validate"},
+		},
+		{
+			name:     "missing required check with nothing skipped",
+			entries:  []checks.Entry{run("validate", "SUCCESS")},
+			required: []string{"validate", "test"},
+			want:     checks.MissingRequired,
+		},
+		{
 			name:     "required neutral is not named",
 			entries:  []checks.Entry{run("validate", "NEUTRAL")},
 			required: []string{"validate"},
@@ -300,6 +313,25 @@ func TestHint(t *testing.T) {
 				"merge base differs from base commit: unknown",
 				"run: gh pr update-branch 7",
 			},
+		},
+		{
+			name: "skipped beside a missing required check",
+			result: checks.Result{
+				Outcome: checks.MissingRequired,
+				Names:   []string{"test"},
+				Skipped: []string{"validate"},
+			},
+			mergeBase: "old",
+			want: []string{
+				"skipped required check: validate",
+				"merge base differs from base commit: yes",
+				"run: gh pr update-branch 7",
+			},
+		},
+		{
+			name:      "missing required check with nothing skipped",
+			result:    checks.Result{Outcome: checks.MissingRequired, Names: []string{"test"}},
+			mergeBase: "old",
 		},
 		{
 			name:      "nothing skipped",

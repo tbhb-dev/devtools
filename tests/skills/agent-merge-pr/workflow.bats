@@ -225,6 +225,17 @@ update_branch() {
   [[ "$output" == *"run: gh pr update-branch 7"* ]]
 }
 
+@test "skipped required check beside a missing required check fails with the update-branch hint" {
+  advance_base
+  echo '[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"validate"},{"context":"test"}]}}]' >"$GH_FIXTURES/api/repos_{owner}_{repo}_rules_branches_main.json"
+  pr '.statusCheckRollup=[{__typename:"CheckRun",name:"validate",status:"COMPLETED",conclusion:"SKIPPED"}]'
+  run bash "$AGENT/review.sh" 7
+  [ "$status" -eq 3 ]
+  [[ "$output" == *"skipped required check: validate"* ]]
+  [[ "$output" == *"merge base differs from base commit: yes"* ]]
+  [[ "$output" == *"run: gh pr update-branch 7"* ]]
+}
+
 @test "update-branch with passing required checks clears the gate and the hint" {
   advance_base
   pr '.statusCheckRollup=[{__typename:"CheckRun",name:"test",status:"COMPLETED",conclusion:"SKIPPED"}]'

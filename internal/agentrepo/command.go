@@ -44,7 +44,7 @@ func NewCommand() (*cobra.Command, *int) {
 	evaluate := &cobra.Command{
 		Use:   "evaluate",
 		Short: "Evaluate a saved rollup and print a JSON verdict",
-		Long:  "Read gh pr view JSON from --file or stdin. Exit codes: 0 success, 1 failed, 2 pending, 3 missing required, 4 empty, 5 unreadable, 6 head moved. Required names match exactly. With --pr, a failure from a required check that concluded SKIPPED also prints the update-branch hint to stderr, using --base and --merge-base; the exit status is unchanged.",
+		Long:  "Read gh pr view JSON from --file or stdin. Exit codes: 0 success, 1 failed, 2 pending, 3 missing required, 4 empty, 5 unreadable, 6 head moved. Required names match exactly. With --pr, a failure or a missing required check beside a required check that concluded SKIPPED also prints the update-branch hint to stderr, using --base and --merge-base; the exit status is unchanged.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			input := cmd.InOrStdin()

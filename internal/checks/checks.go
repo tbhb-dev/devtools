@@ -42,8 +42,10 @@ var errInput = errors.New("invalid rollup")
 type Result struct {
 	Outcome Outcome  `json:"outcome"`
 	Names   []string `json:"names,omitempty"`
-	// Skipped names the required checks within Names that concluded SKIPPED.
-	// It informs a hint only. The outcome is Failed with or without it.
+	// Skipped names the required checks that concluded SKIPPED. On a Failed
+	// result they're a subset of Names. On a MissingRequired result Names holds
+	// the absent checks and Skipped the skipped ones. It informs a hint only. The
+	// outcome is unchanged with or without it.
 	Skipped []string `json:"skipped,omitempty"`
 	Error   string   `json:"error,omitempty"`
 }
@@ -160,7 +162,9 @@ func Evaluate(data []byte, expectedHead string, required []string) Result {
 		}
 	}
 	if len(missing) > 0 {
-		return named(MissingRequired, missing)
+		r := named(MissingRequired, missing)
+		r.Skipped = skippedRequired(latest, needed)
+		return r
 	}
 	if len(bad) > 0 {
 		r := named(Failed, bad)
@@ -222,14 +226,14 @@ func sortedNames(names map[string]bool) []string {
 	return sorted
 }
 
-// Hint explains a Failed result whose required checks concluded SKIPPED. A
-// check run on an old merge ref reports SKIPPED, and only updating the branch
-// replaces that ref. It reports whether the merge base of the base commit and
-// the head differs from the base commit. An empty merge base argument means
-// unknown. It returns nothing for a result without skipped required checks, so
-// it never changes a verdict.
+// Hint explains a Failed or MissingRequired result whose required checks
+// concluded SKIPPED. A check run on an old merge ref reports SKIPPED, and only
+// updating the branch replaces that ref. It reports whether the merge base of
+// the base commit and the head differs from the base commit. An empty merge
+// base argument means unknown. It returns nothing for a result without skipped
+// required checks, so it never changes a verdict.
 func Hint(r Result, number int, base, mergeBase string) []string {
-	if r.Outcome != Failed || len(r.Skipped) == 0 {
+	if (r.Outcome != Failed && r.Outcome != MissingRequired) || len(r.Skipped) == 0 {
 		return nil
 	}
 	differs := "unknown"
