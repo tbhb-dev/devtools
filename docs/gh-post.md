@@ -13,6 +13,8 @@ Choose a devtools release that includes `gh-post`. Add the tool alongside the ot
 
 Run `mise install`. Or install directly with `go install github.com/tbhb-dev/devtools/cmd/gh-post@<devtools-release>`. Both `devtools:update-pins` and `devtools:check-pins` require this declaration and include it in version comparisons. Add it before updating consumers to the skills that require `gh-post`.
 
+Use `gh-post --help` for the complete list of operations and flags, or `gh-post --check-deps` to look for `git` and `gh` on PATH. These informational flags don't need a checkout, configuration, body input, or network access. The dependency check reports each missing binary with exit 2 and executes neither tool.
+
 ## Configure
 
 Configuration belongs on the machine. For a target `owner/project`, lookup checks exported `DEVTOOLS_<KEY>` first, then `${XDG_CONFIG_HOME:-~/.config}/devtools/project.conf`, then `devtools.conf` in that directory. Values are literal, unquoted `key = value` assignments. The target repository selects the file, even when `-R` names a different repository from the current checkout.
@@ -49,7 +51,7 @@ Use an explicit empty body file to clear a description.
 gh-post pr create -R owner/project --head topic --base main \
   --title 'feat: add the example' --body-file description.md
 gh-post issue comment 42 -R owner/project --body-file comment.md
-gh-post pr review 42 -R owner/project --approve --body-file review.md
+gh-post pr review 42 -R owner/project --approve --commit "$head" --body-file review.md
 gh-post review edit 42 789 -R owner/project --body-file correction.md
 gh-post comment edit 123 -R owner/project --kind issue --body-file correction.md
 gh-post comment edit 456 -R owner/project --kind review --body-file correction.md
@@ -57,6 +59,8 @@ gh-post release edit v1.0.0 -R owner/project --body-file notes.md
 ```
 
 Supported operations are `issue create|comment|edit`, `pr create|edit|comment|review`, `review edit`, `comment edit`, and `release create|edit`. Issue and PR targets are numeric IDs. Comment edits require `--kind issue` for issue comments or `--kind review` for inline review comments. Both use REST `PATCH` endpoints. Release operations translate body input to GitHub's notes-file flag. Creation requires an explicit title for issues and pull requests. New reviews require exactly one of `--approve`, `--comment`, or `--request-changes`.
+
+New reviews also require `--commit <40-hex-sha>` and a first body line of `Reviewed head: <sha>` matching that commit. You can wrap the SHA in backticks. Before posting, the command reads the pull request's `headRefOid` through `gh` and refuses a different head with exit 1. Re-read the head and review it again after a push. The command sends JSON fields `commit_id`, `event`, and `body` through `POST /repos/{owner}/{repo}/pulls/{pr}/reviews`. The explicit `commit_id` anchors the review to the examined commit even if a push races the write. Existing scan, identity guard, and audit requirements apply.
 
 Use `review edit <pr> <review-id>` to replace a submitted pull request review's body. Both IDs must be positive integers. It sends the scanned body as JSON through `PUT /repos/{owner}/{repo}/pulls/{pull_number}/reviews/{review_id}` with the same identity guard and audit record as other posts. It accepts the shared repository and body-file flags. `comment edit --kind review` edits an inline review comment.
 
@@ -66,9 +70,9 @@ Use `-R owner/project` or `--repo owner/project` to select the target. Otherwise
 
 | Exit | Meaning |
 | --- | --- |
-| 0 | Posted and recorded in the audit log. |
-| 1 | Refused by a scan or the identity guard. |
-| 2 | Invalid arguments, configuration or input failure, failed GitHub command, or audit failure. |
+| 0 | Posted and recorded in the audit log, or an informational flag succeeded. |
+| 1 | Refused by a scan, the identity guard, or the review head or first-line rule. |
+| 2 | Missing dependency, invalid arguments, configuration or input failure, failed GitHub command, or audit failure. |
 
 Each successful post appends one JSON line to `${XDG_STATE_HOME:-~/.local/state}/devtools/gh-post.log`. It records UTC time, operation, the target URL, and the SHA-256 hash of the body. It never records the body. If the command can't open the audit log, it prevents posting. A failed write or an audit failure after posting needs inspection before retrying, because GitHub may already have accepted the content.
 
