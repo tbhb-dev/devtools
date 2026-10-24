@@ -18,8 +18,9 @@ Global flags:
 	--help         Show all operations and flags without network access.
 	--check-deps   Check git and gh on PATH without executing them.
 
-All operations accept -R, --repo OWNER/REPO and --body-file PATH.
-Body input defaults to stdin; --body-file - also reads stdin.
+All operations accept -R, --repo OWNER/REPO.
+Content operations accept --body-file PATH and default to stdin;
+--body-file - also reads stdin. PR ready and close never read stdin.
 
 Operations and additional flags:
 	issue create    --title TEXT --label NAME --assignee LOGIN --milestone NAME
@@ -32,6 +33,8 @@ Operations and additional flags:
 	pr edit <pr>    --title TEXT --base BRANCH --add-label NAME --remove-label NAME
 	--add-assignee LOGIN --remove-assignee LOGIN --add-reviewer LOGIN
 	--remove-reviewer LOGIN --milestone NAME --remove-milestone
+	pr ready <pr>   --head SHA --dry-run
+	pr close <pr>   --head SHA --comment-file PATH --dry-run
 	pr comment <pr> --edit-last --create-if-none
 	pr review <pr>  --commit SHA (--approve | --comment | --request-changes)
 	comment edit <comment> --kind issue|review
@@ -41,6 +44,11 @@ Operations and additional flags:
 
 New reviews require a 40-hex --commit matching the current PR head and
 first body line Reviewed head: <sha> (the SHA may be wrapped in backticks).
+
+PR ready and close require a full 40-hex --head, checked before the write
+and at read-back. Ready requires an open draft; close requires an open PR
+and a nonempty scanned reason file (at most 65536 characters).
+Only these two verbs accept --dry-run; neither accepts --body-file.
 `
 
 func checkDeps(errOut io.Writer) int {

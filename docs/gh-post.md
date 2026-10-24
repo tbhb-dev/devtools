@@ -58,7 +58,7 @@ gh-post comment edit 456 -R owner/project --kind review --body-file correction.m
 gh-post release edit v1.0.0 -R owner/project --body-file notes.md
 ```
 
-Supported operations are `issue create|comment|edit`, `pr create|edit|comment|review`, `review edit`, `comment edit`, and `release create|edit`. Issue and PR targets are numeric IDs. Comment edits require `--kind issue` for issue comments or `--kind review` for inline review comments. Both use REST `PATCH` endpoints. Release operations translate body input to GitHub's notes-file flag. Creation requires an explicit title for issues and pull requests. New reviews require exactly one of `--approve`, `--comment`, or `--request-changes`.
+Supported operations are `issue create|comment|edit`, `pr create|edit|comment|review|ready|close`, `review edit`, `comment edit`, and `release create|edit`. Issue and PR targets are numeric IDs. Comment edits require `--kind issue` for issue comments or `--kind review` for inline review comments. Both use REST `PATCH` endpoints. Release operations translate body input to GitHub's notes-file flag. Creation requires an explicit title for issues and pull requests. New reviews require exactly one of `--approve`, `--comment`, or `--request-changes`.
 
 New reviews also require `--commit <40-hex-sha>` and a first body line of `Reviewed head: <sha>` matching that commit. You can wrap the SHA in backticks. Before posting, the command reads the pull request's `headRefOid` through `gh` and refuses a different head with exit 1. Re-read the head and review it again after a push. The command sends JSON fields `commit_id`, `event`, and `body` through `POST /repos/{owner}/{repo}/pulls/{pr}/reviews`. The explicit `commit_id` anchors the review to the examined commit even if a push races the write. Existing scan, identity guard, and audit requirements apply.
 
@@ -66,12 +66,30 @@ Use `review edit <pr> <review-id>` to replace a submitted pull request review's 
 
 Use `-R owner/project` or `--repo owner/project` to select the target. Otherwise the command resolves the checkout's origin remote. Ambient `GH_REPO` and `GH_HOST` don't redirect it. The built-in checks cover local file URLs, home paths with a name segment, GitHub tokens, private-key headers, and secret-manager references. Placeholders such as `/Users/<name>/` and `/home/<name>/` pass. The command matches private literals without regard to case. Findings print only a category and line number, with line numbers local to each text field.
 
+### Change PR state
+
+Use `pr ready` to mark an open draft ready for review, or `pr close` to close an open PR with a reason comment:
+
+```bash
+gh-post pr ready 42 --repo owner/project --head "$head"
+gh-post pr close 42 --repo owner/project --head "$head" --comment-file reason.md
+gh-post pr close 42 --repo owner/project --head "$head" --comment-file reason.md --dry-run
+```
+
+Both require a full 40-character hexadecimal `--head`, compared without regard to case. The initial read checks the PR state and head before a state write. A second read verifies the result before the command prints the PR URL. Neither accepts `--body-file` or reads stdin. Close requires a nonempty reason file, limited to the comment limit of 65,536 characters, and posts its scanned bytes through the same path as `pr comment`. Ready requires a draft. Close accepts an open PR whether it's a draft or ready for review. Both use the existing token and allowed-identity check and can change any PR in the target repository regardless of author. They don't add a credential or permission.
+
+Only these two verbs accept `--dry-run`. It checks input, scan, identity, head and state, prints the proposed change, and doesn't write to GitHub. Close also describes the reason comment it would post.
+
+Before posting a close reason, the command reads all comment pages and skips an identical comment by the current identity. If the comment posts but closing fails, the error reports the comment and the state read back. A later invocation with the same file reuses that comment. A comment write failure stops before closing. The command never retries a write automatically.
+
+GitHub doesn't offer an expected-head condition for these state mutations. A push between the initial check and write can race it. If read-back fails or reports a different head or unexpected state, the command exits nonzero with one diagnostic line. It doesn't retry or undo the write. Inspect GitHub before taking further action.
+
 ## Results and audit
 
 | Exit | Meaning |
 | --- | --- |
-| 0 | Posted and recorded in the audit log, or an informational flag succeeded. |
-| 1 | Refused by a scan, the identity guard, or the review head or first-line rule. |
+| 0 | Posted and recorded in the audit log, or an informational flag or dry run succeeded. |
+| 1 | Refused by a scan, identity, head, PR state, or review first-line rule. Also a read-back mismatch after a state write. |
 | 2 | Missing dependency, invalid arguments, configuration or input failure, failed GitHub command, or audit failure. |
 
 Each successful post appends one JSON line to `${XDG_STATE_HOME:-~/.local/state}/devtools/gh-post.log`. It records UTC time, operation, the target URL, and the SHA-256 hash of the body. It never records the body. If the command can't open the audit log, it prevents posting. A failed write or an audit failure after posting needs inspection before retrying, because GitHub may already have accepted the content.

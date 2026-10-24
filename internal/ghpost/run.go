@@ -21,6 +21,9 @@ const (
 	exitEnvironment = 2
 	apiCommand      = "api"
 	jqFlag          = "--jq"
+	jsonFlag        = "--json"
+	methodFlag      = "--method"
+	viewVerb        = "view"
 )
 
 var errEnvironment = errors.New("cannot resolve repository, read input, or execute gh")
@@ -41,9 +44,9 @@ func Run(ctx context.Context, args []string, in io.Reader, out, errOut io.Writer
 		return exitEnvironment
 	}
 	r.repo = repo
-	body, err := readBody(r.bodyFile, in)
+	body, err := r.readInput(in)
 	if err != nil {
-		fmt.Fprintln(errOut, "gh-post: cannot read body")
+		fmt.Fprintln(errOut, "gh-post:", err)
 		return exitEnvironment
 	}
 	if r.operation == prReview && !r.matchesReviewBody(body) {
@@ -150,10 +153,10 @@ func cleanEnv(env []string) []string {
 	return append(result, "GH_PROMPT_DISABLED=1", "GH_PAGER=cat")
 }
 
-func identityAllowed(ctx context.Context, allowlist string) (bool, error) {
+func identityAllowed(ctx context.Context, allowlist string) (string, bool, error) {
 	identities := splitList(allowlist)
 	if len(identities) == 0 {
-		return false, nil
+		return "", false, nil
 	}
 	data, err := gh(ctx, []string{apiCommand, "user", jqFlag, ".login"}, nil)
 	if err != nil {
@@ -164,14 +167,14 @@ func identityAllowed(ctx context.Context, allowlist string) (bool, error) {
 		)
 	}
 	if err != nil {
-		return false, err
+		return "", false, err
 	}
 	login := strings.TrimSpace(string(data))
-	return slices.Contains(identities, login), nil
+	return login, slices.Contains(identities, login), nil
 }
 
 func post(ctx context.Context, r request, body []byte, identities string, out, errOut io.Writer) int {
-	allowed, err := identityAllowed(ctx, identities)
+	login, allowed, err := identityAllowed(ctx, identities)
 	if err != nil {
 		fmt.Fprintln(errOut, "gh-post: cannot read gh identity")
 		return exitEnvironment
@@ -186,6 +189,13 @@ func post(ctx context.Context, r request, body []byte, identities string, out, e
 		return exitEnvironment
 	}
 	defer log.Close()
+	if r.isPRStateChange() {
+		return r.changePRState(ctx, body, login, log, out, errOut)
+	}
+	return postContent(ctx, r, body, log, out, errOut)
+}
+
+func postContent(ctx context.Context, r request, body []byte, log, out, errOut io.Writer) int {
 	args, input, err := r.command(body)
 	if err != nil {
 		fmt.Fprintln(errOut, "gh-post: cannot encode body")
@@ -230,7 +240,7 @@ func (r *request) command(body []byte) ([]string, []byte, error) {
 		if err != nil {
 			return nil, nil, fmt.Errorf("encode body: %w", err)
 		}
-		return []string{apiCommand, "--method", method, endpoint, "--input", "-", jqFlag, ".html_url"}, input, nil
+		return []string{apiCommand, methodFlag, method, endpoint, "--input", "-", jqFlag, ".html_url"}, input, nil
 	}
 	args := strings.Fields(r.operation)
 	if r.operand != "" {
@@ -260,7 +270,11 @@ func (r *request) targetURL(ctx context.Context, output string) string {
 	// Review and release edits can be silent on success. Read the target URL.
 	kind := strings.Fields(r.operation)[0]
 	if kind == "issue" || kind == "pr" || kind == "release" {
-		data, err := gh(ctx, []string{kind, "view", r.operand, repoFlag, r.repo, "--json", "url", jqFlag, ".url"}, nil)
+		data, err := gh(
+			ctx,
+			[]string{kind, viewVerb, r.operand, repoFlag, r.repo, jsonFlag, "url", jqFlag, ".url"},
+			nil,
+		)
 		if err == nil && strings.HasPrefix(strings.TrimSpace(string(data)), prefix) {
 			return strings.TrimSpace(string(data))
 		}
