@@ -29,7 +29,7 @@ func setup(t *testing.T) string {
 	t.Setenv("HOME", dir)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(dir, "config"))
 	t.Setenv("XDG_STATE_HOME", filepath.Join(dir, "state"))
-	for _, key := range []string{"DEVTOOLS_PRIVATE_STRINGS", "DEVTOOLS_PRIVATE_STRINGS_REF", "DEVTOOLS_PRIVATE_STRINGS_TOKEN_COMMAND", "DEVTOOLS_SCAN_MODE", "DEVTOOLS_POST_IDENTITIES", "GH_TOKEN", "OP_SERVICE_ACCOUNT_TOKEN", "LOGIN", "IDENTITY_STATUS", "WRITE_STATUS", "SILENT", "PRIVATE_RESULT"} {
+	for _, key := range []string{"DEVTOOLS_PRIVATE_STRINGS", "DEVTOOLS_PRIVATE_STRINGS_REF", "DEVTOOLS_PRIVATE_STRINGS_TOKEN_COMMAND", "DEVTOOLS_SCAN_MODE", "DEVTOOLS_POST_IDENTITIES", "GH_TOKEN", "OP_SERVICE_ACCOUNT_TOKEN", "LOGIN", "IDENTITY_STATUS", "GRAPHQL_STATUS", "WRITE_STATUS", "SILENT", "PRIVATE_RESULT", "HEAD_OID", "HEAD_STATUS"} {
 		t.Setenv(key, "")
 		require.NoError(t, os.Unsetenv(key))
 	}
@@ -40,7 +40,8 @@ func setup(t *testing.T) string {
 printf '%s\n' "$*" >> "$CALLS"
 case "$*" in
 	'api user --jq .login') echo "${LOGIN:-agent}"; exit "${IDENTITY_STATUS:-0}" ;;
-	'api graphql '*) echo 'app[bot]'; exit 0 ;;
+	'api graphql '*) echo 'app[bot]'; exit "${GRAPHQL_STATUS:-1}" ;;
+	*'--json headRefOid'*) echo "${HEAD_OID:-0123456789abcdef0123456789abcdef01234567}"; exit "${HEAD_STATUS:-0}" ;;
 	*' view '*) echo 'https://github.com/owner/repo/pull/12'; exit 0 ;;
 esac
 cat > "$PAYLOAD"
@@ -94,6 +95,50 @@ func TestPostAndAudit(t *testing.T) {
 		_, err = time.Parse(time.RFC3339Nano, record.Time)
 		require.NoError(t, err)
 		require.NotContains(t, line, body)
+	}
+}
+
+func TestPostWithGHConfigDir(t *testing.T) {
+	for _, tt := range []struct {
+		name, login string
+		graphql     bool
+	}{
+		{"app", "app[bot]", true},
+		{"user", "agent", false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := setup(t)
+			configDir := filepath.Join(dir, "gh-config")
+			write(
+				t,
+				filepath.Join(configDir, "hosts.yml"),
+				"github.com:\n    user: "+tt.login+"\n    oauth_token: test-placeholder\n    git_protocol: https\n",
+			)
+			t.Setenv("GH_CONFIG_DIR", configDir)
+			write(t, filepath.Join(dir, "gh"), `#!/bin/sh
+printf '%s\n' "$*" >> "$CALLS"
+login=$(sed -n 's/^    user: //p' "$GH_CONFIG_DIR/hosts.yml")
+case "$*" in
+	'api user --jq .login')
+		[ "$login" != 'app[bot]' ] || exit 1
+		echo "$login"; exit 0 ;;
+	'api graphql '*) echo "$login"; exit 0 ;;
+esac
+cat > "$PAYLOAD"
+echo 'https://github.com/owner/repo/pull/12'
+`)
+			t.Setenv("DEVTOOLS_POST_IDENTITIES", tt.login)
+			code, out, errOut := run(t, "Public text\n", "pr", "comment", "12", "-R", "owner/repo")
+			require.Equal(t, 0, code, errOut)
+			require.Equal(t, "https://github.com/owner/repo/pull/12\n", out)
+			require.Empty(t, errOut)
+			calls, err := os.ReadFile(filepath.Join(dir, "calls"))
+			require.NoError(t, err)
+			require.Equal(t, tt.graphql, strings.Contains(string(calls), "api graphql"))
+			payload, err := os.ReadFile(filepath.Join(dir, "payload"))
+			require.NoError(t, err)
+			require.Equal(t, "Public text\n", string(payload))
+		})
 	}
 }
 
@@ -285,23 +330,36 @@ func TestSecretsOnlyAndApp(t *testing.T) {
 	t.Setenv("DEVTOOLS_POST_IDENTITIES", "app[bot]")
 	t.Setenv("GH_TOKEN", "test-placeholder")
 	t.Setenv("IDENTITY_STATUS", "1")
+	t.Setenv("GRAPHQL_STATUS", "0")
 	t.Setenv("SILENT", "1")
 	code, out, errOut := run(
 		t,
-		"/home/"+"example/report hidden-literal",
+		"Reviewed head: "+reviewHead+"\n/home/"+"example/report hidden-literal",
 		"pr",
 		"review",
 		"12",
 		"--approve",
+		"--commit", reviewHead,
 		"-R",
 		"owner/repo",
 	)
 	require.Equal(t, 0, code, errOut)
 	require.Contains(t, out, "/pull/12")
 	require.NoError(t, os.Remove(filepath.Join(dir, "payload")))
-	code, _, errOut = run(t, "op:"+"//vault/item", "pr", "review", "12", "--approve", "-R", "owner/repo")
+	code, _, errOut = run(
+		t,
+		"Reviewed head: "+reviewHead+"\nop:"+"//vault/item",
+		"pr",
+		"review",
+		"12",
+		"--approve",
+		"--commit",
+		reviewHead,
+		"-R",
+		"owner/repo",
+	)
 	require.Equal(t, 1, code)
-	require.Contains(t, errOut, "secret line 1")
+	require.Contains(t, errOut, "secret line 2")
 	require.NoFileExists(t, filepath.Join(dir, "payload"))
 }
 
@@ -382,4 +440,177 @@ func TestAuditLocations(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Join(dir, "alternate", "devtools", "gh-post.log"), 0o700))
 	_, err = openAudit()
 	require.Error(t, err)
+}
+
+const reviewHead = "0123456789abcdef0123456789abcdef01234567"
+
+func TestHelp(t *testing.T) {
+	setup(t)
+	code, out, errOut := run(t, "", "--help")
+	require.Equal(t, 0, code, errOut)
+	require.Empty(t, errOut)
+	for _, operation := range []string{
+		"issue create", "issue comment", "issue edit", "pr create", "pr edit",
+		"pr comment", "pr review", "comment edit", "review edit", "release create", "release edit",
+	} {
+		require.Contains(t, out, operation)
+		values, switches, ok := allowed(operation)
+		require.True(t, ok)
+		for flag := range values {
+			require.Contains(t, out, flag)
+		}
+		for flag := range switches {
+			require.Contains(t, out, flag)
+		}
+	}
+	for _, flag := range []string{"--help", "--check-deps", "--commit"} {
+		require.Contains(t, out, flag)
+	}
+}
+
+func TestCheckDeps(t *testing.T) {
+	for _, present := range [][]string{{"git", "gh"}, {"git"}, {"gh"}, {}} {
+		t.Run(strings.Join(present, "+"), func(t *testing.T) {
+			dir := setup(t)
+			bin := filepath.Join(dir, "bin")
+			require.NoError(t, os.Mkdir(bin, 0o700))
+			for _, name := range present {
+				write(t, filepath.Join(bin, name), "#!/bin/sh\nexit 99\n")
+			}
+			t.Setenv("PATH", bin)
+			code, _, errOut := run(t, "", "--check-deps")
+			want := 0
+			for _, name := range []string{"git", "gh"} {
+				if _, err := os.Stat(filepath.Join(bin, name)); os.IsNotExist(err) {
+					want = 2
+					require.Contains(t, errOut, name)
+				}
+			}
+			require.Equal(t, want, code, errOut)
+		})
+	}
+}
+
+func TestInformationalFlagsStayOffline(t *testing.T) {
+	for _, flag := range []string{"--help", "--check-deps"} {
+		t.Run(flag, func(t *testing.T) {
+			dir := setup(t)
+			write(t, filepath.Join(dir, "git"), "#!/bin/sh\necho called >> \"$CALLS\"\nexit 99\n")
+			t.Setenv("DEVTOOLS_SCAN_MODE", "invalid")
+			var out, errOut bytes.Buffer
+			code := Run(t.Context(), []string{flag}, brokenIO{}, &out, &errOut)
+			require.Equal(t, 0, code, errOut.String())
+			require.NoFileExists(t, filepath.Join(dir, "calls"))
+			require.NoFileExists(t, filepath.Join(dir, "payload"))
+			require.NoFileExists(t, filepath.Join(dir, "state", "devtools", "gh-post.log"))
+		})
+	}
+}
+
+func TestReviewPinnedHead(t *testing.T) {
+	for _, event := range []struct{ flag, value string }{
+		{"--approve", "APPROVE"}, {"--comment", "COMMENT"}, {"--request-changes", "REQUEST_CHANGES"},
+	} {
+		t.Run(event.flag, func(t *testing.T) {
+			dir := setup(t)
+			body := "Reviewed head: " + reviewHead + "\n\nPublic review \"quoted\"\n"
+			code, _, errOut := run(
+				t,
+				body,
+				"pr",
+				"review",
+				"12",
+				"-R",
+				"owner/repo",
+				event.flag,
+				"--commit",
+				reviewHead,
+			)
+			require.Equal(t, 0, code, errOut)
+			calls, err := os.ReadFile(filepath.Join(dir, "calls"))
+			require.NoError(t, err)
+			require.Contains(t, string(calls), "pr view 12 --repo owner/repo --json headRefOid --jq .headRefOid\n")
+			require.True(
+				t,
+				strings.HasSuffix(
+					string(calls),
+					"api --method POST repos/owner/repo/pulls/12/reviews --input - --jq .html_url\n",
+				),
+			)
+			payload, err := os.ReadFile(filepath.Join(dir, "payload"))
+			require.NoError(t, err)
+			var decoded map[string]string
+			require.NoError(t, json.Unmarshal(payload, &decoded))
+			require.Equal(t, map[string]string{"commit_id": reviewHead, "event": event.value, "body": body}, decoded)
+		})
+	}
+}
+
+func TestReviewHeadRefusal(t *testing.T) {
+	for _, tt := range []struct {
+		name, head, status string
+		code               int
+	}{
+		{"changed", strings.Repeat("a", 40), "0", 1},
+		{"read failed", reviewHead, "1", 2},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := setup(t)
+			t.Setenv("HEAD_OID", tt.head)
+			t.Setenv("HEAD_STATUS", tt.status)
+			code, out, errOut := run(
+				t,
+				"Reviewed head: "+reviewHead+"\n",
+				"pr",
+				"review",
+				"12",
+				"-R",
+				"owner/repo",
+				"--approve",
+				"--commit",
+				reviewHead,
+			)
+			require.Equal(t, tt.code, code, errOut)
+			require.Empty(t, out)
+			require.NotEmpty(t, errOut)
+			require.NoFileExists(t, filepath.Join(dir, "payload"))
+		})
+	}
+}
+
+func TestReviewFirstLine(t *testing.T) {
+	for _, tt := range []struct {
+		name, body string
+		code       int
+	}{
+		{"plain", "Reviewed head: " + reviewHead + "\nReview", 0},
+		{"backticks", "Reviewed head: `" + reviewHead + "`\r\nReview", 0},
+		{"missing", "Public review", 1},
+		{"wrong prefix case", "reviewed head: " + reviewHead, 1},
+		{"second line", "Review\nReviewed head: " + reviewHead, 1},
+		{"mismatch", "Reviewed head: " + strings.Repeat("a", 40), 1},
+		{"unclosed backtick", "Reviewed head: `" + reviewHead, 1},
+		{"suffix", "Reviewed head: " + reviewHead + " extra", 1},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := setup(t)
+			code, _, errOut := run(
+				t,
+				tt.body,
+				"pr",
+				"review",
+				"12",
+				"-R",
+				"owner/repo",
+				"--approve",
+				"--commit",
+				reviewHead,
+			)
+			require.Equal(t, tt.code, code, errOut)
+			if tt.code != 0 {
+				require.NoFileExists(t, filepath.Join(dir, "calls"))
+				require.NoFileExists(t, filepath.Join(dir, "payload"))
+			}
+		})
+	}
 }

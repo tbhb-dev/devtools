@@ -12,7 +12,7 @@ setup() {
 
 # Extract task bodies without launching mise or installing its toolchain.
 task_body() {
-	python3 - "$ROOT/$1" "$2" <<'PY'
+	uv run --project "$ROOT" --no-sync python - "$ROOT/$1" "$2" <<'PY'
 import sys, tomllib
 with open(sys.argv[1], 'rb') as source:
     data = tomllib.load(source)
@@ -111,7 +111,7 @@ stub() {
 
 # Isolate the installer functions so probes never download or install mise.
 bootstrap_function() {
-	python3 - "$ROOT/tools/mise-bootstrap" "$1" <<'PY'
+	uv run --project "$ROOT" --no-sync python - "$ROOT/tools/mise-bootstrap" "$1" <<'PY'
 import sys
 text = open(sys.argv[1]).read()
 start = text.index('        ' + sys.argv[2] + '() {')

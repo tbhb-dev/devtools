@@ -60,10 +60,10 @@ gate() {
 }
 
 @test "ignored gate definitions and hooks invalidate passes (#161)" {
-  printf 'mise.toml\n.config/\n.devtools/\n.agents/\n' >>.gitignore
+  printf 'mise.toml\n.config/\n.devtools/\n.agents/\nprek.toml\n.pre-commit-config.yaml\n.pre-commit-hooks.yaml\n' >>.gitignore
   git add -- .gitignore
   git commit --quiet -m ignores
-  for path in mise.toml .config/mise/conf.d/tools.toml .devtools/tasks/test .git/hooks/pre-commit .agents/agent-skills.conf; do
+  for path in mise.toml .config/mise/conf.d/tools.toml .devtools/tasks/test .git/hooks/pre-commit .agents/agent-skills.conf prek.toml .config/prek.toml .pre-commit-config.yaml .pre-commit-hooks.yaml; do
     gate
     parent=$(dirname "$path")
     mkdir -p "$parent"
@@ -102,8 +102,9 @@ gate() {
   [ "$(cat "$GATE_LOG")" = $'test\ntest\ntest\ntest' ]
 }
 
-@test "expired passes rerun (#161)" {
+@test "old test and lint passes reuse unchanged keys (#555)" {
   gate
+  gate lint
   python3 - <<'PY'
 import json
 from pathlib import Path
@@ -112,8 +113,12 @@ for path in Path('.git/agent-skills/gates').glob('*.json'):
     record['passed'] -= 3601
     path.write_text(json.dumps(record))
 PY
-  gate
-  [ "$(cat "$GATE_LOG")" = $'test\ntest' ]
+  for name in test lint; do
+    run gate "$name"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"mise run $name passed at"*"(reused)"* ]]
+  done
+  [ "$(cat "$GATE_LOG")" = $'test\nlint' ]
 }
 
 @test "a gate that dirties the tree cannot record a pass (#161)" {

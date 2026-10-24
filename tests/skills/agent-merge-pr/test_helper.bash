@@ -16,6 +16,7 @@ agent_setup() {
   cat >.agents/agent-skills.conf <<'CONF'
 lint_squash_cmd = mise run lint-squash-msg
 owner_paths = ^owned/
+constitutional_paths = ^constitution[.]txt$
 golden_paths = ^golden/
 loosening_markers = noqa|nolint|shellcheck disable|vale (off|disable)
 gate_config_paths = (^|/)(lint|hooks)\.(ya?ml|toml)$

@@ -53,10 +53,6 @@ func TestCommands(t *testing.T) {
 			[]string{"pr", "comment", "12", "--repo", "owner/repo", "--edit-last", "--body-file", "-"},
 		},
 		{
-			[]string{"pr", "review", "12", "--approve"},
-			[]string{"pr", "review", "12", "--repo", "owner/repo", "--approve", "--body-file", "-"},
-		},
-		{
 			[]string{"release", "create", "v1", "--title", "name", "--verify-tag"},
 			[]string{
 				"release",
@@ -178,4 +174,21 @@ func TestRejectArguments(t *testing.T) {
 			func(t *testing.T) { t.Parallel(); _, err := parse(args); require.ErrorIs(t, err, errUsage) },
 		)
 	}
+}
+
+func TestReviewCommitArguments(t *testing.T) {
+	t.Parallel()
+	for _, commit := range []string{"", "abc", strings.Repeat("g", 40), strings.Repeat("a", 39), strings.Repeat("a", 41)} {
+		t.Run(commit, func(t *testing.T) {
+			t.Parallel()
+			args := []string{"pr", "review", "12", "--approve"}
+			if commit != "" {
+				args = append(args, "--commit", commit)
+			}
+			_, err := parse(args)
+			require.ErrorIs(t, err, errUsage)
+		})
+	}
+	_, err := parse([]string{"pr", "review", "12", "--approve", "--commit", reviewHead, "--commit", reviewHead})
+	require.ErrorIs(t, err, errUsage)
 }

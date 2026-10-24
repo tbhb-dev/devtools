@@ -27,6 +27,9 @@ var errEnvironment = errors.New("cannot resolve repository, read input, or execu
 
 // Run posts only after all text has passed the scan and identity guard.
 func Run(ctx context.Context, args []string, in io.Reader, out, errOut io.Writer) int {
+	if code, handled := informational(args, out, errOut); handled {
+		return code
+	}
 	r, err := parse(args)
 	if err != nil {
 		fmt.Fprintln(errOut, "gh-post:", errUsage)
@@ -42,6 +45,10 @@ func Run(ctx context.Context, args []string, in io.Reader, out, errOut io.Writer
 	if err != nil {
 		fmt.Fprintln(errOut, "gh-post: cannot read body")
 		return exitEnvironment
+	}
+	if r.operation == prReview && !r.matchesReviewBody(body) {
+		fmt.Fprintln(errOut, "gh-post: first line must be Reviewed head: <sha> matching --commit")
+		return 1
 	}
 	config, err := settings(repo)
 	if err != nil {
@@ -149,7 +156,7 @@ func identityAllowed(ctx context.Context, allowlist string) (bool, error) {
 		return false, nil
 	}
 	data, err := gh(ctx, []string{apiCommand, "user", jqFlag, ".login"}, nil)
-	if err != nil && os.Getenv("GH_TOKEN") != "" {
+	if err != nil {
 		data, err = gh(
 			ctx,
 			[]string{apiCommand, "graphql", "-f", "query={viewer{login}}", jqFlag, ".data.viewer.login"},
@@ -184,6 +191,11 @@ func post(ctx context.Context, r request, body []byte, identities string, out, e
 		fmt.Fprintln(errOut, "gh-post: cannot encode body")
 		return exitEnvironment
 	}
+	if r.operation == prReview {
+		if code := r.checkReviewHead(ctx, errOut); code != 0 {
+			return code
+		}
+	}
 	data, err := gh(ctx, args, input)
 	if err != nil {
 		fmt.Fprintln(errOut, "gh-post: gh write failed; check GitHub before retrying")
@@ -199,6 +211,9 @@ func post(ctx context.Context, r request, body []byte, identities string, out, e
 }
 
 func (r *request) command(body []byte) ([]string, []byte, error) {
+	if r.operation == prReview {
+		return r.reviewCommand(body)
+	}
 	if r.operation == commentEdit || r.operation == reviewEdit {
 		method := "PATCH"
 		endpoint := "repos/" + r.repo + "/issues/comments/" + r.operand
@@ -221,7 +236,7 @@ func (r *request) command(body []byte) ([]string, []byte, error) {
 	if r.operand != "" {
 		args = append(args, r.operand)
 	}
-	args = append(args, "--repo", r.repo)
+	args = append(args, repoFlag, r.repo)
 	args = append(args, r.flags...)
 	// Metadata-only PR edits must preserve the existing description. An
 	// explicit body file still allows callers to clear it deliberately.
@@ -245,7 +260,7 @@ func (r *request) targetURL(ctx context.Context, output string) string {
 	// Review and release edits can be silent on success. Read the target URL.
 	kind := strings.Fields(r.operation)[0]
 	if kind == "issue" || kind == "pr" || kind == "release" {
-		data, err := gh(ctx, []string{kind, "view", r.operand, "--repo", r.repo, "--json", "url", jqFlag, ".url"}, nil)
+		data, err := gh(ctx, []string{kind, "view", r.operand, repoFlag, r.repo, "--json", "url", jqFlag, ".url"}, nil)
 		if err == nil && strings.HasPrefix(strings.TrimSpace(string(data)), prefix) {
 			return strings.TrimSpace(string(data))
 		}

@@ -18,7 +18,7 @@
 # Usage:
 #   check-leaks.sh                 scan the working tree: tracked files and
 #                                  untracked files git does not ignore
-#   check-leaks.sh --staged        scan the index blobs of staged files
+#   check-leaks.sh --staged        compare staged blobs against the commit base
 #   check-leaks.sh --range A..B    scan every object the range adds
 #   check-leaks.sh --pre-push [REMOTE [URL]]
 #                                  scan what a push sends. Reads the
@@ -54,7 +54,7 @@
 # typed into GitHub.
 #
 # Exit status: 0 clean, 1 findings, 2 misuse, or a git or read failure.
-# cspell:ignore objs toread gsub nwant ngot lref loid rref roid getline tolower RSTART RLENGTH ACMRT quotepath gitlinks sprintf objecttype objectname
+# cspell:ignore objs toread gsub nwant ngot lref loid rref roid getline tolower RSTART RLENGTH ACMRT ACMRTU SUBSEP quotepath gitlinks sprintf objecttype objectname
 set -euo pipefail
 export LC_ALL=C
 
@@ -66,17 +66,7 @@ exec 3>&2
 # Bash 3.2 applies errexit to `command` even when the caller tests its status.
 git() { env git "$@" 2>/dev/null; }
 
-# Repository-owned ERE allow list: patterns only, never private literals.
-# Read relative to the repository root in every mode.
 top=$(git rev-parse --show-toplevel || true)
-pattern_exempt='^$'
-if [[ -n $top && -f $top/.leak-allow ]]; then
-  pattern_exempt=$(awk '!/^#/ && NF { printf "%s(%s)", sep, $0; sep="|" }' "$top/.leak-allow")
-  [[ -n $pattern_exempt ]] || pattern_exempt='^$'
-fi
-patterns=/dev/null
-if [[ -n $top && -f $top/.leak-patterns ]]; then patterns=$top/.leak-patterns; fi
-
 finished=
 die() {
   echo "check-leaks: $*" >&2
@@ -119,9 +109,10 @@ add_needle() {
 
 # Every exported variable ending in _PRIVATE_STRINGS is a comma-separated
 # list of private literals. mise loads these from gitignored mise.local.toml.
-for name in $(compgen -e | LC_ALL=C sort); do
+names=$(compgen -e | LC_ALL=C sort)
+for name in $names; do
   [[ $name == *_PRIVATE_STRINGS ]] || continue
-  IFS=',' read -r -a entries <<<"${!name}"
+  IFS=',' read -r -a entries < <(printf '%s\n' "${!name}")
   index=0
   for entry in "${entries[@]+"${entries[@]}"}"; do
     index=$((index + 1))
@@ -131,38 +122,11 @@ for name in $(compgen -e | LC_ALL=C sort); do
   done
 done
 
-if ((loaded == 0)); then
-  msg="no private values loaded (*_PRIVATE_STRINGS unset); only the publishable patterns are checked, so a host name, login or path outside those shapes passes"
-  # On a machine that has the settings file, the values just didn't reach
-  # this process. Say so, because that is a local setup mistake, not CI.
-  if [[ -n $top && -f $top/mise.local.toml ]]; then
-    msg="$msg. mise.local.toml exists here but its values are not in the environment; run the check through mise (mise run devtools:lint-leaks) so it can read them"
-  fi
-  echo "check-leaks: $msg" >&2
-  if [[ ${GITHUB_ACTIONS-} == true ]]; then
-    echo "::notice title=leak check::$msg"
-  fi
-
-fi
-
-# Validate EREs before producers use the allow list. awk diagnostics can
-# repeat a malformed expression, so replace them with a fixed error.
-if ! PATTERN_EXEMPT=$pattern_exempt PATTERNS=$patterns awk '
-  BEGIN {
-    unused = ("" ~ ENVIRON["PATTERN_EXEMPT"])
-    while ((r = (getline line < ENVIRON["PATTERNS"])) > 0) {
-      if (line !~ /^#/ && line != "") unused = ("" ~ tolower(line))
-    }
-    exit r < 0 ? 1 : 0
-  }
-' >/dev/null 2>"$tmp/pattern-error"; then
-  die "could not read valid pattern configuration; the result is incomplete"
-fi
-
 # scan reads the record stream the producers write and prints findings.
 # A record starting with \001 opens a file (the rest is its label), one
 # starting with \002 is a path to scan as text of its own, and every other
-# record is "<line number or "binary"><TAB><text>".
+# record is "<line number or "binary"><TAB><text>". Staged streams use
+# \003 and \004 to switch between base budgets and index findings.
 scan() {
   PATTERN_EXEMPT=$pattern_exempt NEEDLES=$needles PATTERNS=$patterns awk '
     BEGIN {
@@ -218,11 +182,22 @@ scan() {
       }
       return 0
     }
-    function check(low, skip_patterns,    i) {
+    function check(low, skip_patterns,    i, rest, at, key) {
       for (i = 1; i <= nn; i++) {
-        if (index(low, needle[i])) report("private literal " name[i])
+        if (quiet || !phase) {
+          if (index(low, needle[i])) report("private literal " name[i])
+          continue
+        }
+        key = full SUBSEP i
+        rest = low
+        while ((at = index(rest, needle[i])) > 0) {
+          if (phase == "base") budget[key]++
+          else if (budget[key] > 0) budget[key]--
+          else report("private literal " name[i])
+          rest = substr(rest, at + length(needle[i]))
+        }
       }
-      if (skip_patterns) return
+      if (skip_patterns || (!quiet && phase == "base")) return
       if (index(low, op_ref)) report("pattern: password-manager reference")
       if (foreign_ts(low)) report("pattern: tailnet host name")
       if (low ~ re_tailnet) report("pattern: tailnet address")
@@ -243,6 +218,8 @@ scan() {
     # With the private values unread, say nothing: any finding or location
     # would come from an incomplete set, and the END rule reports the failure.
     unreadable { next }
+    /^\003/ { phase = "base"; next }
+    /^\004/ { phase = "index"; next }
     /^\001/ { full = substr($0, 2); label = locate(full); skip = (full ~ exempt); next }
     /^\002/ {
       full = substr($0, 2)
@@ -308,7 +285,7 @@ emit_file() {
 emit_tree() {
   local f tree_skip
   load_leak_skip
-  git ls-files -z --cached --others --exclude-standard >"$tmp/list"
+  git -c diff.ignoreSubmodules=none ls-files -z --cached --others --exclude-standard >"$tmp/list"
   while IFS= read -r -d '' f; do
     [[ $f =~ $tree_skip ]] && continue
     if [[ -f $f && ! -L $f ]]; then
@@ -322,38 +299,39 @@ emit_tree() {
   done <"$tmp/list"
 }
 
-# emit_raw FILE MODE: the paths of a `diff --raw -z -M` listing, with both
-# sides of a rename or copy. With MODE content it also emits each new blob
-# whole; with any other MODE, only the paths.
-emit_raw() {
-  local meta st p1 p2 p
+emit_staged() {
+  local meta st old_path new_path old_label new_label
   local -a m
+  # The raw listing pins index blob IDs and rename pairs for the scan.
+  git -c diff.ignoreSubmodules=none diff --ignore-submodules=none --cached --no-ext-diff --raw --no-abbrev -z -M --diff-filter=ACMRTU "$base_tree" >"$tmp/raw"
   while IFS= read -r -d '' meta; do
     read -r -a m <<<"${meta#:}"
     st=${m[4]}
-    IFS= read -r -d '' p1
-    p=$p1
-    if [[ $st == R* || $st == C* ]]; then
-      emit_path "$p1"
-      IFS= read -r -d '' p2
-      p=$p2
+    [[ $st != U ]] || die "could not read an unmerged index"
+    IFS= read -r -d '' old_path
+    new_path=$old_path
+    if [[ $st == R* || $st == C* ]]; then IFS= read -r -d '' new_path; fi
+    old_label=$(esc "$old_path")
+    new_label=$(esc "$new_path")
+    printf '\003\n'
+    if [[ ! ${m[2]} =~ ^0+$ ]]; then
+      # Attribute renamed base content to the destination path. Paths
+      # themselves are scanned using their original names below.
+      if [[ ${m[0]} != 160000 ]]; then
+        git cat-file blob "${m[2]}" >"$tmp/blob"
+        printf '\001%s\n' "$new_label"
+        emit_body "$tmp/blob"
+      fi
+      printf '\001%s\npath\t/%s\n' "$new_label" "$old_label"
     fi
+    printf '\004\n'
     if [[ ${m[1]} == 160000 ]]; then
-      emit_path "$p"
-      continue
-    fi
-    if [[ $2 == content ]]; then
-      git cat-file blob "${m[3]}" >"$tmp/blob"
-      emit_file "$p" "$tmp/blob"
+      emit_path "$new_path"
     else
-      emit_path "$p"
+      git cat-file blob "${m[3]}" >"$tmp/blob"
+      emit_file "$new_path" "$tmp/blob"
     fi
-  done <"$1"
-}
-
-emit_staged() {
-  git diff --cached --raw -z -M --diff-filter=ACMRT >"$tmp/raw"
-  emit_raw "$tmp/raw" content
+  done <"$tmp/raw"
 }
 
 # emit_objects: the object ids in $tmp/objs, one "oid[ path]" per line as
@@ -542,12 +520,76 @@ while (($#)); do
   shift
 done
 
-script_dir=$(dirname "${BASH_SOURCE[0]}")
+script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=.devtools/scripts/leak-skip.sh
 if [[ $mode == tree ]]; then source "$script_dir/leak-skip.sh"; fi
 if [[ $mode != files ]]; then
   top=$(git rev-parse --show-toplevel)
   cd "$top"
+fi
+
+# Staged configuration is pinned to the base tree, never the checkout or
+# index under review. Both sides use the exported private literals loaded
+# above. Other modes retain their checkout configuration.
+pattern_exempt='^$'
+patterns=/dev/null
+if [[ $mode == staged ]]; then
+  if [[ -n ${DEVTOOLS_LEAK_BASE-} ]]; then
+    base_tree=$(git rev-parse --verify "${DEVTOOLS_LEAK_BASE}^{tree}")
+  elif git rev-parse --verify HEAD >"$tmp/head"; then
+    base_tree=$(git rev-parse --verify 'HEAD^{tree}')
+  else
+    # Only a genuinely unborn branch may fall back to the empty tree.
+    ref=$(git symbolic-ref -q HEAD)
+    status=0
+    git show-ref --verify --quiet "$ref" || status=$?
+    [[ $status == 1 ]] || die "could not read the base"
+    base_tree=$(git hash-object -w -t tree --stdin </dev/null)
+  fi
+  git ls-tree -z "$base_tree" -- .leak-allow .leak-patterns >"$tmp/config-list"
+  while IFS= read -r -d '' config; do
+    meta=${config%%$'\t'*}
+    path=${config#*$'\t'}
+    read -r permissions kind oid <<<"$meta"
+    [[ $kind == blob && $permissions != 120000 ]] || die "could not read valid pattern configuration"
+    git cat-file blob "$oid" >"$tmp/$path"
+  done <"$tmp/config-list"
+  config_root=$tmp
+else
+  config_root=$top
+fi
+if [[ -n $config_root && -f $config_root/.leak-allow ]]; then
+  pattern_exempt=$(awk '!/^#/ && NF { printf "%s(%s)", sep, $0; sep="|" }' "$config_root/.leak-allow")
+  [[ -n $pattern_exempt ]] || pattern_exempt='^$'
+fi
+if [[ -n $config_root && -f $config_root/.leak-patterns ]]; then patterns=$config_root/.leak-patterns; fi
+
+if ((loaded == 0)); then
+  msg="no private values loaded (*_PRIVATE_STRINGS unset); only the publishable patterns are checked, so a host name, login or path outside those shapes passes"
+  # On a machine that has the settings file, the values just didn't reach
+  # this process. Say so, because that is a local setup mistake, not CI.
+  if [[ -n $top && -f $top/mise.local.toml ]]; then
+    msg="$msg. mise.local.toml exists here but its values are not in the environment; run the check through mise (mise run devtools:lint-leaks) so it can read them"
+  fi
+  echo "check-leaks: $msg" >&2
+  if [[ ${GITHUB_ACTIONS-} == true ]]; then
+    echo "::notice title=leak check::$msg"
+  fi
+
+fi
+
+# Validate EREs before producers use the allow list. awk diagnostics can
+# repeat a malformed expression, so replace them with a fixed error.
+if ! PATTERN_EXEMPT=$pattern_exempt PATTERNS=$patterns awk '
+  BEGIN {
+    unused = ("" ~ ENVIRON["PATTERN_EXEMPT"])
+    while ((r = (getline line < ENVIRON["PATTERNS"])) > 0) {
+      if (line !~ /^#/ && line != "") unused = ("" ~ tolower(line))
+    }
+    exit r < 0 ? 1 : 0
+  }
+' >/dev/null 2>"$tmp/pattern-error"; then
+  die "could not read valid pattern configuration; the result is incomplete"
 fi
 
 case $mode in

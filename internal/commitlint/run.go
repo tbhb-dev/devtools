@@ -100,7 +100,9 @@ func checkMessageCommand(
 		fmt.Fprintf(errOut, "commit-lint: %v\n", err)
 		return exitInputError
 	}
-	findings := CheckWithIdentities(Parse(string(data)), config, options.rules, identities)
+	message := Parse(string(data))
+	message.merge = pendingMerge(dir)
+	findings := CheckWithIdentities(message, config, options.rules, identities)
 	for _, finding := range findings {
 		fmt.Fprintln(errOut, finding)
 	}

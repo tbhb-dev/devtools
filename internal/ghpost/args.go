@@ -21,12 +21,15 @@ type request struct {
 	operand   string
 	reviewID  string
 	kind      string
+	commit    string
 	flags     []string
 	text      []string
 }
 
 const (
 	bodyFileFlag   = "--body-file"
+	repoFlag       = "--repo"
+	prReview       = "pr review"
 	issueCreate    = "issue create"
 	prCreate       = "pr create"
 	commentEdit    = "comment edit"
@@ -94,7 +97,7 @@ func (r *request) addValue(key, value string) error {
 		return errUsage
 	}
 	switch key {
-	case "-R", "--repo":
+	case "-R", repoFlag:
 		if r.repo != "" {
 			return errUsage
 		}
@@ -104,6 +107,11 @@ func (r *request) addValue(key, value string) error {
 			return errUsage
 		}
 		r.bodyFile = value
+	case "--commit":
+		if r.commit != "" || !regexp.MustCompile(`^[0-9a-fA-F]{40}$`).MatchString(value) {
+			return errUsage
+		}
+		r.commit = strings.ToLower(value)
 	case "--kind":
 		r.kind = value
 	default:
@@ -138,7 +146,8 @@ func allowed(operation string) (map[string]bool, map[string]bool, bool) {
 			)...,
 		)
 		switches = []string{"--remove-milestone"}
-	case "pr review":
+	case prReview:
+		values = append(values, "--commit")
 		switches = []string{"--approve", "--comment", "--request-changes"}
 	case commentEdit:
 		values = append(values, "--kind")
@@ -169,7 +178,7 @@ func (r *request) validate() error {
 	if r.operation == commentEdit && r.kind != "issue" && r.kind != "review" {
 		return errUsage
 	}
-	if r.operation == "pr review" && len(r.flags) != 1 {
+	if r.operation == prReview && (len(r.flags) != 1 || r.commit == "") {
 		return errUsage
 	}
 	if r.operation == issueCreate || r.operation == prCreate {

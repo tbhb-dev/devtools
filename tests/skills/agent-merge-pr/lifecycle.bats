@@ -102,7 +102,8 @@ fi
 READY
   chmod +x "$BATS_TEST_TMPDIR/ready"
   printf '\nmerge_ready_cmd = %s\n' "$BATS_TEST_TMPDIR/ready" >>.agents/agent-skills.conf
-  git add -- .agents/agent-skills.conf
+  echo protected >constitution.txt
+  git add -- .agents/agent-skills.conf constitution.txt
   git commit --quiet -m 'test: readiness drift'
   HEAD_OID=$(git rev-parse HEAD)
   git push --quiet origin topic

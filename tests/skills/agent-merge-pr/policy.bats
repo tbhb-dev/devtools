@@ -5,6 +5,30 @@ setup() {
   agent_setup
 }
 
+@test "devtools configured owner-review label stops unattended merging" {
+  local label config
+  run bash -c 'source "$1/lib.sh"; cd "$2"; dt_repo_conf owner_review_label owner-review' _ "$SCRIPTS" "$ROOT"
+  [ "$status" -eq 0 ]
+  label=$output
+  config=$(cat .agents/agent-skills.conf)
+  change .agents/agent-skills.conf "$config"$'\n'"owner_review_label = $label"
+  approve_owner
+  bash "$AGENT/review.sh" 7
+  grant merge
+
+  pr '.labels=[{name:"merge:owner-review"}]'
+  run bash "$AGENT/merge.sh" 7
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"needs-owner: the PR has the owner-review label"* ]]
+  [ ! -e "$GH_FIXTURES/merged" ]
+
+  [ "$label" = merge:owner-review ]
+  pr '.labels=[]'
+  run bash "$AGENT/merge.sh" 7
+  [ "$status" -eq 0 ]
+  [ -f "$GH_FIXTURES/merged" ]
+}
+
 @test "App review uses GraphQL author type and login" {
   export DEVTOOLS_REQUIRED_REVIEWER=review-app DEVTOOLS_REQUIRED_REVIEWER_TYPE=Bot
   pr '.reviews[0].author={__typename:"Bot",login:"review-app"}'
@@ -266,6 +290,40 @@ LOCK
   run uv run --quiet --script "$POLICY" inspect "$BASE_OID" "$HEAD_OID" <<<'{}'
   [ "$status" -eq 1 ]
   [[ "$output" == *"Policy pattern golden_paths must not be empty"* ]]
+}
+
+@test "AC6 unset constitutional_paths reads as ^$ while a present empty key fails" {
+  git checkout --quiet main
+  sed '/^constitutional_paths = /d' .agents/agent-skills.conf >.agents/agent-skills.conf.tmp
+  mv .agents/agent-skills.conf.tmp .agents/agent-skills.conf
+  git add -- .agents/agent-skills.conf
+  git commit --quiet -m 'test: omit constitutional_paths'
+  BASE_OID=$(git rev-parse HEAD)
+  base_at "$BASE_OID"
+  git checkout --quiet topic
+  git rebase --quiet main
+  change constitution.txt baseline
+  run inspect_policy
+  [ "$status" -eq 0 ]
+  jq -e '.findings == []' <<<"$output"
+
+  git checkout --quiet main
+  printf 'constitutional_paths =\n' >>.agents/agent-skills.conf
+  git add -- .agents/agent-skills.conf
+  git commit --quiet -m 'test: empty constitutional_paths'
+  BASE_OID=$(git rev-parse HEAD)
+  base_at "$BASE_OID"
+  git checkout --quiet topic
+  git rebase --quiet main
+  HEAD_OID=$(git rev-parse HEAD)
+  git push --quiet --force origin main topic
+  pr ".headRefOid=\"$HEAD_OID\" | .reviews[0].commit.oid=\"$HEAD_OID\""
+  run inspect_policy
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"merge policy unreadable: Policy pattern constitutional_paths must not be empty"* ]] || return 1
+  run bash "$AGENT/preflight.sh" 7
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"merge policy unreadable: Policy pattern constitutional_paths must not be empty"* ]]
 }
 
 @test "top-level policy refusals include the exception message" {

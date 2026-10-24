@@ -117,7 +117,7 @@ TOML
 
 @test "mutation config bounds Gremlins to a four-CPU runner" {
 	for config in "$ROOT/.gremlins.yaml" "$ROOT/.devtools/config/go/.gremlins.yaml"; do
-		run python3 - "$config" <<'PY'
+		run uv run --project "$ROOT" --no-sync python - "$config" <<'PY'
 import sys
 
 import yaml

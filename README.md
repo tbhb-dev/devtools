@@ -7,10 +7,10 @@ Shared agent tooling for tbhb repositories. The repo provides Go command-line to
 Repositories across tbhb install the shared primitives with the [APM CLI](https://microsoft.github.io/apm/quickstart/):
 
 ```bash
-apm install tbhb-dev/devtools#v0.14.2
+apm install tbhb-dev/devtools#v0.19.0
 ```
 
-A consumer can also select a sub-package, such as `apm install tbhb-dev/devtools/packages/agents/claude#v0.14.2`. The pin tasks support both forms.
+A consumer can also select a sub-package, such as `apm install tbhb-dev/devtools/packages/agents/claude#v0.19.0`. The pin tasks support both forms.
 
 The package deploys these primitives from sub-packages under [`packages/agents/`](packages/agents/): `claude` contains the skills below plus the `guard-markdown` hook declaration, `codex` contains the Codex skill variants, and `common` contains the harness-neutral `worktree-wip` instructions.
 
@@ -21,7 +21,7 @@ The package deploys these primitives from sub-packages under [`packages/agents/`
 | `worktree-wip` | instructions | Stash and work-in-progress rules for repos that run more than one agent worktree session. |
 | `guard-markdown` | hook | `PreToolUse` gate on `Write` and `Edit` that refuses Markdown whose paragraphs span more than one line. |
 
-Pinning the bare repo (`apm install tbhb-dev/devtools#v0.14.2`) resolves the root workspace manifest, whose dependencies on the four sub-packages under `packages/agents/` are local paths that a remote consumer's `apm` resolves transitively, filtering each sub-package by its own targets. For a claude-only consumer, the bare pin gives exactly what the `claude` and `common` pins deliver. APM filters the other packages by their declared targets. This repo installs its own package the way a consumer does: `apm install` deploys the primitives into the local harness layout, and CI rejects drift between the `packages/agents/*/.apm/` sources and the deployed copies.
+Pinning the bare repo (`apm install tbhb-dev/devtools#v0.19.0`) resolves the root workspace manifest, whose dependencies on the four sub-packages under `packages/agents/` are local paths that a remote consumer's `apm` resolves transitively, filtering each sub-package by its own targets. For a claude-only consumer, the bare pin gives exactly what the `claude` and `common` pins deliver. APM filters the other packages by their declared targets. This repo installs its own package the way a consumer does: `apm install` deploys the primitives into the local harness layout, and CI rejects drift between the `packages/agents/*/.apm/` sources and the deployed copies.
 
 ## Checks
 
@@ -38,7 +38,7 @@ A check is one rule enforced everywhere it matters. Because all three callers ru
 ```yaml
 repos:
   - repo: https://github.com/tbhb-dev/devtools
-    rev: v0.14.2
+    rev: v0.19.0
     hooks:
       - id: guard-markdown
 ```
@@ -54,6 +54,7 @@ Pass `--fix` to collapse paragraphs someone already wrapped.
 Each tool under [`cmd/`](cmd/) builds as a standalone binary:
 
 - [`agentrepo`](docs/checks-evaluator.md) evaluates saved GitHub checks. This binary owns repository transactions, signing, and delegation as they move into Go.
+- `agy-otel hook <event>` silently records Antigravity hook events in a local spool.
 - `agenthooks` manages shared agent hooks.
 - `agentstore` stores shared agent state.
 - `agentcontext` assembles shared agent context.
@@ -67,6 +68,15 @@ Install one directly:
 ```bash
 go install github.com/tbhb-dev/devtools/cmd/agenthooks@latest
 ```
+
+The next minor release includes `agy-otel`. After that tag exists, pin the recorder through mise:
+
+```toml
+[tools]
+"go:github.com/tbhb-dev/devtools/cmd/agy-otel" = "v0.15.0"
+```
+
+The current v0.14.2 release doesn't contain this command. Hook registration remains an operator task. The recorder stores events under `$XDG_STATE_HOME/agy-otel`, falling back to `~/.local/state/agy-otel`.
 
 Or build everything from a checkout:
 
@@ -152,6 +162,8 @@ Supply `.vale.ini`, `.cspell.jsonc` and the Markdown lint config. Scope Vale to 
 Declare agent dependencies in `apm.yml`. The pin tasks accept the bare `tbhb-dev/devtools#vX.Y.Z` reference and the published `packages/agents/common`, `packages/agents/claude`, `packages/agents/codex` and `packages/agents/agy` forms, including quoted YAML strings. An unrecognized package or a reference without a version fails the update before files change. All declared references and the guard tool must specify the same release.
 
 Run `mise run devtools:apm-sync` for the first deployment and after changing agent dependencies. It clears `.hooks` in Claude and Codex settings, `.apm` in the shared agent hook file and the generated hook manifests, then runs `apm install` and audits the result. Settings outside those keys remain unchanged. Those hook keys belong to APM. Keep custom hooks in package declarations so reconciliation can restore them. A failed install or audit fails the task.
+
+The commit and rebase skills use rebase to bring branches current. Consumers that bring pull request branches current by merging can keep Git's generated subjects: `Merge branch '<b>'[ of <url>][ into <b>]`, `Merge remote-tracking branch '<r>'[ into <b>]`, and `Merge commit '<sha>'[ into <b>]`. The `shape` rule accepts these forms only when `MERGE_HEAD` exists for the pending commit or the outgoing commit has more than one parent. Other merge subjects and all non-merge subjects still require Conventional Commits syntax. Length, body, trailer, and leak checks still apply. Repository rules still forbid merge commits on main.
 
 Set `DEVTOOLS_LOCK_PLATFORMS` in the root mise environment to the project's supported platform list. Run `mise lock --platform <list>` and commit both mise lockfiles along with the payload and APM deployment. Updates warn and leave lockfiles alone without that variable.
 
@@ -279,4 +291,8 @@ PROJECT_PRIVATE_STRINGS = "private-account-name, private-directory-name"
 
 Every exported variable ending in `_PRIVATE_STRINGS` supplies comma-separated, case-insensitive fixed strings. The gate trims whitespace around entries and skips entries shorter than four characters with a warning. Commas and newlines inside a literal are unsupported. Run through mise so it loads the local environment. CI checks publishable patterns without these private values. Never commit the local file.
 
-Add extra case-insensitive extended regular expressions to `.leak-patterns`, one per line. The gate ignores blank lines and lines starting with `#`. For legitimate fixtures, document anchored path expressions in `.leak-allow`, with a comment explaining each exception. These exceptions apply to pattern findings only: the gate checks private literals even in allowed paths. Treat changes to both files as security configuration requiring review. For working-tree scans only, `.leak-skip` skips matching paths entirely. This excludes their contents and private literals from scanning. Use case-sensitive anchored extended regular expressions against repository-relative paths, one per line (such as `^vendor/`). Blank lines and `#` comments have no effect here either. Invalid or unanchored expressions fail the scan. Lint doesn't detect private values already present in a skipped tree. Staged, range, pre-push and explicit-file scans ignore this file and still check private literals. Treat skip changes as security configuration requiring review. The gate scans working files by default, index blobs with `--staged`, explicit file arguments for commit messages, and complete new Git objects with `--range` or pre-push. Encoded or split values are outside its scope.
+Add extra case-insensitive extended regular expressions to `.leak-patterns`, one per line. The gate ignores blank lines and lines starting with `#`. For legitimate fixtures, document anchored path expressions in `.leak-allow`, with a comment explaining each exception. These exceptions apply to pattern findings only: the gate checks private literals even in allowed paths. Treat changes to both files as security configuration requiring review. For working-tree scans only, `.leak-skip` skips matching paths entirely. This excludes their contents and private literals from scanning. Use case-sensitive anchored extended regular expressions against repository-relative paths, one per line (such as `^vendor/`). Blank lines and `#` comments have no effect here either. Invalid or unanchored expressions fail the scan. Lint doesn't detect private values already present in a skipped tree. Staged, range, pre-push and explicit-file scans ignore this file and still check private literals. Treat skip changes as security configuration requiring review. The gate scans working files by default, index blobs compared against the commit base with `--staged`, explicit file arguments for commit messages, and complete new Git objects with `--range` or pre-push. Encoded or split values are outside its scope.
+
+`--staged` compares private literal counts by path and list entry with `HEAD`, with `HEAD~1` for an amend, or with the empty tree for a root commit. It maps renamed files to their base paths before counting and reports new occurrences at index line numbers, so line shifts and unstaged edits don't affect the comparison. This mode reads `.leak-allow` and `.leak-patterns` from Git objects in the base tree, while every other mode reads those files from the checkout. Exported `*_PRIVATE_STRINGS` variables supply the private literals in every mode.
+
+The commit workflow pins `DEVTOOLS_LEAK_BASE` and sets `DEVTOOLS_LEAK_MODE=staged` for its direct scan, lint and pre-commit hook, without caching scoped lint as a full-tree pass. Bare `devtools:lint-leaks`, standalone `mise run lint` and CI range scans still scan their full scope. When CI loads the private strings list, its full scan catches literals already in the base that the local comparison allows. The owner must approve the final head and acknowledge this reduction in local coverage.

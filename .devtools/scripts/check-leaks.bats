@@ -16,7 +16,7 @@ setup() {
 	repo_root=$(git -C "$BATS_TEST_DIRNAME" rev-parse --show-toplevel)
 
 	unset GIT_DIR GIT_COMMON_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY
-	unset PRE_COMMIT_FROM_REF PRE_COMMIT_TO_REF GITHUB_ACTIONS CI DEVTOOLS_LEAK_HOOK_CHECK
+	unset PRE_COMMIT_FROM_REF PRE_COMMIT_TO_REF GITHUB_ACTIONS CI DEVTOOLS_LEAK_HOOK_CHECK DEVTOOLS_LEAK_BASE DEVTOOLS_LEAK_MODE
 	for name in $(compgen -v O11Y_); do unset "$name"; done
 
 	export O11Y_PRIVATE_STRINGS="zebra-host-01, /zq/stash/dir, /zq/bin/tsc, quokka-pond, 203.0.113.77, kestrel99, mango-secret"
@@ -365,6 +365,8 @@ run_check() {
 }
 
 @test "vendored paths skip the patterns but not the literals" {
+	git add -- .leak-allow
+	git commit -qm "test: base exemptions"
 	mkdir -p .devtools
 	: >.devtools/10.1.2.3.md
 	: >.devtools/zebra-host-01.md
@@ -493,14 +495,13 @@ run_check() {
 
 # --- paths --------------------------------------------------------------
 
-@test "both sides of a rename are scanned in a staged change" {
+@test "a staged rename away from an existing private name passes" {
 	echo "some content" >zebra-host-01.txt
 	git add zebra-host-01.txt
 	git commit -q -m "chore: old name"
 	git mv zebra-host-01.txt clean-name.txt
 	run_check --staged
-	[ "$status" -eq 1 ]
-	[[ $output =~ path#[0-9a-f]{8}:path:\ private\ literal\ O11Y_PRIVATE_STRINGS\ entry\ 1 ]]
+	[ "$status" -eq 0 ]
 }
 
 @test "a staged rename to a private name is caught" {
@@ -645,11 +646,8 @@ run_check() {
 
 @test "the mise task keeps argument boundaries" {
 	command -v mise >/dev/null
-	local line
-	line=$(awk '/^\["devtools:lint-leaks"\]/ { f = 1 } f && /^run = / { print; exit }' "$repo_root/.devtools/tasks/leaks.toml")
-	[[ $line == 'run = "bash $DEVTOOLS_DIR/scripts/check-leaks.sh"' ]]
-	printf '[tasks."devtools:lint-leaks"]\nquiet = true\nrun = "bash %s"\n' "$checker" >mise.toml
-	export DEVTOOLS_DIR="$work/.devtools"
+	printf '[task_config]\nincludes = ["%s/.devtools/tasks/leaks.toml"]\n' "$repo_root" >mise.toml
+	export DEVTOOLS_DIR="$repo_root/.devtools"
 	mise trust -q "$work/mise.toml"
 	echo "fine" >"a file with spaces.md"
 	run mise run devtools:lint-leaks -- "a file with spaces.md"
@@ -1505,4 +1503,186 @@ fake() {
 	run bash check-leaks.sh
 	[ "$status" -eq 0 ]
 	[ -z "$output" ]
+}
+
+# Commit comparison regressions (#636): counts follow paths and entries,
+# never line numbers or checkout contents.
+private_base() {
+	printf 'kestrel99\nclean\n' >existing.txt
+	git add -- existing.txt
+	git commit -qm 'test: private base'
+}
+
+@test "AC1 an unrelated edit in a file with a base literal passes" {
+	private_base
+	printf 'kestrel99\nchanged\n' >existing.txt
+	git add -- existing.txt
+	run_check --staged
+	[ "$status" -eq 0 ]
+}
+
+@test "AC2 an extra occurrence on the same line reports only its index location" {
+	private_base
+	printf 'kestrel99 kestrel99\nclean\n' >existing.txt
+	git add -- existing.txt
+	run_check --staged
+	[ "$status" -eq 1 ]
+	[[ "$output" == *'existing.txt:1: private literal O11Y_PRIVATE_STRINGS entry 6'* ]]
+	[ "$(printf '%s\n' "$output" | wc -l)" -eq 1 ]
+}
+
+@test "AC3 line shifts pass but a new occurrence after the shift fails" {
+	private_base
+	printf 'inserted\nkestrel99\nclean\n' >existing.txt
+	git add -- existing.txt
+	run_check --staged
+	[ "$status" -eq 0 ]
+	printf 'kestrel99\n' >>existing.txt
+	git add -- existing.txt
+	run_check --staged
+	[ "$status" -eq 1 ]
+	[[ "$output" == *'existing.txt:4: private literal O11Y_PRIVATE_STRINGS entry 6'* ]]
+}
+
+@test "AC3 a rename preserves old counts but catches an added occurrence" {
+	private_base
+	git mv existing.txt renamed.txt
+	run_check --staged
+	[ "$status" -eq 0 ]
+	printf 'kestrel99\n' >>renamed.txt
+	git add -- renamed.txt
+	run_check --staged
+	[ "$status" -eq 1 ]
+	[[ "$output" == *'renamed.txt:3: private literal O11Y_PRIVATE_STRINGS entry 6'* ]]
+}
+
+@test "AC3 partial staging reads index counts rather than checkout counts" {
+	private_base
+	printf 'kestrel99\nchanged\n' >existing.txt
+	git add -- existing.txt
+	printf 'kestrel99\n' >>existing.txt
+	run_check --staged
+	[ "$status" -eq 0 ]
+	git add -- existing.txt
+	printf 'clean checkout\n' >existing.txt
+	run_check --staged
+	[ "$status" -eq 1 ]
+	[[ "$output" == *'existing.txt:3: private literal O11Y_PRIVATE_STRINGS entry 6'* ]]
+}
+
+@test "AC4 an unreadable explicit base fails closed" {
+	export DEVTOOLS_LEAK_BASE=missing-base
+	echo clean >new.txt
+	git add -- new.txt
+	run_check --staged
+	[ "$status" -eq 2 ]
+}
+
+@test "AC4 an unreadable staged needles list fails closed without findings" {
+	private_base
+	echo kestrel99 >>existing.txt
+	git add -- existing.txt
+	real=$(command -v awk)
+	fake awk "[ -n \"\$NEEDLES\" ] && rm -f \"\$NEEDLES\"; exec $real \"\$@\""
+	run_check --staged
+	[ "$status" -eq 2 ]
+	[[ "$output" != *'private literal'* ]]
+}
+
+@test "AC5 standalone and range scans still find base literals" {
+	private_base
+	run_check
+	[ "$status" -eq 1 ]
+	run_check --range "$base..HEAD"
+	[ "$status" -eq 1 ]
+}
+
+@test "AC6 staged comparison can use the amend parent or an unborn base" {
+	private_base
+	export DEVTOOLS_LEAK_BASE=HEAD~1
+	run_check --staged
+	[ "$status" -eq 1 ]
+	unset DEVTOOLS_LEAK_BASE
+	git checkout --orphan unborn
+	run_check --staged
+	[ "$status" -eq 1 ]
+}
+
+@test "staged pattern configuration comes from the base, never staged or checkout edits" {
+	printf 'forbidden-fixture\n' >.leak-patterns
+	git add -- .leak-patterns
+	git commit -qm 'test: base rule'
+	printf 'forbidden-fixture\n' >new.txt
+	printf '^new.txt$\n' >.leak-allow
+	: >.leak-patterns
+	git add -- new.txt .leak-allow .leak-patterns
+	run_check --staged
+	[ "$status" -eq 1 ]
+	[[ "$output" == *'new.txt:1: pattern: repository rule 1'* ]]
+}
+
+@test "AC7 staged comparison keeps matched content inside its private temp directory" {
+	private_base
+	echo kestrel99 >>existing.txt
+	git add -- existing.txt
+	mkdir scratch
+	export TMPDIR="$work/scratch"
+	run_check --staged
+	[ "$status" -eq 1 ]
+	[ -z "$(find scratch -type f -print)" ]
+}
+
+@test "AC5 task defaults to full scan and only scopes no-argument calls on request" {
+	private_base
+	printf '[task_config]\nincludes = ["%s/.devtools/tasks/leaks.toml"]\n' "$repo_root" >mise.toml
+	export DEVTOOLS_DIR="$repo_root/.devtools"
+	mise trust -q "$work/mise.toml"
+	run mise run --quiet devtools:lint-leaks
+	[ "$status" -eq 1 ]
+	DEVTOOLS_LEAK_MODE=staged run mise run --quiet devtools:lint-leaks
+	[ "$status" -eq 0 ]
+	DEVTOOLS_LEAK_MODE=staged run mise run --quiet devtools:lint-leaks -- --range "$base..HEAD"
+	[ "$status" -eq 1 ]
+}
+
+@test "AC4 an unreadable base configuration blob fails closed" {
+	printf '^fixture$\n' >.leak-allow
+	git add -- .leak-allow
+	git commit -qm 'test: base configuration'
+	oid=$(git rev-parse HEAD:.leak-allow)
+	real=$(command -v git)
+	fake git "[ \"\$1\" = cat-file ] && [ \"\$3\" = $oid ] && exit 1; exec $real \"\$@\""
+	run_check --staged
+	[ "$status" -eq 2 ]
+}
+
+@test "AC4 an unreadable index blob fails closed" {
+	echo clean >index.txt
+	git add -- index.txt
+	oid=$(git rev-parse :index.txt)
+	real=$(command -v git)
+	fake git "[ \"\$1\" = cat-file ] && [ \"\$3\" = $oid ] && exit 1; exec $real \"\$@\""
+	run_check --staged
+	[ "$status" -eq 2 ]
+}
+
+@test "AC4 an unmerged index fails closed" {
+	oid=$(git rev-parse HEAD:.gitignore)
+	printf '100644 %s 1\tconflict.txt\n100644 %s 2\tconflict.txt\n' "$oid" "$oid" | git update-index --index-info
+	run_check --staged
+	[ "$status" -eq 2 ]
+}
+
+@test "AC4 private-list discovery errors fail closed" {
+	fake sort 'exit 1'
+	run_check --staged
+	[ "$status" -eq 2 ]
+}
+
+@test "staged scanning finds new submodule entries despite diff.ignoreSubmodules all" {
+	git config diff.ignoreSubmodules all
+	git update-index --add --cacheinfo "160000,$base,kestrel99"
+	run_check --staged
+	[ "$status" -eq 1 ]
+	[[ "$output" =~ path#[0-9a-f]{8}:path:\ private\ literal\ O11Y_PRIVATE_STRINGS\ entry\ 6 ]]
 }
