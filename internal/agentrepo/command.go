@@ -38,12 +38,13 @@ func NewCommand() (*cobra.Command, *int) {
 		},
 	)
 	group := &cobra.Command{Use: "checks", Short: "Evaluate saved GitHub checks"}
-	var file, head string
+	var file, head, base, mergeBase string
+	var number int
 	var required []string
 	evaluate := &cobra.Command{
 		Use:   "evaluate",
 		Short: "Evaluate a saved rollup and print a JSON verdict",
-		Long:  "Read gh pr view JSON from --file or stdin. Exit codes: 0 success, 1 failed, 2 pending, 3 missing required, 4 empty, 5 unreadable, 6 head moved. Required names match exactly.",
+		Long:  "Read gh pr view JSON from --file or stdin. Exit codes: 0 success, 1 failed, 2 pending, 3 missing required, 4 empty, 5 unreadable, 6 head moved. Required names match exactly. With --pr, a failure from a required check that concluded SKIPPED also prints the update-branch hint to stderr, using --base and --merge-base; the exit status is unchanged.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			input := cmd.InOrStdin()
@@ -65,12 +66,21 @@ func NewCommand() (*cobra.Command, *int) {
 				result = checks.Evaluate(data, head, required)
 			}
 			*code = int(result.Outcome)
+			if number > 0 {
+				for _, line := range checks.Hint(result, number, base, mergeBase) {
+					_, _ = fmt.Fprintln(cmd.ErrOrStderr(), line)
+				}
+			}
 			return json.NewEncoder(cmd.OutOrStdout()).Encode(result)
 		},
 	}
 	evaluate.Flags().StringVar(&file, "file", "-", "Saved JSON file, or - for stdin")
 	evaluate.Flags().StringVar(&head, "expected-head", "", "Expected headRefOid")
 	evaluate.Flags().StringArrayVar(&required, "required", nil, "Required check name (repeatable)")
+	evaluate.Flags().IntVar(&number, "pr", 0, "Pull request number, enabling the stale merge ref hint")
+	evaluate.Flags().StringVar(&base, "base", "", "Base commit the pull request merges into")
+	evaluate.Flags().
+		StringVar(&mergeBase, "merge-base", "", "Merge base of the base commit and the head; empty when unknown")
 	group.AddCommand(evaluate)
 	root.AddCommand(group, reviewCommand(code), configCommand(code))
 	return root, code

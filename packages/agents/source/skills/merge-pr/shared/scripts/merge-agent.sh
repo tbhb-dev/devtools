@@ -117,7 +117,7 @@ ma_identity() {
 # Reused before review and again immediately before every merge write.
 ma_gates() {
   ma_require_gates || return 0
-  local view=$1 pr=$2 base_oid=$3 final=${4:-false} head base reviewer reviewer_type label ready config key value required default dir st root encoded
+  local view=$1 pr=$2 base_oid=$3 final=${4:-false} head base reviewer reviewer_type label ready config key value required default dir st root encoded merge_base
   ma_context || return $?
   st=$(dt_state_dir) || return $?
   root=$(dt_root) || return $?
@@ -167,7 +167,11 @@ ma_gates() {
     required=$MA_REQUIRED
   fi
   [ -n "$required" ] || dt_die "No required checks are known for the base"
-  set -- checks evaluate --file "$view" --expected-head "$head"
+  # A required check that ran on a stale merge ref reports SKIPPED. The hint
+  # needs the merge base only to say whether the branch lags; an unreadable
+  # merge base reports unknown and never changes the verdict.
+  merge_base=$(gitr merge-base "$base_oid" "$head" 2>/dev/null) || merge_base=''
+  set -- checks evaluate --file "$view" --expected-head "$head" --pr "$pr" --base "$base_oid" --merge-base "$merge_base"
   while IFS= read -r value; do set -- "$@" --required "$value"; done <<<"$required"
   agentrepo "$@" || return $?
   ready=$(dt_repo_conf merge_ready_cmd) || return $?

@@ -5,6 +5,7 @@ package checks_test
 
 import (
 	"encoding/json"
+	"slices"
 	"testing"
 
 	"github.com/tbhb-dev/devtools/internal/checks"
@@ -194,4 +195,125 @@ func FuzzParse(f *testing.F) {
 		}
 		_ = checks.Evaluate(data, "", nil)
 	})
+}
+
+func TestSkipped(t *testing.T) {
+	t.Parallel()
+	run := func(name, state string) checks.Entry {
+		return checks.Entry{Type: "CheckRun", Name: name, Status: "COMPLETED", Conclusion: state}
+	}
+	tests := []struct {
+		name     string
+		entries  []checks.Entry
+		required []string
+		want     checks.Outcome
+		skipped  []string
+	}{
+		{
+			name:     "required skipped",
+			entries:  []checks.Entry{run("validate", "SKIPPED"), run("test", "SUCCESS")},
+			required: []string{"validate", "test"},
+			want:     checks.Failed,
+			skipped:  []string{"validate"},
+		},
+		{
+			name:     "required skipped beside failure",
+			entries:  []checks.Entry{run("validate", "SKIPPED"), run("test", "FAILURE")},
+			required: []string{"validate", "test"},
+			want:     checks.Failed,
+			skipped:  []string{"validate"},
+		},
+		{
+			name:     "required neutral is not named",
+			entries:  []checks.Entry{run("validate", "NEUTRAL")},
+			required: []string{"validate"},
+			want:     checks.Failed,
+		},
+		{
+			name:     "required failure is not named",
+			entries:  []checks.Entry{run("validate", "FAILURE")},
+			required: []string{"validate"},
+			want:     checks.Failed,
+		},
+		{
+			name:     "optional skipped is not named",
+			entries:  []checks.Entry{run("validate", "SKIPPED"), run("test", "SUCCESS")},
+			required: []string{"test"},
+			want:     checks.Success,
+		},
+		{
+			name:     "required success after update-branch",
+			entries:  []checks.Entry{run("validate", "SUCCESS"), run("test", "SUCCESS")},
+			required: []string{"validate", "test"},
+			want:     checks.Success,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			data, err := json.Marshal(checks.Rollup{Head: "head", Checks: tt.entries})
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := checks.Evaluate(data, "head", tt.required)
+			if got.Outcome != tt.want || !slices.Equal(got.Skipped, tt.skipped) {
+				t.Fatalf("got %+v, want outcome %v skipped %v", got, tt.want, tt.skipped)
+			}
+		})
+	}
+}
+
+func TestHint(t *testing.T) {
+	t.Parallel()
+	stale := checks.Result{Outcome: checks.Failed, Names: []string{"validate"}, Skipped: []string{"validate"}}
+	tests := []struct {
+		name      string
+		result    checks.Result
+		mergeBase string
+		want      []string
+	}{
+		{
+			name:      "lagging merge base",
+			result:    stale,
+			mergeBase: "old",
+			want: []string{
+				"skipped required check: validate",
+				"merge base differs from base commit: yes",
+				"run: gh pr update-branch 7",
+			},
+		},
+		{
+			name:      "current merge base",
+			result:    stale,
+			mergeBase: "base",
+			want: []string{
+				"skipped required check: validate",
+				"merge base differs from base commit: no",
+				"run: gh pr update-branch 7",
+			},
+		},
+		{
+			name:   "unknown merge base",
+			result: stale,
+			want: []string{
+				"skipped required check: validate",
+				"merge base differs from base commit: unknown",
+				"run: gh pr update-branch 7",
+			},
+		},
+		{
+			name:      "nothing skipped",
+			result:    checks.Result{Outcome: checks.Failed, Names: []string{"validate"}},
+			mergeBase: "old",
+		},
+		{name: "success", result: checks.Result{Outcome: checks.Success}, mergeBase: "old"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := checks.Hint(tt.result, 7, "base", tt.mergeBase); !slices.Equal(got, tt.want) {
+				t.Fatalf("got %q, want %q", got, tt.want)
+			}
+		})
+	}
 }

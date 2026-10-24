@@ -187,3 +187,61 @@ CHECK
   [ "$status" -ne 0 ]
   grep -q -- '--owner-path' "$GH_FIXTURES/delegation"
 }
+
+advance_base() {
+  git checkout --quiet main
+  printf 'newer\n' >newer.txt
+  git add -- newer.txt
+  git commit --quiet -m 'test: advance main'
+  BASE_OID=$(git rev-parse HEAD)
+  git push --quiet origin main
+  git checkout --quiet topic
+  base_at "$BASE_OID"
+}
+
+update_branch() {
+  git rebase --quiet main
+  HEAD_OID=$(git rev-parse HEAD)
+  git push --quiet --force-with-lease="refs/heads/topic:$(git -C "$GH_FIXTURES/upstream.git" rev-parse topic)" origin topic
+  pr ".headRefOid=\"$HEAD_OID\" | .reviews[0].commit.oid=\"$HEAD_OID\""
+}
+
+@test "skipped required check on a lagging merge base fails with the update-branch hint" {
+  advance_base
+  pr '.statusCheckRollup=[{__typename:"CheckRun",name:"test",status:"COMPLETED",conclusion:"SKIPPED"}]'
+  run bash "$AGENT/review.sh" 7
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"skipped required check: test"* ]]
+  [[ "$output" == *"merge base differs from base commit: yes"* ]]
+  [[ "$output" == *"run: gh pr update-branch 7"* ]]
+}
+
+@test "skipped required check on a current merge base still fails and reports it" {
+  pr '.statusCheckRollup=[{__typename:"CheckRun",name:"test",status:"COMPLETED",conclusion:"SKIPPED"}]'
+  run bash "$AGENT/review.sh" 7
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"skipped required check: test"* ]]
+  [[ "$output" == *"merge base differs from base commit: no"* ]]
+  [[ "$output" == *"run: gh pr update-branch 7"* ]]
+}
+
+@test "update-branch with passing required checks clears the gate and the hint" {
+  advance_base
+  pr '.statusCheckRollup=[{__typename:"CheckRun",name:"test",status:"COMPLETED",conclusion:"SKIPPED"}]'
+  run bash "$AGENT/review.sh" 7
+  [ "$status" -ne 0 ]
+  update_branch
+  pr '.statusCheckRollup=[{__typename:"CheckRun",name:"test",status:"COMPLETED",conclusion:"SUCCESS"}]'
+  run bash "$AGENT/review.sh" 7
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"update-branch"* ]]
+  [[ "$output" != *"skipped required check"* ]]
+}
+
+@test "a neutral required check is not waived and gets no stale-ref hint" {
+  advance_base
+  pr '.statusCheckRollup=[{__typename:"CheckRun",name:"test",status:"COMPLETED",conclusion:"NEUTRAL"}]'
+  run bash "$AGENT/review.sh" 7
+  [ "$status" -ne 0 ]
+  [[ "$output" != *"update-branch"* ]]
+}
