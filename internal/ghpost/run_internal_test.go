@@ -451,7 +451,7 @@ func TestHelp(t *testing.T) {
 	require.Empty(t, errOut)
 	for _, operation := range []string{
 		"issue create", "issue comment", "issue edit", "pr create", "pr edit",
-		"pr comment", "pr review", "comment edit", "review edit", "release create", "release edit",
+		"pr comment", "pr review", "pr ready", "pr close", "comment edit", "review edit", "release create", "release edit",
 	} {
 		require.Contains(t, out, operation)
 		values, switches, ok := allowed(operation)
@@ -611,6 +611,439 @@ func TestReviewFirstLine(t *testing.T) {
 				require.NoFileExists(t, filepath.Join(dir, "calls"))
 				require.NoFileExists(t, filepath.Join(dir, "payload"))
 			}
+		})
+	}
+}
+
+const stateViewCall = "pr view 12 --repo owner/repo --json id,state,isDraft,headRefOid,url\n"
+
+const readyCall = "api graphql -f query=mutation($id:ID!){markPullRequestReadyForReview(input:{pullRequestId:$id}){pullRequest{url}}} -f id=PR_example\n"
+
+const closeCall = "pr close 12 --repo owner/repo\n"
+
+const reasonCommentCall = "pr comment 12 --repo owner/repo --body-file -\n"
+
+const commentsCall = "api --method GET repos/owner/repo/issues/12/comments --paginate --slurp\n"
+
+func setupPRState(t *testing.T, verb string) string {
+	t.Helper()
+	dir := setup(t)
+	for _, key := range []string{"STATE_STATUS", "READ_BACK_STATUS", "MUTATE_STATUS", "COMMENT_STATUS", "COMMENTS_STATUS"} {
+		t.Setenv(key, "0")
+	}
+	t.Setenv("FIXTURE", dir)
+	writePRState(t, dir, "initial", "OPEN", true, reviewHead)
+	state, draft := "OPEN", false
+	if verb == "close" {
+		state, draft = "CLOSED", true
+	}
+	writePRState(t, dir, "after", state, draft, reviewHead)
+	write(t, filepath.Join(dir, "reason"), "Superseded by another change.\n")
+	write(t, filepath.Join(dir, "comments"), "[[]]")
+	write(
+		t,
+		filepath.Join(dir, "new-comment"),
+		`[[{"body":"Superseded by another change.\n","user":{"login":"agent"}}]]`,
+	)
+	write(t, filepath.Join(dir, "gh"), `#!/bin/sh
+printf '%s\n' "$*" >> "$CALLS"
+case "$*" in
+	'api user --jq .login') echo "${LOGIN:-agent}"; exit "${IDENTITY_STATUS:-0}" ;;
+	'api graphql -f query={viewer{login}} --jq .data.viewer.login') echo 'app[bot]'; exit "${GRAPHQL_STATUS:-1}" ;;
+	'pr view 12 --repo owner/repo --json id,state,isDraft,headRefOid,url')
+		if [ -f "$FIXTURE/viewed" ]; then
+			cat "$FIXTURE/after"; exit "$READ_BACK_STATUS"
+		fi
+		touch "$FIXTURE/viewed"
+		cat "$FIXTURE/initial"; exit "$STATE_STATUS" ;;
+	'api --method GET repos/owner/repo/issues/12/comments --paginate --slurp')
+		cat "$FIXTURE/comments"; exit "$COMMENTS_STATUS" ;;
+	'pr comment 12 --repo owner/repo --body-file -')
+		printf '%s\n' "$*" >> "$FIXTURE/writes"
+		cat > "$PAYLOAD"
+		[ "$COMMENT_STATUS" = 0 ] || exit "$COMMENT_STATUS"
+		cp "$FIXTURE/new-comment" "$FIXTURE/comments"
+		echo 'https://github.com/owner/repo/pull/12#issuecomment-1'; exit 0 ;;
+	'api graphql -f query=mutation('*|'pr close 12 --repo owner/repo')
+		printf '%s\n' "$*" >> "$FIXTURE/writes"
+		exit "$MUTATE_STATUS" ;;
+	*) exit 99 ;;
+esac
+`)
+	return dir
+}
+
+func writePRState(t *testing.T, dir, file, state string, draft bool, head string) {
+	t.Helper()
+	data, err := json.Marshal(map[string]any{
+		"id": "PR_example", "state": state, "isDraft": draft, "headRefOid": head,
+		"url":    "https://github.com/owner/repo/pull/12",
+		"author": map[string]string{"login": "another-author"},
+	})
+	require.NoError(t, err)
+	write(t, filepath.Join(dir, file), string(data))
+}
+
+func stateArgs(dir, verb string) []string {
+	args := []string{"pr", verb, "12", "--repo", "owner/repo", "--head", reviewHead}
+	if verb == "close" {
+		args = append(args, "--comment-file", filepath.Join(dir, "reason"))
+	}
+	return args
+}
+
+func fileText(t *testing.T, path string) string {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return ""
+	}
+	require.NoError(t, err)
+	return string(data)
+}
+
+func TestPRStateAC1AC2AC10(t *testing.T) {
+	for _, verb := range []string{"ready", "close"} {
+		t.Run(verb, func(t *testing.T) {
+			dir := setupPRState(t, verb)
+			var out, errOut bytes.Buffer
+			// Neither verb may read body input, even when stdin fails.
+			code := Run(t.Context(), stateArgs(dir, verb), brokenIO{}, &out, &errOut)
+			require.Equal(t, 0, code, errOut.String())
+			require.Equal(t, "https://github.com/owner/repo/pull/12\n", out.String())
+			require.Empty(t, errOut.String())
+			writes := readyCall
+			calls := "api user --jq .login\n" + stateViewCall
+			if verb == "close" {
+				writes = reasonCommentCall + closeCall
+				calls += commentsCall
+				require.Equal(t, "Superseded by another change.\n", fileText(t, filepath.Join(dir, "payload")))
+			}
+			require.Equal(t, writes, fileText(t, filepath.Join(dir, "writes")))
+			require.Equal(t, calls+writes+stateViewCall, fileText(t, filepath.Join(dir, "calls")))
+			require.Contains(t, fileText(t, filepath.Join(dir, "state", "devtools", "gh-post.log")), "pr "+verb)
+		})
+	}
+}
+
+func TestPRStateAC3(t *testing.T) {
+	for _, tt := range []struct {
+		name, state, head, message string
+		draft                      bool
+	}{
+		{"head", "OPEN", strings.Repeat("a", 40), "PR head does not match --head", true},
+		{"closed", "CLOSED", reviewHead, "PR is not open", true},
+		{"merged", "MERGED", reviewHead, "PR is not open", true},
+		{"non-draft", "OPEN", reviewHead, "PR is not a draft", false},
+	} {
+		for _, verb := range []string{"ready", "close"} {
+			if tt.name == "non-draft" && verb == "close" {
+				continue
+			}
+			t.Run(verb+"/"+tt.name, func(t *testing.T) {
+				dir := setupPRState(t, verb)
+				writePRState(t, dir, "initial", tt.state, tt.draft, tt.head)
+				code, out, errOut := run(t, "", stateArgs(dir, verb)...)
+				require.Equal(t, 1, code)
+				require.Empty(t, out)
+				require.Equal(t, "gh-post: "+tt.message+"\n", errOut)
+				require.NoFileExists(t, filepath.Join(dir, "writes"))
+				require.Equal(t, "api user --jq .login\n"+stateViewCall, fileText(t, filepath.Join(dir, "calls")))
+			})
+		}
+	}
+}
+
+func TestPRStateAC4(t *testing.T) {
+	for _, verb := range []string{"ready", "close"} {
+		for _, head := range []string{"", "abc", strings.Repeat("a", 39), strings.Repeat("a", 41), strings.Repeat("g", 40)} {
+			t.Run(verb+"/"+head, func(t *testing.T) {
+				dir := setupPRState(t, verb)
+				args := []string{"pr", verb, "12", "--repo", "owner/repo"}
+				if head != "" {
+					args = append(args, "--head", head)
+				}
+				if verb == "close" {
+					args = append(args, "--comment-file", filepath.Join(dir, "reason"))
+				}
+				code, _, errOut := run(t, "", args...)
+				require.Equal(t, 2, code)
+				require.Equal(t, "gh-post: "+errUsage.Error()+"\n", errOut)
+				require.NoFileExists(t, filepath.Join(dir, "writes"))
+				require.NoFileExists(t, filepath.Join(dir, "calls"))
+			})
+		}
+	}
+}
+
+func TestPRStateAC4CaseInsensitive(t *testing.T) {
+	for _, verb := range []string{"ready", "close"} {
+		t.Run(verb, func(t *testing.T) {
+			dir := setupPRState(t, verb)
+			args := stateArgs(dir, verb)
+			args[6] = strings.ToUpper(reviewHead)
+			writePRState(t, dir, "initial", "OPEN", true, strings.ToUpper(reviewHead))
+			code, _, errOut := run(t, "", args...)
+			require.Equal(t, 0, code, errOut)
+		})
+	}
+}
+
+func TestPRStateAC5(t *testing.T) {
+	for _, tt := range []struct {
+		name, reason, message string
+		code                  int
+	}{
+		{"missing", "", "", 2},
+		{"empty", "", "gh-post: close reason must not be empty\n", 2},
+		{"whitespace", " \n", "gh-post: close reason must not be empty\n", 2},
+		{"scan", "hidden-literal", "gh-post: private-string line 1\n", 1},
+		{"unreadable", "", "gh-post: cannot read body\n", 2},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := setupPRState(t, "close")
+			t.Setenv("DEVTOOLS_PRIVATE_STRINGS", "hidden-literal")
+			args := stateArgs(dir, "close")
+			write(t, filepath.Join(dir, "reason"), tt.reason)
+			if tt.name == "missing" {
+				args = args[:len(args)-2]
+			}
+			if tt.name == "unreadable" {
+				require.NoError(t, os.Remove(filepath.Join(dir, "reason")))
+			}
+			code, out, errOut := run(t, "unused", args...)
+			require.Equal(t, tt.code, code)
+			require.Empty(t, out)
+			if tt.message != "" {
+				require.Equal(t, tt.message, errOut)
+			}
+			require.NoFileExists(t, filepath.Join(dir, "writes"))
+			require.NoFileExists(t, filepath.Join(dir, "calls"))
+		})
+	}
+}
+
+func TestPRStateAC6(t *testing.T) {
+	for _, verb := range []string{"ready", "close"} {
+		t.Run(verb, func(t *testing.T) {
+			dir := setupPRState(t, verb)
+			code, out, errOut := run(t, "ignored", append(stateArgs(dir, verb), "--dry-run")...)
+			require.Equal(t, 0, code, errOut)
+			require.Contains(t, out, "would "+verb+" https://github.com/owner/repo/pull/12")
+			if verb == "close" {
+				require.Contains(t, out, "reason comment")
+			}
+			require.Empty(t, errOut)
+			require.NoFileExists(t, filepath.Join(dir, "writes"))
+			require.Equal(t, "api user --jq .login\n"+stateViewCall, fileText(t, filepath.Join(dir, "calls")))
+		})
+	}
+}
+
+func TestPRStateAC7(t *testing.T) {
+	dir := setupPRState(t, "close")
+	t.Setenv("MUTATE_STATUS", "1")
+	writePRState(t, dir, "after", "OPEN", true, reviewHead)
+	code, _, errOut := run(t, "", stateArgs(dir, "close")...)
+	require.Equal(t, 2, code)
+	require.Equal(
+		t,
+		"gh-post: reason comment was posted; close failed and PR is still open; check GitHub before retrying\n",
+		errOut,
+	)
+	require.Equal(t, reasonCommentCall+closeCall, fileText(t, filepath.Join(dir, "writes")))
+	require.Equal(
+		t,
+		"api user --jq .login\n"+stateViewCall+commentsCall+reasonCommentCall+closeCall+stateViewCall,
+		fileText(t, filepath.Join(dir, "calls")),
+	)
+	require.NoError(t, os.Remove(filepath.Join(dir, "viewed")))
+	t.Setenv("MUTATE_STATUS", "0")
+	writePRState(t, dir, "after", "CLOSED", true, reviewHead)
+	code, _, errOut = run(t, "", stateArgs(dir, "close")...)
+	require.Equal(t, 0, code, errOut)
+	require.Equal(t, reasonCommentCall+closeCall+closeCall, fileText(t, filepath.Join(dir, "writes")))
+}
+
+func TestPRStateAC8(t *testing.T) {
+	for _, verb := range []string{"ready", "close"} {
+		for _, failure := range []string{"head", "read", "state", "draft"} {
+			t.Run(verb+"/"+failure, func(t *testing.T) {
+				dir := setupPRState(t, verb)
+				state, draft, head := "OPEN", false, reviewHead
+				message, want := "PR read-back contradicts requested state", 1
+				switch failure {
+				case "head":
+					head, message = strings.Repeat("a", 40), "PR read-back head does not match --head"
+				case "read":
+					t.Setenv("READ_BACK_STATUS", "1")
+					message, want = "cannot read PR back", 2
+				case "state":
+					state = "MERGED"
+				case "draft":
+					draft = true
+				}
+				writePRState(t, dir, "after", state, draft, head)
+				code, out, errOut := run(t, "", stateArgs(dir, verb)...)
+				require.Equal(t, want, code)
+				require.Empty(t, out)
+				require.Equal(t, "gh-post: "+message+"; do not retry or undo automatically\n", errOut)
+				writes := readyCall
+				if verb == "close" {
+					writes = reasonCommentCall + closeCall
+				}
+				require.Equal(t, writes, fileText(t, filepath.Join(dir, "writes")))
+			})
+		}
+	}
+}
+
+func TestPRStateAC9(t *testing.T) {
+	for _, verb := range []string{"ready", "close"} {
+		t.Run(verb, func(t *testing.T) {
+			dir := setupPRState(t, verb)
+			t.Setenv("LOGIN", "unapproved")
+			code, out, errOut := run(t, "", stateArgs(dir, verb)...)
+			require.Equal(t, 1, code)
+			require.Empty(t, out)
+			require.Equal(t, "gh-post: identity refused\n", errOut)
+			require.NoFileExists(t, filepath.Join(dir, "writes"))
+			require.Equal(t, "api user --jq .login\n", fileText(t, filepath.Join(dir, "calls")))
+		})
+	}
+}
+
+func TestPRStateAC10ReasonLimit(t *testing.T) {
+	for _, size := range []int{65536, 65537} {
+		t.Run(strings.Repeat("x", size-65535), func(t *testing.T) {
+			dir := setupPRState(t, "close")
+			write(t, filepath.Join(dir, "reason"), strings.Repeat("x", size))
+			code, _, errOut := run(t, "", stateArgs(dir, "close")...)
+			if size == 65536 {
+				require.Equal(t, 0, code, errOut)
+				require.Equal(t, reasonCommentCall+closeCall, fileText(t, filepath.Join(dir, "writes")))
+			} else {
+				require.Equal(t, 2, code)
+				require.Equal(t, "gh-post: close reason exceeds comment size limit\n", errOut)
+				require.NoFileExists(t, filepath.Join(dir, "writes"))
+				require.NoFileExists(t, filepath.Join(dir, "calls"))
+			}
+		})
+	}
+}
+
+func TestPRStateBeforeWriteFailures(t *testing.T) {
+	for _, tt := range []struct{ name, message string }{
+		{"state", "cannot read PR state"},
+		{"invalid state", "cannot read PR state"},
+		{"comments", "cannot read PR comments"},
+		{"invalid comments", "cannot read PR comments"},
+		{"identity", "cannot read gh identity"},
+		{"comment", "gh write failed; check GitHub before retrying"},
+		{"audit", "cannot open audit log"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := setupPRState(t, "close")
+			switch tt.name {
+			case "state":
+				t.Setenv("STATE_STATUS", "1")
+			case "invalid state":
+				write(t, filepath.Join(dir, "initial"), "{}")
+			case "comments":
+				t.Setenv("COMMENTS_STATUS", "1")
+			case "invalid comments":
+				write(t, filepath.Join(dir, "comments"), "invalid")
+			case "identity":
+				t.Setenv("IDENTITY_STATUS", "1")
+				t.Setenv("GRAPHQL_STATUS", "1")
+			case "comment":
+				t.Setenv("COMMENT_STATUS", "1")
+			case "audit":
+				t.Setenv("XDG_STATE_HOME", filepath.Join(dir, "gh"))
+			}
+			code, out, errOut := run(t, "", stateArgs(dir, "close")...)
+			require.Equal(t, 2, code)
+			require.Empty(t, out)
+			require.Equal(t, "gh-post: "+tt.message+"\n", errOut)
+			if tt.name == "comment" {
+				require.Equal(t, reasonCommentCall, fileText(t, filepath.Join(dir, "writes")))
+			} else {
+				require.NoFileExists(t, filepath.Join(dir, "writes"))
+			}
+		})
+	}
+}
+
+func TestPRStateCommentIdentity(t *testing.T) {
+	for _, tt := range []struct{ name, comments, writes string }{
+		{"same identity later page", `[[{"body":"different","user":{"login":"agent"}}],[{"body":"Superseded by another change.\n","user":{"login":"agent"}}]]`, closeCall},
+		{"different identity", `[[{"body":"Superseded by another change.\n","user":{"login":"someone-else"}}]]`, reasonCommentCall + closeCall},
+		{"different text", `[[{"body":"different","user":{"login":"agent"}}]]`, reasonCommentCall + closeCall},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := setupPRState(t, "close")
+			write(t, filepath.Join(dir, "comments"), tt.comments)
+			code, _, errOut := run(t, "", stateArgs(dir, "close")...)
+			require.Equal(t, 0, code, errOut)
+			require.Equal(t, tt.writes, fileText(t, filepath.Join(dir, "writes")))
+		})
+	}
+}
+
+func TestPRStateFlagBoundaries(t *testing.T) {
+	for _, verb := range []string{"ready", "close"} {
+		for _, extra := range [][]string{
+			{"--body-file", "-"},
+			{"--body", "text"},
+			{"--head", reviewHead},
+			{"--delete-branch"},
+			{"--undo"},
+			{"--reopen"},
+			{"13"},
+		} {
+			t.Run(verb+"/"+strings.Join(extra, " "), func(t *testing.T) {
+				dir := setupPRState(t, verb)
+				code, _, _ := run(t, "", append(stateArgs(dir, verb), extra...)...)
+				require.Equal(t, 2, code)
+				require.NoFileExists(t, filepath.Join(dir, "writes"))
+				require.NoFileExists(t, filepath.Join(dir, "calls"))
+			})
+		}
+	}
+	for _, args := range [][]string{
+		{"pr", "ready", "12", "--head", reviewHead, "--comment-file", "reason"},
+		{"pr", "close", "12", "--head", reviewHead, "--comment-file", "-"},
+		{"pr", "comment", "12", "--dry-run"},
+		{"pr", "edit", "12", "--dry-run"},
+		{"pr", "review", "12", "--approve", "--commit", reviewHead, "--dry-run"},
+		{"issue", "comment", "12", "--dry-run"},
+		{"release", "edit", "v1", "--dry-run"},
+	} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			dir := setupPRState(t, "ready")
+			code, _, _ := run(t, "", args...)
+			require.Equal(t, 2, code)
+			require.NoFileExists(t, filepath.Join(dir, "writes"))
+			require.NoFileExists(t, filepath.Join(dir, "calls"))
+		})
+	}
+}
+
+func TestPRStateAC10MutationFailure(t *testing.T) {
+	for _, verb := range []string{"ready", "close"} {
+		t.Run(verb, func(t *testing.T) {
+			dir := setupPRState(t, verb)
+			t.Setenv("MUTATE_STATUS", "1")
+			code, out, errOut := run(t, "", stateArgs(dir, verb)...)
+			require.Equal(t, 2, code)
+			require.Empty(t, out)
+			require.Equal(t, "gh-post: PR state write failed; check GitHub before retrying\n", errOut)
+			writes := readyCall
+			if verb == "close" {
+				writes = reasonCommentCall + closeCall
+			}
+			require.Equal(t, writes, fileText(t, filepath.Join(dir, "writes")))
+			require.True(t, strings.HasSuffix(fileText(t, filepath.Join(dir, "calls")), stateViewCall))
 		})
 	}
 }

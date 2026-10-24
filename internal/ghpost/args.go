@@ -11,25 +11,30 @@ import (
 )
 
 var errUsage = errors.New(
-	"expected issue create|comment|edit, pr create|edit|comment|review, comment edit, review edit, or release create|edit; use --body-file PATH or stdin and only supported flags",
+	"expected issue create|comment|edit, pr create|edit|comment|review|ready|close, comment edit, review edit, or release create|edit; use only supported flags and file input",
 )
 
 type request struct {
-	operation string
-	repo      string
-	bodyFile  string
-	operand   string
-	reviewID  string
-	kind      string
-	commit    string
-	flags     []string
-	text      []string
+	operation   string
+	repo        string
+	bodyFile    string
+	operand     string
+	reviewID    string
+	kind        string
+	commit      string
+	head        string
+	commentFile string
+	flags       []string
+	text        []string
 }
 
 const (
 	bodyFileFlag   = "--body-file"
+	headFlag       = "--head"
 	repoFlag       = "--repo"
 	prReview       = "pr review"
+	prReady        = "pr ready"
+	prClose        = "pr close"
 	issueCreate    = "issue create"
 	prCreate       = "pr create"
 	commentEdit    = "comment edit"
@@ -107,17 +112,36 @@ func (r *request) addValue(key, value string) error {
 			return errUsage
 		}
 		r.bodyFile = value
-	case "--commit":
-		if r.commit != "" || !regexp.MustCompile(`^[0-9a-fA-F]{40}$`).MatchString(value) {
+	case "--commit", headFlag:
+		return r.addRevision(key, value)
+	case "--comment-file":
+		if r.commentFile != "" {
 			return errUsage
 		}
-		r.commit = strings.ToLower(value)
+		r.commentFile = value
 	case "--kind":
 		r.kind = value
 	default:
 		r.flags = append(r.flags, key, value)
 		r.text = append(r.text, value)
 	}
+	return nil
+}
+
+func (r *request) addRevision(key, value string) error {
+	if key == headFlag && !r.isPRStateChange() {
+		r.flags = append(r.flags, key, value)
+		r.text = append(r.text, value)
+		return nil
+	}
+	target := &r.commit
+	if key == headFlag {
+		target = &r.head
+	}
+	if *target != "" || !regexp.MustCompile(`^[0-9a-fA-F]{40}$`).MatchString(value) {
+		return errUsage
+	}
+	*target = strings.ToLower(value)
 	return nil
 }
 
@@ -149,6 +173,12 @@ func allowed(operation string) (map[string]bool, map[string]bool, bool) {
 	case prReview:
 		values = append(values, "--commit")
 		switches = []string{"--approve", "--comment", "--request-changes"}
+	case prReady, prClose:
+		values = strings.Fields(map[string]string{
+			prReady: "-R --repo --head",
+			prClose: "-R --repo --head --comment-file",
+		}[operation])
+		switches = []string{"--dry-run"}
 	case commentEdit:
 		values = append(values, "--kind")
 	case reviewEdit:
@@ -181,12 +211,19 @@ func (r *request) validate() error {
 	if r.operation == prReview && (len(r.flags) != 1 || r.commit == "") {
 		return errUsage
 	}
+	if r.isPRStateChange() && r.head == "" || r.operation == prClose && r.commentFile == "" {
+		return errUsage
+	}
 	if r.operation == issueCreate || r.operation == prCreate {
 		if !slices.Contains(r.flags, "--title") {
 			return errUsage
 		}
 	}
 	return nil
+}
+
+func (r *request) isPRStateChange() bool {
+	return r.operation == prReady || r.operation == prClose
 }
 
 func (r *request) validateOperands() error {

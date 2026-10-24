@@ -20,8 +20,8 @@ func (r *request) matchesReviewBody(body []byte) bool {
 
 func (r *request) checkReviewHead(ctx context.Context, errOut io.Writer) int {
 	data, err := gh(ctx, []string{
-		"pr", "view", r.operand, repoFlag, r.repo,
-		"--json", "headRefOid", jqFlag, ".headRefOid",
+		"pr", viewVerb, r.operand, repoFlag, r.repo,
+		jsonFlag, "headRefOid", jqFlag, ".headRefOid",
 	}, nil)
 	if err != nil {
 		fmt.Fprintln(errOut, "gh-post: cannot read PR head")
@@ -47,5 +47,5 @@ func (r *request) reviewCommand(body []byte) ([]string, []byte, error) {
 		return nil, nil, fmt.Errorf("encode review: %w", err)
 	}
 	endpoint := "repos/" + r.repo + "/pulls/" + r.operand + "/reviews"
-	return []string{apiCommand, "--method", "POST", endpoint, "--input", "-", jqFlag, ".html_url"}, input, nil
+	return []string{apiCommand, methodFlag, "POST", endpoint, "--input", "-", jqFlag, ".html_url"}, input, nil
 }
