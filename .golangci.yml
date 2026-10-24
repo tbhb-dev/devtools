@@ -26,7 +26,8 @@ formatters:
       custom-order: true
     gofumpt:
       module-path: github.com/tbhb-dev/devtools
-      extra-rules: true
+      extra:
+        group-params: true
     goimports:
       local-prefixes:
         - github.com/tbhb-dev/devtools
