@@ -296,3 +296,31 @@ grant() {
   run bash "$SCRIPTS/commit.sh"
   [ "$status" -eq 0 ]
 }
+
+@test "AC6 commit scopes both leak gates to the same base without caching full lint" {
+  real_mise=$(command -v mise)
+  cat >"$BATS_TEST_TMPDIR/bin/mise-scoped" <<'STUB'
+#!/usr/bin/env bash
+if [ "$1" = run ] && { [ "$2" = lint ] || [ "$2" = devtools:lint-leaks ]; }; then
+  printf '%s %s %s\n' "$2" "${DEVTOOLS_LEAK_MODE:-tree}" "${DEVTOOLS_LEAK_BASE:-unset}" >>"$SCOPE_LOG"
+fi
+exec "$REAL_MISE" "$@"
+STUB
+  chmod +x "$BATS_TEST_TMPDIR/bin/mise-scoped"
+  export REAL_MISE="$real_mise" SCOPE_LOG="$BATS_TEST_TMPDIR/scopes"
+  mkdir "$BATS_TEST_TMPDIR/scoped-bin"
+  ln -s "$BATS_TEST_TMPDIR/bin/mise-scoped" "$BATS_TEST_TMPDIR/scoped-bin/mise"
+  export PATH="$BATS_TEST_TMPDIR/scoped-bin:$PATH"
+  expected=$(git rev-parse 'HEAD^{tree}')
+  bash "$SCRIPTS/review.sh"
+  run bash "$SCRIPTS/commit.sh" --dry-run
+  [ "$status" -eq 0 ]
+  [ "$(cat "$SCOPE_LOG")" = "$(printf 'devtools:lint-leaks staged %s\nlint staged %s' "$expected" "$expected")" ]
+  [ ! -e ".git/agent-skills/gates/$(printf lint | shasum -a 256 | cut -d ' ' -f 1).json" ]
+  : >"$SCOPE_LOG"
+  expected=$(git hash-object -t tree --stdin </dev/null)
+  bash "$SCRIPTS/review.sh" --amend
+  run bash "$SCRIPTS/commit.sh" --amend --dry-run
+  [ "$status" -eq 0 ]
+  [ "$(cat "$SCOPE_LOG")" = "$(printf 'devtools:lint-leaks staged %s\nlint staged %s' "$expected" "$expected")" ]
+}

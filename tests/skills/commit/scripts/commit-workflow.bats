@@ -406,7 +406,7 @@ STUB
   run bash "$SCRIPTS/commit.sh" --amend --confirmed
   [ "$status" -eq 0 ]
   [[ "$output" == *"mise run test passed at"*"(reused)"* ]]
-  [ "$(cat "$GATE_LOG")" = $'lint-commit-msg\ndevtools:lint-leaks\ndevtools:gitleaks\nlint\ntest\nlint-commit-msg\ndevtools:lint-leaks\ndevtools:gitleaks\nlint\ntest\ndevtools:lint-leaks\ndevtools:gitleaks' ]
+  [ "$(cat "$GATE_LOG")" = $'lint-commit-msg\ndevtools:lint-leaks\ndevtools:gitleaks\nlint\ntest\nlint-commit-msg\ndevtools:lint-leaks\ndevtools:gitleaks\nlint\ntest\ndevtools:lint-leaks\ndevtools:gitleaks\nlint' ]
 }
 
 @test "commit always reviews after gates, including a cached dry run (#161)" {
@@ -419,7 +419,7 @@ STUB
   bash "$SCRIPTS/commit.sh" --amend --dry-run
   run bash "$SCRIPTS/commit.sh" --amend --confirmed
   [ "$status" -eq 0 ]
-  [ "$(cat "$GATE_LOG")" = $'lint-commit-msg\ndevtools:lint-leaks\ndevtools:gitleaks\nlint\ntest\nreview\ndevtools:lint-leaks\ndevtools:gitleaks\nreview' ]
+  [ "$(cat "$GATE_LOG")" = $'lint-commit-msg\ndevtools:lint-leaks\ndevtools:gitleaks\nlint\ntest\nreview\ndevtools:lint-leaks\ndevtools:gitleaks\nlint\nreview' ]
 }
 
 @test "preflight uses configured sign-off instead of Git identity" {
@@ -457,4 +457,77 @@ STUB
   PATH=/usr/bin:/bin run bash "$SCRIPTS/preflight.sh"
   [ "$status" -eq 1 ]
   [ "$output" = 'commit preflight: commit-lint is not installed; add "go:github.com/tbhb-dev/devtools/cmd/commit-lint" = "<devtools-version>" to mise.toml [tools]' ]
+}
+
+@test "AC6 commit scopes both leak gates to the same base without caching full lint" {
+  initial_commit
+  stage tracked.txt reviewed
+  real_mise=$(command -v mise)
+  cat >"$BATS_TEST_TMPDIR/bin/mise-scoped" <<'STUB'
+#!/usr/bin/env bash
+if [ "$1" = run ] && { [ "$2" = lint ] || [ "$2" = devtools:lint-leaks ]; }; then
+  printf '%s %s %s\n' "$2" "${DEVTOOLS_LEAK_MODE:-tree}" "${DEVTOOLS_LEAK_BASE:-unset}" >>"$SCOPE_LOG"
+fi
+exec "$REAL_MISE" "$@"
+STUB
+  chmod +x "$BATS_TEST_TMPDIR/bin/mise-scoped"
+  export REAL_MISE="$real_mise" SCOPE_LOG="$BATS_TEST_TMPDIR/scopes"
+  mkdir "$BATS_TEST_TMPDIR/scoped-bin"
+  ln -s "$BATS_TEST_TMPDIR/bin/mise-scoped" "$BATS_TEST_TMPDIR/scoped-bin/mise"
+  export PATH="$BATS_TEST_TMPDIR/scoped-bin:$PATH"
+  expected=$(git rev-parse 'HEAD^{tree}')
+  bash "$SCRIPTS/review.sh"
+  run bash "$SCRIPTS/commit.sh" --dry-run
+  [ "$status" -eq 0 ]
+  [ "$(cat "$SCOPE_LOG")" = "$(printf 'devtools:lint-leaks staged %s\nlint staged %s' "$expected" "$expected")" ]
+  [ ! -e ".git/agent-skills/gates/$(printf lint | shasum -a 256 | cut -d ' ' -f 1).json" ]
+  : >"$SCOPE_LOG"
+  expected=$(git hash-object -t tree --stdin </dev/null)
+  bash "$SCRIPTS/review.sh" --amend
+  run bash "$SCRIPTS/commit.sh" --amend --dry-run
+  [ "$status" -eq 0 ]
+  [ "$(cat "$SCOPE_LOG")" = "$(printf 'devtools:lint-leaks staged %s\nlint staged %s' "$expected" "$expected")" ]
+}
+
+@test "amend refuses a shallow boundary whose real parent is unavailable" {
+  initial_commit
+  stage tracked.txt second
+  git commit --quiet -m 'test: second state'
+  git clone --quiet --depth=1 "file://$REPO" "$BATS_TEST_TMPDIR/shallow"
+  cd "$BATS_TEST_TMPDIR/shallow"
+  git config user.name Tester
+  git config user.email tester@example.com
+  printf 'test: bind the review\n\nSigned-off-by: Tester <tester@example.com>\n' >COMMIT_AGENTMSG
+  stage tracked.txt reviewed
+  start=$(git rev-parse HEAD)
+  bash "$SCRIPTS/review.sh" --amend
+  run bash "$SCRIPTS/commit.sh" --amend --dry-run
+  [ "$status" -eq 2 ]
+  [[ "$output" == *'could not resolve the amend parent tree'* ]]
+  [ "$(git rev-parse HEAD)" = "$start" ]
+  ! grep -q '^devtools:lint-leaks$' "$GATE_LOG"
+}
+
+@test "AC7 amend parent extraction keeps a private HEAD message in a pipe" {
+  initial_commit
+  stage tracked.txt second
+  # macOS Bash 3.2 writes here-strings to a temporary file.
+  { printf 'test: private message\n\n'; printf '%20000s' 'fixture-private-literal'; } | git commit --quiet -F -
+  stage tracked.txt reviewed
+  bash "$SCRIPTS/review.sh" --amend
+  real_awk=$(command -v awk)
+  cat >"$BATS_TEST_TMPDIR/bin/awk" <<'STUB'
+#!/usr/bin/env bash
+if [[ $1 == *'/^parent /'* ]]; then
+  [[ -p /dev/stdin ]] || exit 1
+fi
+exec "$REAL_AWK" "$@"
+STUB
+  chmod +x "$BATS_TEST_TMPDIR/bin/awk"
+  export REAL_AWK="$real_awk"
+  mkdir "$BATS_TEST_TMPDIR/empty-tmp"
+  export TMPDIR="$BATS_TEST_TMPDIR/empty-tmp"
+  run /bin/bash "$SCRIPTS/commit.sh" --amend --dry-run
+  [ "$status" -eq 0 ]
+  [ -z "$(find "$TMPDIR" -type f -print)" ]
 }

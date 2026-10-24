@@ -129,9 +129,32 @@ the same. Run the review again against the current draft and index:
 }
 require_reviewed
 dt_commit_lint "$draft" "$rerun_gates"
+# Pin the comparison base for both the direct gate and lint, including
+# the pre-commit staged hook. A root commit (also when amended) has no parent.
+export DEVTOOLS_LEAK_MODE=staged
+if [ "$mode" = amend ]; then
+  # rev-list hides parents at a shallow boundary; the commit header does not.
+  parent=$(gitr cat-file -p HEAD | awk '!header_done && /^$/ { header_done = 1 }
+    !header_done && /^parent / && !parent { parent = $2 }
+    END { print parent }') || exit 2
+  if [ -n "$parent" ]; then
+    DEVTOOLS_LEAK_BASE=$(gitr rev-parse --verify "${parent}^{tree}") || {
+      printf 'commit: could not resolve the amend parent tree; the leak scan is incomplete\n' >&2
+      exit 2
+    }
+  else
+    DEVTOOLS_LEAK_BASE=$(gitr hash-object -w -t tree --stdin </dev/null)
+  fi
+elif [ "$start" = unborn ]; then
+  DEVTOOLS_LEAK_BASE=$(gitr hash-object -w -t tree --stdin </dev/null)
+else
+  DEVTOOLS_LEAK_BASE=$(gitr rev-parse --verify 'HEAD^{tree}')
+fi
+export DEVTOOLS_LEAK_BASE
 mise run devtools:lint-leaks
 mise run devtools:gitleaks
-dt_gate lint "" "$rerun_gates" mise run lint
+# A scoped lint pass cannot satisfy the full-tree lint cache.
+mise run lint
 dt_gate test "" "$rerun_gates" mise run test
 if [ "$mode" = amend ]; then
   DEVTOOLS_UNATTENDED=${DEVTOOLS_UNATTENDED:-0} bash "$here/review.sh" --amend
