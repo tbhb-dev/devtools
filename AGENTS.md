@@ -238,6 +238,8 @@ In the commit skill, `commit.sh` resolves the confirmation itself rather than le
 
 Without any of them the script exits 75 and commits nothing, and the agent asks. An unattended subagent may lack a session grant and can't answer an interactive confirmation. The machine’s `delegation_check` supplies that answer. A parent’s instruction alone doesn't configure it. The checker receives `check <repository> <action>`, with `commit`, `pr`, or `merge` as the action. Exit 0 grants, exit 1 refuses, and any other exit leaves the action waiting. A refusal stops the write, and the agent must not grant itself pre-approval or invent an operator confirmation. Like the reviewer, the checker comes from machine configuration only, because a commit must not be able to widen its own authority. The PR and merge scripts use the same confirmation order for their own actions.
 
+For `merge`, the checker always receives `check <repository> merge --pr <number> --head <40-hex sha>`. The head is the reviewed commit passed to `gh pr merge --match-head-commit`. The invocation appends `--owner-path` exactly when the merge gates run and owner paths appear in the merge policy, while checkers should ignore arguments they don't use.
+
 ## Moving a branch onto its base
 
 Run the `rebase` skill. It picks the base the way the commit preflight does, then replays the branch under pinned settings and checks what came out.
