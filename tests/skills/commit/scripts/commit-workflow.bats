@@ -507,3 +507,27 @@ STUB
   [ "$(git rev-parse HEAD)" = "$start" ]
   ! grep -q '^devtools:lint-leaks$' "$GATE_LOG"
 }
+
+@test "AC7 amend parent extraction keeps a private HEAD message in a pipe" {
+  initial_commit
+  stage tracked.txt second
+  # macOS Bash 3.2 writes here-strings to a temporary file.
+  { printf 'test: private message\n\n'; printf '%20000s' 'fixture-private-literal'; } | git commit --quiet -F -
+  stage tracked.txt reviewed
+  bash "$SCRIPTS/review.sh" --amend
+  real_awk=$(command -v awk)
+  cat >"$BATS_TEST_TMPDIR/bin/awk" <<'STUB'
+#!/usr/bin/env bash
+if [[ $1 == *'/^parent /'* ]]; then
+  [[ -p /dev/stdin ]] || exit 1
+fi
+exec "$REAL_AWK" "$@"
+STUB
+  chmod +x "$BATS_TEST_TMPDIR/bin/awk"
+  export REAL_AWK="$real_awk"
+  mkdir "$BATS_TEST_TMPDIR/empty-tmp"
+  export TMPDIR="$BATS_TEST_TMPDIR/empty-tmp"
+  run /bin/bash "$SCRIPTS/commit.sh" --amend --dry-run
+  [ "$status" -eq 0 ]
+  [ -z "$(find "$TMPDIR" -type f -print)" ]
+}

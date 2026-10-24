@@ -112,7 +112,7 @@ add_needle() {
 names=$(compgen -e | LC_ALL=C sort)
 for name in $names; do
   [[ $name == *_PRIVATE_STRINGS ]] || continue
-  IFS=',' read -r -a entries <<<"${!name}"
+  IFS=',' read -r -a entries < <(printf '%s\n' "${!name}")
   index=0
   for entry in "${entries[@]+"${entries[@]}"}"; do
     index=$((index + 1))

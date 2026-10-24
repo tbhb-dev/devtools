@@ -134,8 +134,9 @@ dt_commit_lint "$draft" "$rerun_gates"
 export DEVTOOLS_LEAK_MODE=staged
 if [ "$mode" = amend ]; then
   # rev-list hides parents at a shallow boundary; the commit header does not.
-  header=$(gitr cat-file -p HEAD) || exit 2
-  parent=$(awk '/^$/ { exit } /^parent / { print $2; exit }' <<<"$header") || exit 2
+  parent=$(gitr cat-file -p HEAD | awk '!header_done && /^$/ { header_done = 1 }
+    !header_done && /^parent / && !parent { parent = $2 }
+    END { print parent }') || exit 2
   if [ -n "$parent" ]; then
     DEVTOOLS_LEAK_BASE=$(gitr rev-parse --verify "${parent}^{tree}") || {
       printf 'commit: could not resolve the amend parent tree; the leak scan is incomplete\n' >&2

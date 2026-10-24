@@ -1712,8 +1712,9 @@ private_base() {
 	no_secrets
 }
 
-@test "staged scanning fails closed on a missing base environment file" {
-	printf '[env._]\nfile = ".env"\n' >mise.toml
+@test "staged scanning fails closed on a missing required base environment value" {
+	# mise treats absent environment files as optional; require the value explicitly.
+	printf '[env._]\nfile = ".env"\n[env]\nPROJECT_PRIVATE_STRINGS = { required = true }\n' >mise.toml
 	git add -- mise.toml
 	git commit -qm 'test: missing base environment file'
 	run_check --staged
@@ -1748,9 +1749,88 @@ private_base() {
 	git add -- mise.toml
 	git commit -qm 'test: base private list'
 	oid=$(git rev-parse HEAD:mise.toml)
-	real=$(command -v git)
-	fake git "[ \"\$1\" = cat-file ] && [ \"\$3\" = $oid ] && exit 1; exec $real \"\$@\""
+	object=$(git rev-parse --git-path "objects/${oid:0:2}/${oid:2}")
+	rm "$object"
 	run_check --staged
 	[ "$status" -eq 2 ]
 	[[ "$output" == *'could not read base private lists'* ]]
+}
+
+# mise owns source discovery; each fixture removes the base entry locally.
+base_source_change() {
+	git add -- "$@"
+	git commit -qm 'test: base list source'
+	printf 'kestrel99\n' >new.txt
+	unset O11Y_PRIVATE_STRINGS
+}
+
+@test "staged scanning evaluates top-level env_file from the base" {
+	printf 'env_file = ".env"\n' >mise.toml
+	printf 'PROJECT_PRIVATE_STRINGS=kestrel99,mango-secret\n' >.env
+	base_source_change mise.toml .env
+	printf 'PROJECT_PRIVATE_STRINGS=mango-secret\n' >.env
+	git add -- .env new.txt
+	run_check --staged
+	[ "$status" -eq 1 ]
+	[[ "$output" == *'new.txt:1: private literal PROJECT_PRIVATE_STRINGS entry 1'* ]]
+}
+
+@test "staged scanning evaluates env source from the base" {
+	printf '[env._]\nsource = "private.sh"\n' >mise.toml
+	printf 'export PROJECT_PRIVATE_STRINGS=kestrel99,mango-secret\n' >private.sh
+	base_source_change mise.toml private.sh
+	printf 'export PROJECT_PRIVATE_STRINGS=mango-secret\n' >private.sh
+	git add -- private.sh new.txt
+	run_check --staged
+	[ "$status" -eq 1 ]
+	[[ "$output" == *'new.txt:1: private literal PROJECT_PRIVATE_STRINGS entry 1'* ]]
+}
+
+@test "staged scanning evaluates the selected mise environment from the base" {
+	mkdir -p .config/mise
+	printf '[env]\nPROJECT_PRIVATE_STRINGS = "kestrel99,mango-secret"\n' >.config/mise/config.review.toml
+	base_source_change .config/mise/config.review.toml
+	printf '[env]\nPROJECT_PRIVATE_STRINGS = "mango-secret"\n' >.config/mise/config.review.toml
+	git add -- .config/mise/config.review.toml new.txt
+	MISE_ENV=review run_check --staged
+	[ "$status" -eq 1 ]
+	[[ "$output" == *'new.txt:1: private literal PROJECT_PRIVATE_STRINGS entry 1'* ]]
+}
+
+@test "staged scanning evaluates base templates with the real environment" {
+	printf '[env]\nPROJECT_PRIVATE_STRINGS = "{{ env.BASE_LIST_FIXTURE }}"\n' >mise.toml
+	base_source_change mise.toml
+	printf '[env]\nPROJECT_PRIVATE_STRINGS = "mango-secret"\n' >mise.toml
+	git add -- mise.toml new.txt
+	BASE_LIST_FIXTURE=kestrel99,mango-secret run_check --staged
+	[ "$status" -eq 1 ]
+	[[ "$output" == *'new.txt:1: private literal PROJECT_PRIVATE_STRINGS entry 1'* ]]
+}
+
+@test "staged scanning fails closed when mise cannot evaluate the base" {
+	printf '[env]\nPROJECT_PRIVATE_STRINGS = "{{ env.MISSING_LIST_FIXTURE }}"\n' >mise.toml
+	git add -- mise.toml
+	git commit -qm 'test: invalid base template'
+	unset MISSING_LIST_FIXTURE
+	run_check --staged
+	[ "$status" -eq 2 ]
+	[[ "$output" == *'could not read base private lists'* ]]
+}
+
+@test "staged scanning fails closed when mise is unavailable" {
+	fake mise 'exit 127'
+	run_check --staged
+	[ "$status" -eq 2 ]
+	[[ "$output" == *'could not read base private lists'* ]]
+}
+
+@test "staged scanning evaluates tracked environment file values" {
+	printf '[env._]\nfile = ".env"\n' >mise.toml
+	printf 'PROJECT_PRIVATE_STRINGS=${BASE_LIST_FIXTURE}\n' >.env
+	base_source_change mise.toml .env
+	printf 'PROJECT_PRIVATE_STRINGS=mango-secret\n' >.env
+	git add -- .env new.txt
+	BASE_LIST_FIXTURE=kestrel99,mango-secret run_check --staged
+	[ "$status" -eq 1 ]
+	[[ "$output" == *'new.txt:1: private literal PROJECT_PRIVATE_STRINGS entry 1'* ]]
 }
