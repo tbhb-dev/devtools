@@ -122,7 +122,7 @@ HOOK
     run bash "$SCRIPTS/publish.sh" --dry-run
     [ "$status" -eq 0 ]
     [[ "$output" != *"mise run lint passed at"* ]]
-    [[ "$output" == *"mise run test passed at"*"(reused)"* ]]
+    [[ "$output" == *"mise run test-affected"*"(reused)"* ]]
     [ "$(cat "$GATE_LOG")" = $'lint-pr-description\ndevtools:lint-leaks\ndevtools:gitleaks\nlint\nreview' ]
   done
 }

@@ -373,7 +373,6 @@ HOOK
   [ -z "$(remote_topic)" ]
 }
 
-
 @test "publisher resolves milestones and issue references without REST" {
   write_draft v1 '' 'Closes #12.'
   bash "$SCRIPTS/review.sh"
@@ -471,8 +470,8 @@ STUB
   bash "$SCRIPTS/create-pr.sh" --dry-run
   run bash "$SCRIPTS/create-pr.sh" --confirmed
   [ "$status" -eq 0 ]
-  [[ "$output" == *"mise run test passed at"*"(reused)"* ]]
-  [ "$(cat "$GATE_LOG")" = $'lint-pr-description\ndevtools:lint-leaks\ndevtools:gitleaks\nlint\nreview\ntest\ndevtools:lint-leaks\ndevtools:gitleaks\nlint\nreview' ]
+  [[ "$output" == *"mise run test-affected"*"(reused)"* ]]
+  [ "$(cat "$GATE_LOG")" = $'lint-pr-description\ndevtools:lint-leaks\ndevtools:gitleaks\nlint\nreview\ntest-affected\ndevtools:lint-leaks\ndevtools:gitleaks\nlint\nreview' ]
 }
 
 @test "check-description rejects an unknown label before other gates (#198)" {
@@ -488,7 +487,7 @@ STUB
   export DEVTOOLS_REVIEW_CMD='cat >/dev/null; echo "VERDICT: CHANGES REQUIRED"; echo finding'
   run bash "$SCRIPTS/create-pr.sh" --dry-run
   [ "$status" -ne 0 ]
-  refute_grep '^test$' "$GATE_LOG"
+  refute_grep '^test-affected$' "$GATE_LOG"
 }
 
 @test "publisher rerun-gates overrides cached passes (#161)" {
@@ -497,7 +496,7 @@ STUB
   run bash "$SCRIPTS/create-pr.sh" --dry-run --rerun-gates
   [ "$status" -eq 0 ]
   [[ "$output" != *"(reused)"* ]]
-  [ "$(grep -c '^test$' "$GATE_LOG")" -eq 2 ]
+  [ "$(grep -c '^test-affected$' "$GATE_LOG")" -eq 2 ]
 }
 
 @test "preflight does not require the optional description writer (#225)" {
@@ -696,4 +695,69 @@ publication_edit() {
   [ -z "$(remote_topic)" ]
   refute_grep '^devtools:lint-leaks' "$GATE_LOG"
   refute_grep '^pr create ' "$GH_LOG"
+}
+
+@test "AC2 affected task replaces the full suite (#648)" {
+  bash "$SCRIPTS/review.sh"
+  run bash "$SCRIPTS/create-pr.sh" --dry-run
+  [ "$status" -eq 0 ]
+  grep -qx test-affected "$GATE_LOG"
+  ! grep -qx test "$GATE_LOG"
+  [ "$(cat "$AFFECTED_LOG")" = "run test-affected --base $(git merge-base origin/main HEAD)" ]
+  [[ "$output" == *"No affected tests were selected."* ]]
+}
+
+@test "AC3 and AC5 unavailable or failing affected tests block publication (#648)" {
+  bats_require_minimum_version 1.5.0
+  bash "$SCRIPTS/review.sh"
+  for failure in missing failing binary; do
+    if [ "$failure" = missing ]; then
+      export AFFECTED_TASKS='[]'
+    elif [ "$failure" = failing ]; then
+      unset AFFECTED_TASKS
+      export FAIL_GATE=test-affected
+    else
+      unset FAIL_GATE
+      export MISSING_TEST_BINARY=1
+    fi
+    expected=1
+    [ "$failure" != binary ] || expected=127
+    run -"$expected" bash "$SCRIPTS/create-pr.sh"
+    case "$failure" in
+    missing) [[ "$output" == *"test gate: missing mise task test-affected"* ]] ;;
+    failing) grep -qx test-affected "$GATE_LOG" ;;
+    binary) [[ "$output" == *"missing-test-binary"* ]] ;;
+    esac
+    [ -z "$(remote_topic)" ]
+    refute_grep 'pr create' "$GH_LOG"
+    refute_grep '^test$' "$GATE_LOG"
+  done
+}
+
+@test "AC2 PR uses the merge base of the resolved remote base (#648)" {
+  stale_local_main
+  mergebase=$(git rev-parse origin/main)
+  git checkout --quiet --detach origin/main
+  commit_file upstream.txt 'fix: upstream change'
+  git push --quiet origin HEAD:main
+  git checkout --quiet topic
+  bash "$SCRIPTS/review.sh"
+  run /bin/bash "$SCRIPTS/create-pr.sh" --dry-run
+  [ "$status" -eq 0 ]
+  [ "$(cat "$AFFECTED_LOG")" = "run test-affected --base $mergebase" ]
+  [ "$mergebase" != "$(git rev-parse origin/main)" ]
+  [ "$mergebase" != "$(git rev-parse main)" ]
+  ! grep -qx test "$GATE_LOG"
+}
+
+@test "AC3 missing PR task has one refusal line and never writes (#648)" {
+  bash "$SCRIPTS/review.sh"
+  export AFFECTED_TASKS='test-affected-other'
+  run /bin/bash "$SCRIPTS/create-pr.sh" --dry-run
+  [ "$status" -ne 0 ]
+  [ "$(printf '%s\n' "$output" | grep '^test gate:')" = 'test gate: missing mise task test-affected' ]
+  [ ! -s "$AFFECTED_LOG" ]
+  [ -z "$(remote_topic)" ]
+  refute_grep 'pr create' "$GH_LOG"
+  ! grep -qx test "$GATE_LOG"
 }

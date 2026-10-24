@@ -165,7 +165,18 @@ mise run devtools:lint-leaks
 mise run devtools:gitleaks
 # A scoped lint pass cannot satisfy the full-tree lint cache.
 mise run lint
-dt_gate test "" "$rerun_gates" mise run test
+tasks=$(mise tasks ls --name-only) || exit $?
+if ! printf '%s\n' "$tasks" | grep -qx test-affected; then
+  printf 'test gate: missing mise task test-affected\n' >&2
+  exit 1
+fi
+test_base=HEAD
+if [ "$mode" = amend ]; then
+  test_base=${parent:-$DEVTOOLS_LEAK_BASE}
+elif [ "$start" = unborn ]; then
+  test_base=$DEVTOOLS_LEAK_BASE
+fi
+dt_gate test "" "$rerun_gates" mise run test-affected --base "$test_base" --staged
 if [ "$mode" = amend ]; then
   DEVTOOLS_UNATTENDED=${DEVTOOLS_UNATTENDED:-0} bash "$here/review.sh" --amend
 else

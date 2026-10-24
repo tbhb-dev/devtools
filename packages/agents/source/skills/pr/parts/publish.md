@@ -13,3 +13,5 @@ After the push it checks that `HEAD` is still the reviewed commit and that origi
 Use `--dry-run` to check without writing and `--rerun-gates` to force fresh gates. The script can skip checks while the cache key is unchanged: the clean committed tree, command, gate inputs, and tool versions must match. Description checks also bind the draft. It prints each check it skips. Leak scans and the scripted review always run.
 
 Use `--check-description` to run the description validator and prose lint along with labels and property checks. This skips scans, review, lint, tests, and publication. Publication runs description checks, leak scans, lint, the scripted review, and tests in that order.
+
+The test gate requires `test-affected`. Tests cover the committed diff from the merge base of the resolved base ref and `HEAD`. A missing task refuses publication without a full-suite fallback.

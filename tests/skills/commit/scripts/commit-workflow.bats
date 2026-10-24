@@ -419,8 +419,8 @@ STUB
   bash "$SCRIPTS/commit.sh" --amend --dry-run --rerun-gates
   run bash "$SCRIPTS/commit.sh" --amend --confirmed
   [ "$status" -eq 0 ]
-  [[ "$output" == *"mise run test passed at"*"(reused)"* ]]
-  [ "$(cat "$GATE_LOG")" = $'lint-commit-msg\ndevtools:lint-leaks\ndevtools:gitleaks\nlint\ntest\nlint-commit-msg\ndevtools:lint-leaks\ndevtools:gitleaks\nlint\ntest\ndevtools:lint-leaks\ndevtools:gitleaks\nlint' ]
+  [[ "$output" == *"mise run test-affected"*"(reused)"* ]]
+  [ "$(cat "$GATE_LOG")" = $'lint-commit-msg\ndevtools:lint-leaks\ndevtools:gitleaks\nlint\ntest-affected\nlint-commit-msg\ndevtools:lint-leaks\ndevtools:gitleaks\nlint\ntest-affected\ndevtools:lint-leaks\ndevtools:gitleaks\nlint' ]
 }
 
 @test "commit always reviews after gates, including a cached dry run (#161)" {
@@ -433,7 +433,7 @@ STUB
   bash "$SCRIPTS/commit.sh" --amend --dry-run
   run bash "$SCRIPTS/commit.sh" --amend --confirmed
   [ "$status" -eq 0 ]
-  [ "$(cat "$GATE_LOG")" = $'lint-commit-msg\ndevtools:lint-leaks\ndevtools:gitleaks\nlint\ntest\nreview\ndevtools:lint-leaks\ndevtools:gitleaks\nlint\nreview' ]
+  [ "$(cat "$GATE_LOG")" = $'lint-commit-msg\ndevtools:lint-leaks\ndevtools:gitleaks\nlint\ntest-affected\nreview\ndevtools:lint-leaks\ndevtools:gitleaks\nlint\nreview' ]
 }
 
 @test "preflight uses configured sign-off instead of Git identity" {
@@ -544,4 +544,87 @@ STUB
   run /bin/bash "$SCRIPTS/commit.sh" --amend --dry-run
   [ "$status" -eq 0 ]
   [ -z "$(find "$TMPDIR" -type f -print)" ]
+}
+
+@test "AC1 affected task replaces the full suite (#648)" {
+  initial_commit
+  stage tracked.txt reviewed
+  bash "$SCRIPTS/review.sh"
+  run bash "$SCRIPTS/commit.sh" --dry-run
+  [ "$status" -eq 0 ]
+  grep -qx test-affected "$GATE_LOG"
+  ! grep -qx test "$GATE_LOG"
+  [ "$(cat "$AFFECTED_LOG")" = "run test-affected --base HEAD --staged" ]
+  [[ "$output" == *"No affected tests were selected."* ]]
+}
+
+@test "AC3 and AC5 unavailable or failing affected tests block a commit (#648)" {
+  bats_require_minimum_version 1.5.0
+  initial_commit
+  stage tracked.txt reviewed
+  bash "$SCRIPTS/review.sh"
+  before=$(git rev-parse HEAD)
+  for failure in missing failing binary; do
+    if [ "$failure" = missing ]; then
+      export AFFECTED_TASKS='[]'
+    elif [ "$failure" = failing ]; then
+      unset AFFECTED_TASKS
+      export FAIL_GATE=test-affected
+    else
+      unset FAIL_GATE
+      export MISSING_TEST_BINARY=1
+    fi
+    expected=1
+    [ "$failure" != binary ] || expected=127
+    run -"$expected" bash "$SCRIPTS/commit.sh"
+    case "$failure" in
+    missing) [[ "$output" == *"test gate: missing mise task test-affected"* ]] ;;
+    failing) grep -qx test-affected "$GATE_LOG" ;;
+    binary) [[ "$output" == *"missing-test-binary"* ]] ;;
+    esac
+    [ "$(git rev-parse HEAD)" = "$before" ]
+    ! grep -qx test "$GATE_LOG"
+  done
+}
+
+@test "AC1 amend compares the index with the first parent (#648)" {
+  initial_commit
+  parent=$(git rev-parse HEAD)
+  stage tracked.txt second
+  git commit --quiet -m 'test: second state'
+  stage tracked.txt reviewed
+  bash "$SCRIPTS/review.sh" --amend
+  run /bin/bash "$SCRIPTS/commit.sh" --amend --dry-run
+  [ "$status" -eq 0 ]
+  [ "$(cat "$AFFECTED_LOG")" = "run test-affected --base $parent --staged" ]
+}
+
+@test "AC1 root commit and root amend compare the index with the empty tree (#648)" {
+  empty=$(git hash-object -t tree --stdin </dev/null)
+  stage tracked.txt root
+  bash "$SCRIPTS/review.sh"
+  run /bin/bash "$SCRIPTS/commit.sh" --dry-run
+  [ "$status" -eq 0 ]
+  [ "$(cat "$AFFECTED_LOG")" = "run test-affected --base $empty --staged" ]
+  git commit --quiet -m 'test: root state'
+  : >"$AFFECTED_LOG"
+  stage tracked.txt reviewed
+  bash "$SCRIPTS/review.sh" --amend
+  run /bin/bash "$SCRIPTS/commit.sh" --amend --dry-run
+  [ "$status" -eq 0 ]
+  [ "$(cat "$AFFECTED_LOG")" = "run test-affected --base $empty --staged" ]
+}
+
+@test "AC3 missing task has one refusal line and never reaches affected tests (#648)" {
+  initial_commit
+  stage tracked.txt reviewed
+  bash "$SCRIPTS/review.sh"
+  before=$(git rev-parse HEAD)
+  export AFFECTED_TASKS='test-affected-other'
+  run /bin/bash "$SCRIPTS/commit.sh" --dry-run
+  [ "$status" -ne 0 ]
+  [ "$(printf '%s\n' "$output" | grep '^test gate:')" = 'test gate: missing mise task test-affected' ]
+  [ ! -s "$AFFECTED_LOG" ]
+  [ "$(git rev-parse HEAD)" = "$before" ]
+  ! grep -qx test "$GATE_LOG"
 }

@@ -240,4 +240,6 @@ Report the resulting commit, then the groups still waiting from step 2, if any.
 
 Preflight checks the toolchain this skill assumes, and `references/PRECONDITIONS.md` beside this file lists it. When a precondition is missing, tell the operator rather than improvising a substitute. The workflow commits only the repository holding the session. A sibling checkout has no stamp of its own, so open a session there to commit it.
 
-The wrapper runs `lint-commit-msg`, `lint`, and `test`. Use `--dry-run` to run these checks without committing, or `--rerun-gates` to force fresh checks even when the wrapper holds successful results from the past hour for the same clean committed tree. It prints each cached result it uses. Leak scans and the scripted review always run.
+The wrapper runs `lint-commit-msg`, `lint`, and `test-affected`. Use `--dry-run` to run these checks without committing, or `--rerun-gates` to force fresh checks even when the wrapper holds successful results from the past hour for the same clean committed tree. It prints each cached result it uses. Leak scans and the scripted review always run.
+
+Without `test-affected`, the gate refuses the commit. Comparison uses the index against `HEAD`, its parent for an amend, or the empty tree for a root commit.

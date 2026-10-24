@@ -201,7 +201,13 @@ reviewed_digest=$(dt_stamp_value pr draft) || exit $?
   die "PR_AGENTDESC.md changed while it was being copied. Review it again."
 printf 'stamped for %s on %s\n' "$head" "$base_ref"
 
-dt_gate test "" "$rerun_gates" mise run test
+tasks=$(mise tasks ls --name-only) || exit $?
+if ! printf '%s\n' "$tasks" | grep -qx test-affected; then
+  printf 'test gate: missing mise task test-affected\n' >&2
+  exit 1
+fi
+test_base=$(gitr merge-base "$base_ref" HEAD) || exit $?
+dt_gate test "" "$rerun_gates" mise run test-affected --base "$test_base"
 
 # The pre-push hook scans the pushed commits against the same base.
 export DEVTOOLS_LEAK_MODE=publish DEVTOOLS_LEAK_BASE=$leak_base
