@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file. See [conven
 - - -
 <!-- release -->
 
+## [v0.18.0](https://github.com/tbhb-dev/devtools/compare/3f8e9b7b6369482d2e588ae3a71b4e5264b88d22..v0.18.0) - 2026-10-24
+
+### Features
+
+- (**gh-post**) add help and dependency checks and pin reviews to a head (#641) - ([3f8e9b7](https://github.com/tbhb-dev/devtools/commit/3f8e9b7b6369482d2e588ae3a71b4e5264b88d22)) - tbhb.dev Agent
+
+### Bug Fixes
+
+- (**merge**) let `constitutional_paths` decide gate-config merges (#632) - ([1d62800](https://github.com/tbhb-dev/devtools/commit/1d62800731d7bd2df08c62f1fe341126ff3299d4)) - tbhb.dev Agent
+
+- - -
+
+<!-- release -->
+
 ## [v0.17.0](https://github.com/tbhb-dev/devtools/compare/36c82760c4b0c6551ef7509fa84c695f055ef1e0..v0.17.0) - 2026-10-24
 
 ### Features
