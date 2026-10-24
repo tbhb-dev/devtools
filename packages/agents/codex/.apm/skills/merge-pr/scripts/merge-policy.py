@@ -269,18 +269,30 @@ def inline_comment(text: str) -> str:
     return ""
 
 
+def constitutional_paths(base: str) -> re.Pattern[str]:
+    """Read constitutional_paths from .agents/agent-skills.conf at the pinned base."""
+    data = blob(base, ".agents/agent-skills.conf").decode("utf-8")
+    for line in data.split("\n"):
+        if line.lstrip(" \t").startswith("#"):
+            continue
+        key, sep, value = line.partition("=")
+        if sep and key.strip(" \t") == "constitutional_paths":
+            return regex(value.strip(" \t"), "constitutional_paths")
+    return regex("^$", "constitutional_paths")
+
+
 def inspect(base: str, head: str, config: dict[str, str]) -> dict[str, object]:
     """Return reasons needing an owner and the owner paths for reporting."""
-    golden, markers, configs, owners, constitutional = [
+    golden, markers, configs, owners = [
         regex(config.get(key, ""), key)
         for key in (
             "golden_paths",
             "loosening_markers",
             "gate_config_paths",
             "owner_paths",
-            "constitutional_paths",
         )
     ]
+    constitutional = constitutional_paths(base)
     # Validate cleanup policy before any irreversible write as well.
     regex(config.get("disposable_ignored", ""), "disposable_ignored")
     mergebase = git("merge-base", base, head).decode().strip()
@@ -304,9 +316,6 @@ def inspect(base: str, head: str, config: dict[str, str]) -> dict[str, object]:
     findings = []
     owner_paths = [path for path in paths if owners.search(path)]
     for path in paths:
-        # Configuration changes cannot waive their own policy.
-        if path == ".agents/agent-skills.conf":
-            findings.append([path, "changes merge policy"])
         if constitutional.search(path):
             findings.append([path, "changes a constitutional file"])
         if remote_path(path, owned):

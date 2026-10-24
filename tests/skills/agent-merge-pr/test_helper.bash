@@ -52,7 +52,7 @@ approve_owner() {
 }
 
 policy_config() {
-  jq -n '{golden_paths:"^golden/",constitutional_paths:"^constitution[.]txt$",loosening_markers:"noqa|nolint|vale (off|disable)",gate_config_paths:"lint[.]yaml$",owner_paths:"^owned/",disposable_ignored:"^cache/"}'
+  jq -n '{golden_paths:"^golden/",loosening_markers:"noqa|nolint|vale (off|disable)",gate_config_paths:"lint[.]yaml$",owner_paths:"^owned/",disposable_ignored:"^cache/"}'
 }
 
 inspect_policy() { policy_config | uv run --quiet --script "$POLICY" inspect "$BASE_OID" "$HEAD_OID"; }
