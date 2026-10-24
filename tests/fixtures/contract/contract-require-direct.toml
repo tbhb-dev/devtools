@@ -1,0 +1,36 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright Tony Burns
+
+schema_version = 1
+baseline_tag = "v1.1.0"
+
+[[key]]
+file = ".agents/agent-skills.conf"
+name = "alpha"
+required = false
+accepts = ["empty", "nonempty"]
+sample = "x"
+
+[[key]]
+file = ".agents/agent-skills.conf"
+name = "beta"
+required = false
+accepts = ["empty", "nonempty"]
+sample = "x"
+
+[[key]]
+file = ".agents/agent-skills.conf"
+name = "gamma"
+required = true
+accepts = ["empty", "nonempty"]
+sample = "x"
+
+[[transition.entry]]
+kind = "required-key-added"
+file = ".agents/agent-skills.conf"
+key = "gamma"
+applies_when = "key-absent"
+target_value = "on"
+after_release = "v1.1.0"
+verify = "The reader accepts the conf and gamma is set."
+rollback = "Delete the gamma line."

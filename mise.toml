@@ -310,6 +310,7 @@ run = [
   "mise run check-generated-skills",
   "mise run lint-script-hygiene",
   "mise run check-versions",
+  "mise run check-consumer-notes",
 ]
 
 # Same membership as the old lint-go-all recipe.
@@ -452,6 +453,24 @@ run = "bash tools/check-script-hygiene.sh"
 [tasks.check-versions]
 description = "Check the published version literals against the latest release tag"
 run = "bash tools/check-versions.sh"
+
+# The consumer contract in .devtools/consumer-contract.toml is the one
+# source for the consumer notes. Run generate-consumer-notes after editing
+# it. The check is offline and cheap, so it rides in lint. The comparison
+# against the preceding tag's reader is check-consumer-contract: it runs
+# that reader, needs the release tags, and takes about half a minute, so
+# release readiness and the cog pre-bump hook run it instead.
+[tasks.generate-consumer-notes]
+description = "Write docs/consumer-transitions.md from the consumer contract"
+run = "go run ./cmd/agentrepo contract render"
+
+[tasks.check-consumer-notes]
+description = "Check docs/consumer-transitions.md against the consumer contract"
+run = "go run ./cmd/agentrepo contract render --check"
+
+[tasks.check-consumer-contract]
+description = "Judge the consumer contract against the preceding tag's reader"
+run = "go run ./cmd/agentrepo contract validate"
 
 # A skill with a source under packages/agents/source/skills is written
 # into both harness packages from that one source, because APM deploys a

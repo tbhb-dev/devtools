@@ -32,6 +32,9 @@ tag_prefix = "v"
 # The g flag covers a line naming more than one ref.
 # Refresh the local package versions before cog records the release tree.
 pre_bump_hooks = [
+  # First, so a candidate that hides a consumer transition fails before any
+  # literal is rewritten, and so before cog's commit and tag.
+  "mise exec -- go run ./cmd/agentrepo contract validate",
   "perl -pi -e 's/^version: .*/version: {{version}}/' apm.yml",
   "perl -pi -e 's/^version: .*/version: {{version}}/' packages/agents/common/apm.yml",
   "perl -pi -e 's/^version: .*/version: {{version}}/' packages/agents/claude/apm.yml",

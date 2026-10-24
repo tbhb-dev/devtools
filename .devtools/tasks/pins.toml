@@ -104,6 +104,21 @@ if [ -z "$sha" ]; then
 fi
 echo "$version resolves to $sha"
 
+# The consumer contract. The plan runs before any file changes: it reads
+# the tag's contract, runs this repository's own readers (the ones
+# committed at HEAD, never a neighboring release's) and refuses a move
+# that skips the baseline or a compatibility bridge, naming the tag to
+# take first. The tool is resolved now, so the apply and verify steps
+# below run the same version that planned, even after the pin moves.
+contract_state=$(mktemp -d)
+trap 'rm -rf "$contract_state"' EXIT
+contract_tool=$(mise which agentrepo 2>/dev/null || command -v agentrepo || true)
+if [ -z "$contract_tool" ] || ! "$contract_tool" contract --help >/dev/null 2>&1; then
+  echo 'declare "go:github.com/tbhb-dev/devtools/cmd/agentrepo" in mise.toml [tools] at the contract baseline or later' >&2
+  exit 1
+fi
+"$contract_tool" contract plan --remote "$remote" --tag "$version" --state "$contract_state"
+
 # Every rewrite below goes through a temporary file rather than an
 # in-place flag. `sed -i` takes a mandatory backup suffix on BSD sed and
 # none on GNU sed, and this task runs wherever a consumer's developers
@@ -193,6 +208,13 @@ fi
 
 mise install
 mise run devtools:apm-sync
+
+# The declared transitions land in the same tree as the pins, and only
+# they: a conf that already satisfies the contract is not touched. Both
+# readers then judge the result, the consumer's own as it stood before
+# the bump and the target's from its tag.
+"$contract_tool" contract apply --state "$contract_state"
+"$contract_tool" contract verify --state "$contract_state"
 
 # The verification runs against the payload the sync just delivered, so
 # it is the post-update task rather than this one. A release that
