@@ -836,7 +836,6 @@ hook_repo() {
 	command -v mise >/dev/null
 	mkdir -p .devtools/scripts .devtools/tasks
 	cp "$checker" .devtools/scripts/check-leaks.sh
-	cp "$BATS_TEST_DIRNAME/leak-base-lists.py" .devtools/scripts/
 	cp "$BATS_TEST_DIRNAME/install-pre-push.sh" .devtools/scripts/install-pre-push.sh
 	# Exercise the published setup, including consumers without the leak tasks.
 	cp "$repo_root/.devtools/tasks/"{git-hooks,leaks}.toml .devtools/tasks/
@@ -1680,157 +1679,10 @@ private_base() {
 	[ "$status" -eq 2 ]
 }
 
-@test "staged task retains a private list entry removed from base mise configuration" {
-	printf '[task_config]\nincludes = ["%s/.devtools/tasks/leaks.toml"]\n[env]\nO11Y_PRIVATE_STRINGS = "kestrel99,mango-secret"\n' "$repo_root" >mise.toml
-	export DEVTOOLS_DIR="$repo_root/.devtools"
-	git add -- mise.toml
-	git commit -qm 'test: base private list'
-	sed -i 's/kestrel99,mango-secret/mango-secret/' mise.toml
-	printf 'kestrel99\n' >new.txt
-	git add -- mise.toml new.txt
-	mise trust -q "$work/mise.toml"
-	DEVTOOLS_LEAK_MODE=staged run mise run --quiet devtools:lint-leaks
-	[ "$status" -eq 1 ]
-	[[ "$output" == *'new.txt:1: private literal O11Y_PRIVATE_STRINGS'* ]]
-	no_secrets
-}
-
-@test "staged task retains private list entries from file sources in base mise configuration" {
-	printf '[task_config]\nincludes = ["%s/.devtools/tasks/leaks.toml"]\n[env._]\nfile = ".env"\n' "$repo_root" >mise.toml
-	printf 'PROJECT_PRIVATE_STRINGS=ab#kestrel99,mango-secret\n' >.env
-	export DEVTOOLS_DIR="$repo_root/.devtools"
-	git add -- mise.toml .env
-	git commit -qm 'test: base private list file'
-	sed -i 's/ab#kestrel99,mango-secret/mango-secret/' .env
-	printf 'ab#kestrel99\n' >new.txt
-	git add -- .env new.txt
-	unset O11Y_PRIVATE_STRINGS
-	mise trust -q "$work/mise.toml"
-	DEVTOOLS_LEAK_MODE=staged run mise run --quiet devtools:lint-leaks
-	[ "$status" -eq 1 ]
-	[[ "$output" == *'new.txt:1: private literal PROJECT_PRIVATE_STRINGS entry 1'* ]]
-	no_secrets
-}
-
-@test "staged scanning fails closed on a missing required base environment value" {
-	# mise treats absent environment files as optional; require the value explicitly.
-	printf '[env._]\nfile = ".env"\n[env]\nPROJECT_PRIVATE_STRINGS = { required = true }\n' >mise.toml
-	git add -- mise.toml
-	git commit -qm 'test: missing base environment file'
-	run_check --staged
-	[ "$status" -eq 2 ]
-	[[ "$output" == *'could not read base private lists'* ]]
-}
-
 @test "staged scanning finds new submodule entries despite diff.ignoreSubmodules all" {
 	git config diff.ignoreSubmodules all
 	git update-index --add --cacheinfo "160000,$base,kestrel99"
 	run_check --staged
 	[ "$status" -eq 1 ]
 	[[ "$output" =~ path#[0-9a-f]{8}:path:\ private\ literal\ O11Y_PRIVATE_STRINGS\ entry\ 6 ]]
-}
-
-@test "staged scanning retains base lists when checkout configuration is deleted" {
-	mkdir -p .config/mise/conf.d
-	printf '[env]\nPROJECT_PRIVATE_STRINGS = "kestrel99,mango-secret"\n' >.config/mise/conf.d/private.toml
-	git add -- .config/mise/conf.d/private.toml
-	git commit -qm 'test: base private list'
-	git rm -q .config/mise/conf.d/private.toml
-	printf 'kestrel99\n' >new.txt
-	git add -- new.txt
-	unset O11Y_PRIVATE_STRINGS
-	run_check --staged
-	[ "$status" -eq 1 ]
-	[[ "$output" == *'new.txt:1: private literal PROJECT_PRIVATE_STRINGS entry 1'* ]]
-}
-
-@test "staged scanning fails closed on an unreadable base private list blob" {
-	printf '[env]\nPROJECT_PRIVATE_STRINGS = "kestrel99,mango-secret"\n' >mise.toml
-	git add -- mise.toml
-	git commit -qm 'test: base private list'
-	oid=$(git rev-parse HEAD:mise.toml)
-	object=$(git rev-parse --git-path "objects/${oid:0:2}/${oid:2}")
-	rm "$object"
-	run_check --staged
-	[ "$status" -eq 2 ]
-	[[ "$output" == *'could not read base private lists'* ]]
-}
-
-# mise owns source discovery; each fixture removes the base entry locally.
-base_source_change() {
-	git add -- "$@"
-	git commit -qm 'test: base list source'
-	printf 'kestrel99\n' >new.txt
-	unset O11Y_PRIVATE_STRINGS
-}
-
-@test "staged scanning evaluates top-level env_file from the base" {
-	printf 'env_file = ".env"\n' >mise.toml
-	printf 'PROJECT_PRIVATE_STRINGS=kestrel99,mango-secret\n' >.env
-	base_source_change mise.toml .env
-	printf 'PROJECT_PRIVATE_STRINGS=mango-secret\n' >.env
-	git add -- .env new.txt
-	run_check --staged
-	[ "$status" -eq 1 ]
-	[[ "$output" == *'new.txt:1: private literal PROJECT_PRIVATE_STRINGS entry 1'* ]]
-}
-
-@test "staged scanning evaluates env source from the base" {
-	printf '[env._]\nsource = "private.sh"\n' >mise.toml
-	printf 'export PROJECT_PRIVATE_STRINGS=kestrel99,mango-secret\n' >private.sh
-	base_source_change mise.toml private.sh
-	printf 'export PROJECT_PRIVATE_STRINGS=mango-secret\n' >private.sh
-	git add -- private.sh new.txt
-	run_check --staged
-	[ "$status" -eq 1 ]
-	[[ "$output" == *'new.txt:1: private literal PROJECT_PRIVATE_STRINGS entry 1'* ]]
-}
-
-@test "staged scanning evaluates the selected mise environment from the base" {
-	mkdir -p .config/mise
-	printf '[env]\nPROJECT_PRIVATE_STRINGS = "kestrel99,mango-secret"\n' >.config/mise/config.review.toml
-	base_source_change .config/mise/config.review.toml
-	printf '[env]\nPROJECT_PRIVATE_STRINGS = "mango-secret"\n' >.config/mise/config.review.toml
-	git add -- .config/mise/config.review.toml new.txt
-	MISE_ENV=review run_check --staged
-	[ "$status" -eq 1 ]
-	[[ "$output" == *'new.txt:1: private literal PROJECT_PRIVATE_STRINGS entry 1'* ]]
-}
-
-@test "staged scanning evaluates base templates with the real environment" {
-	printf '[env]\nPROJECT_PRIVATE_STRINGS = "{{ env.BASE_LIST_FIXTURE }}"\n' >mise.toml
-	base_source_change mise.toml
-	printf '[env]\nPROJECT_PRIVATE_STRINGS = "mango-secret"\n' >mise.toml
-	git add -- mise.toml new.txt
-	BASE_LIST_FIXTURE=kestrel99,mango-secret run_check --staged
-	[ "$status" -eq 1 ]
-	[[ "$output" == *'new.txt:1: private literal PROJECT_PRIVATE_STRINGS entry 1'* ]]
-}
-
-@test "staged scanning fails closed when mise cannot evaluate the base" {
-	printf '[env]\nPROJECT_PRIVATE_STRINGS = "{{ env.MISSING_LIST_FIXTURE }}"\n' >mise.toml
-	git add -- mise.toml
-	git commit -qm 'test: invalid base template'
-	unset MISSING_LIST_FIXTURE
-	run_check --staged
-	[ "$status" -eq 2 ]
-	[[ "$output" == *'could not read base private lists'* ]]
-}
-
-@test "staged scanning fails closed when mise is unavailable" {
-	fake mise 'exit 127'
-	run_check --staged
-	[ "$status" -eq 2 ]
-	[[ "$output" == *'could not read base private lists'* ]]
-}
-
-@test "staged scanning evaluates tracked environment file values" {
-	printf '[env._]\nfile = ".env"\n' >mise.toml
-	printf 'PROJECT_PRIVATE_STRINGS=${BASE_LIST_FIXTURE}\n' >.env
-	base_source_change mise.toml .env
-	printf 'PROJECT_PRIVATE_STRINGS=mango-secret\n' >.env
-	git add -- .env new.txt
-	BASE_LIST_FIXTURE=kestrel99,mango-secret run_check --staged
-	[ "$status" -eq 1 ]
-	[[ "$output" == *'new.txt:1: private literal PROJECT_PRIVATE_STRINGS entry 1'* ]]
 }

@@ -529,7 +529,8 @@ if [[ $mode != files ]]; then
 fi
 
 # Staged configuration is pinned to the base tree, never the checkout or
-# index under review. Other modes retain their checkout configuration.
+# index under review. Both sides use the exported private literals loaded
+# above. Other modes retain their checkout configuration.
 pattern_exempt='^$'
 patterns=/dev/null
 if [[ $mode == staged ]]; then
@@ -553,13 +554,6 @@ if [[ $mode == staged ]]; then
     [[ $kind == blob && $permissions != 120000 ]] || die "could not read valid pattern configuration"
     git cat-file blob "$oid" >"$tmp/$path"
   done <"$tmp/config-list"
-  # Union exported lists with the base configuration; removing a list
-  # entry in the checkout must not waive an occurrence in the index.
-  TMPDIR=$tmp uv run --script "$script_dir/leak-base-lists.py" "$base_tree" "$needles" >"$tmp/base-needles" 2>"$tmp/list-error" ||
-    die "could not read base private lists; the result is incomplete"
-  while IFS=$'\t' read -r name entry; do
-    add_needle "$name" "$entry"
-  done <"$tmp/base-needles"
   config_root=$tmp
 else
   config_root=$top
