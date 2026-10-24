@@ -54,7 +54,7 @@
 # this task from a git hook today, which is exactly why the failure would
 # be a surprise.
 ["devtools:update-pins"]
-description = "Move every tbhb-dev/devtools pin to <version> and run the follow-ons; check-pins flags prose mentions for manual edits (alias: devtools:update)"
+description = "Move every tbhb-dev/devtools pin to <version> and run the follow-ons; rewrite prose naming the previous pin, leaving other versions for manual edits (alias: devtools:update)"
 alias = "devtools:update"
 usage = 'arg "<version>" help="The devtools release to move to, e.g. v0.5.0"'
 run = '''
@@ -64,21 +64,48 @@ set -euo pipefail
 version=$usage_version
 case "$version" in v*) ;; *) version="v$version" ;; esac
 
+# Keep scratch data outside the worktree, even when TMPDIR points into it.
+scratch=$(mktemp -d /tmp/devtools-update-pins.XXXXXXXX)
+replacement=
+cleanup() {
+  [ -z "$replacement" ] || rm -f -- "$replacement"
+  rm -rf -- "$scratch"
+}
+trap cleanup EXIT
+trap 'exit 1' HUP INT TERM
+
+regular_file() {
+  local file=$1 path=$1
+  # Check ancestors too: a regular file inside a linked directory follows it.
+  while :; do
+    if [ -L "$path" ]; then
+      printf '%s: skipped symlink\n' "$file"
+      return 1
+    fi
+    case "$path" in */*) path=${path%/*} ;; *) break ;; esac
+  done
+  if [ ! -f "$file" ]; then
+    printf '%s: skipped non-regular file\n' "$file"
+    return 1
+  fi
+}
+
 # Validate APM forms before changing any file.
-if [ -f apm.yml ]; then
+if regular_file ./apm.yml; then
   awk '
     /^[[:space:]]*-[[:space:]]*["\047]?tbhb-dev\/devtools/ && !/tbhb-dev\/devtools(\/packages\/agents\/(common|claude|codex|agy))?#v[0-9]+\.[0-9]+\.[0-9]+/ {
       print "unsupported devtools APM pin: " $0 > "/dev/stderr"; bad = 1
     }
     END { exit bad }
-  ' apm.yml
+  ' ./apm.yml
 fi
-if ! grep -Eq '^"go:github.com/tbhb-dev/devtools/cmd/guard-markdown"[[:space:]]*=' mise.toml; then
+regular_file ./mise.toml || exit 1
+if ! grep -Eq '^"go:github.com/tbhb-dev/devtools/cmd/guard-markdown"[[:space:]]*=' -- ./mise.toml; then
   echo 'declare "go:github.com/tbhb-dev/devtools/cmd/guard-markdown" in mise.toml [tools]' >&2
   exit 1
 fi
-guard_version=$(sed -nE 's|^"go:github.com/tbhb-dev/devtools/cmd/guard-markdown"[[:space:]]*=[[:space:]]*"([^"]*)"|\1|p' mise.toml)
-if ! grep -Eq '^"go:github.com/tbhb-dev/devtools/cmd/commit-lint"[[:space:]]*=' mise.toml; then
+guard_version=$(sed -nE 's|^"go:github.com/tbhb-dev/devtools/cmd/guard-markdown"[[:space:]]*=[[:space:]]*"([^"]*)"|\1|p' -- ./mise.toml)
+if ! grep -Eq '^"go:github.com/tbhb-dev/devtools/cmd/commit-lint"[[:space:]]*=' -- ./mise.toml; then
   printf '"go:github.com/tbhb-dev/devtools/cmd/commit-lint" = "%s"\n' "$guard_version" >&2
   exit 1
 fi
@@ -93,9 +120,9 @@ remote=https://github.com/tbhb-dev/devtools
 # publishes signed annotated tags, so the bare ref is the tag object and
 # pinning it would name something no `uses:` or `rev:` can resolve. The
 # fallback covers a lightweight tag, where no dereferenced ref exists.
-sha=$(git ls-remote "$remote" "refs/tags/$version^{}" | cut -f1)
+sha=$(git ls-remote -- "$remote" "refs/tags/$version^{}" | cut -f1)
 if [ -z "$sha" ]; then
-  sha=$(git ls-remote "$remote" "refs/tags/$version" | cut -f1)
+  sha=$(git ls-remote -- "$remote" "refs/tags/$version" | cut -f1)
 fi
 if [ -z "$sha" ]; then
   echo "no tag $version at $remote" >&2
@@ -111,12 +138,19 @@ echo "$version resolves to $sha"
 edit() {
   local file=$1
   shift
-  "$@" "$file" > "$file.pins.tmp" && mv "$file.pins.tmp" "$file"
+  case "$file" in ./*) ;; *) file=./$file ;; esac
+  regular_file "$file" || return 0
+  # Rename on the same filesystem, retaining executable and other mode bits.
+  replacement=$(mktemp "${file%/*}/.pins.XXXXXXXX")
+  cp -p -- "$file" "$replacement"
+  "$@" "$file" > "$replacement"
+  mv -f -- "$replacement" "$file"
+  replacement=
 }
 
 # The two tag-string sites and the preset extends are self-contained
 # lines, so each is one substitution.
-if [ -f apm.yml ]; then
+if regular_file ./apm.yml; then
   edit apm.yml sed -E "s@(tbhb-dev/devtools(/packages/agents/(common|claude|codex|agy))?#)v[^[:space:]\"']+@\\1$version@"
 fi
 
@@ -126,13 +160,13 @@ edit mise.toml sed -E "s|^(\"go:github.com/tbhb-dev/devtools/cmd/gh-post\"[[:spa
 edit mise.toml sed -E "s|^(\"go:github.com/tbhb-dev/devtools/cmd/agentrepo\"[[:space:]]*=[[:space:]]*)\"[^\"]*\"|\\1\"$version\"|"
 
 for wf in .github/workflows/*.yml .github/workflows/*.yaml; do
-  [ -f "$wf" ] || continue
+  [ -f "./$wf" ] || continue
   edit "$wf" sed -E "s|(uses:[[:space:]]*tbhb-dev/devtools/[^@]*@)[0-9a-f]{7,40}([[:space:]]*#[[:space:]]*)v[^[:space:]]*|\\1$sha\\2$version|"
 done
 
 # Move existing refs on every devtools preset, then maintain their version
 # comments. References without a ref are left alone.
-if [ -f .github/renovate.json5 ]; then
+if regular_file ./.github/renovate.json5; then
   edit .github/renovate.json5 sed -E "s|(github>tbhb-dev/devtools//\\.github/[^/\"]+\\.json5)(#[^\"]+)\"|\\1#$sha\"|"
   edit .github/renovate.json5 sed -E "s|(github>tbhb-dev/devtools//\\.github/[^/\"]+\\.json5#[0-9a-f]{7,40}\",?[[:space:]]*//[[:space:]]*)v[^[:space:]]*|\\1$version|"
 fi
@@ -141,27 +175,46 @@ fi
 # names no repository. Both are one key below the line that does, so the
 # rewrite tracks whether the block it is inside belongs to devtools and
 # clears that state as soon as it fires.
-if [ -f vendir.yml ]; then
-  awk -v ver="$version" '
+if regular_file ./vendir.yml; then
+  edit vendir.yml awk -v ver="$version" '
     /url:[[:space:]]*https:\/\/github\.com\/tbhb-dev\/devtools([[:space:]]|$)/ { in_block = 1 }
     in_block && /^[[:space:]]*ref:[[:space:]]*/ {
       sub(/ref:[[:space:]]*.*/, "ref: " ver)
       in_block = 0
     }
     { print }
-  ' vendir.yml > vendir.yml.pins.tmp && mv vendir.yml.pins.tmp vendir.yml
+  '
 fi
 
-if [ -f .pre-commit-config.yaml ]; then
-  awk -v ver="$version" -v sha="$sha" '
+if regular_file ./.pre-commit-config.yaml; then
+  edit .pre-commit-config.yaml awk -v ver="$version" -v sha="$sha" '
     /repo:[[:space:]]*https:\/\/github\.com\/tbhb-dev\/devtools([[:space:]]|$)/ { in_block = 1 }
     in_block && /^[[:space:]]*rev:[[:space:]]*/ {
       sub(/rev:[[:space:]]*.*/, "rev: " sha "  # frozen: " ver)
       in_block = 0
     }
     { print }
-  ' .pre-commit-config.yaml > .pre-commit-config.yaml.pins.tmp && mv .pre-commit-config.yaml.pins.tmp .pre-commit-config.yaml
+  '
 fi
+
+# Enumerate literal tracked paths before reading content, so links and
+# non-regular files are skipped before any reader can follow or block on them.
+# Git keeps its binary-file rules; NUL-delimited records keep paths literal.
+tracked=$(mktemp "$scratch/tracked.XXXXXXXX")
+mentions=$(mktemp "$scratch/mentions.XXXXXXXX")
+git ls-files -z -- > "$tracked"
+while IFS= read -r -d '' file; do
+  regular_file "./$file" || continue
+  git grep -znI -o -E 'tbhb-dev/devtools[[:space:]]+v[0-9]+\.[0-9]+\.[0-9]+' -- ":(literal)$file" > "$mentions" || {
+    status=$?
+    [ "$status" -eq 1 ] || exit "$status"
+  }
+  while IFS= read -r -d '' file && IFS= read -r -d '' line && IFS= read -r mention; do
+    [ "${mention##*[[:space:]]}" = "$guard_version" ] || continue
+    edit "$file" sed -E "${line}s@(tbhb-dev/devtools[[:space:]]+)${guard_version//./\\.}([^0-9]|$)@\\1$version\\2@g"
+    printf '%s:%s: prose %s -> %s\n' "$file" "$line" "$guard_version" "$version"
+  done < "$mentions"
+done < "$tracked"
 
 # The payload arrives first: the lock and the install below have to see
 # the tool pins this sync delivers, not the ones it replaced.
