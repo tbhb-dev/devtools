@@ -58,7 +58,7 @@ gh-post comment edit 456 -R owner/project --kind review --body-file correction.m
 gh-post release edit v1.0.0 -R owner/project --body-file notes.md
 ```
 
-Supported operations are `issue create|comment|edit`, `pr create|edit|comment|review|ready|close`, `review edit`, `comment edit`, and `release create|edit`. Issue and PR targets are numeric IDs. Comment edits require `--kind issue` for issue comments or `--kind review` for inline review comments. Both use REST `PATCH` endpoints. Release operations translate body input to GitHub's notes-file flag. Creation requires an explicit title for issues and pull requests. New reviews require exactly one of `--approve`, `--comment`, or `--request-changes`.
+Supported operations are `issue create|comment|edit|label`, `pr create|edit|comment|review|ready|close|label`, `review edit`, `comment edit`, and `release create|edit`. Issue and PR targets are numeric IDs. Comment edits require `--kind issue` for issue comments or `--kind review` for inline review comments. Both use REST `PATCH` endpoints. Release operations translate body input to GitHub's notes-file flag. Creation requires an explicit title for issues and pull requests. New reviews require exactly one of `--approve`, `--comment`, or `--request-changes`.
 
 New reviews also require `--commit <40-hex-sha>` and a first body line of `Reviewed head: <sha>` matching that commit. You can wrap the SHA in backticks. Before posting, the command reads the pull request's `headRefOid` through `gh` and refuses a different head with exit 1. Re-read the head and review it again after a push. The command sends JSON fields `commit_id`, `event`, and `body` through `POST /repos/{owner}/{repo}/pulls/{pr}/reviews`. The explicit `commit_id` anchors the review to the examined commit even if a push races the write. Existing scan, identity guard, and audit requirements apply.
 
@@ -84,13 +84,32 @@ Before posting a close reason, the command reads all comment pages and skips an 
 
 GitHub doesn't offer an expected-head condition for these state mutations. A push between the initial check and write can race it. If read-back fails or reports a different head or unexpected state, the command exits nonzero with one diagnostic line. It doesn't retry or undo the write. Inspect GitHub before taking further action.
 
+### Change labels
+
+Change a `change:` label on an issue or PR with `issue label` or `pr label`, without sending a body:
+
+```bash
+gh-post pr label 42 -R owner/project --remove change:docs --add change:feat
+gh-post issue label 17 -R owner/project --add change:fix
+```
+
+You must pass `-R`, and the target repository selects the identity configuration as it does for every other operation. The number must be positive. At least one `--add LABEL` or `--remove LABEL` has to be present, and either repeats. A label change never touches a body, title, assignee, or milestone, since the command rejects `--body-file` and doesn't read stdin.
+
+The command accepts only labels that start with `change:`, compared without regard to case. It refuses a label containing a comma or a newline, so a value can't expand into a list of labels. Any other label draws a refusal that states the `change:` prefix. Those refusals, and a label that appears in both `--add` and `--remove`, exit 2 before the first GitHub call. Labels with the `merge:` and `refinement:` prefixes fall under a separate change. Label values also pass the content scan.
+
+After the identity check, the command reads the target's labels, and reads the repository's label list when something needs adding. If the target already has an added label, or lacks a removed one, nothing changes: the command prints a plain message and exits 0 without a write. An added label that the repository doesn't define exits 1 and isn't created, and the command checks every label before the first write. A `pr label` call on an issue number, an `issue label` call on a pull request number, and a missing target all exit 1. The write is one `gh issue edit` or `gh pr edit` with only label flags, using the repository's own spelling of each label, followed by one audit record with an empty body hash.
+
+`issue edit` and `pr edit` keep their existing `--add-label` and `--remove-label` behavior, which accepts any label and scans a body. This command doesn't change them.
+
+Support covers repositories whose owner-review label doesn't start with `change:`, and the command doesn't look up a repository's configuration to check. Because no devtools gate treats a `change:` label as an authority, every gate stays in place. A consumer that sets a `change:` label as its owner-review label falls outside this support, because an agent could then clear that hold.
+
 ## Results and audit
 
 | Exit | Meaning |
 | --- | --- |
-| 0 | Posted and recorded in the audit log, or an informational flag or dry run succeeded. |
-| 1 | Refused by a scan, identity, head, PR state, or review first-line rule. Also a read-back mismatch after a state write. |
-| 2 | Missing dependency, invalid arguments, configuration or input failure, failed GitHub command, or audit failure. |
+| 0 | Posted and recorded in the audit log, or an informational flag, dry run, or label no-op succeeded. |
+| 1 | Refused by a scan, identity, head, PR state, or review first-line rule. Also a read-back mismatch after a state write, and for labels a missing target, a wrong-kind target, or a label the repository lacks. |
+| 2 | Missing dependency, invalid arguments (including a refused label), configuration or input failure, failed GitHub command, or audit failure. |
 
 Each successful post appends one JSON line to `${XDG_STATE_HOME:-~/.local/state}/devtools/gh-post.log`. It records UTC time, operation, the target URL, and the SHA-256 hash of the body. It never records the body. If the command can't open the audit log, it prevents posting. A failed write or an audit failure after posting needs inspection before retrying, because GitHub may already have accepted the content.
 

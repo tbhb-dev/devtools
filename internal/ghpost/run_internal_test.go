@@ -450,7 +450,7 @@ func TestHelp(t *testing.T) {
 	require.Equal(t, 0, code, errOut)
 	require.Empty(t, errOut)
 	for _, operation := range []string{
-		"issue create", "issue comment", "issue edit", "pr create", "pr edit",
+		"issue create", "issue comment", "issue edit", "issue label", "pr create", "pr edit", "pr label",
 		"pr comment", "pr review", "pr ready", "pr close", "comment edit", "review edit", "release create", "release edit",
 	} {
 		require.Contains(t, out, operation)

@@ -35,7 +35,7 @@ func Run(ctx context.Context, args []string, in io.Reader, out, errOut io.Writer
 	}
 	r, err := parse(args)
 	if err != nil {
-		fmt.Fprintln(errOut, "gh-post:", errUsage)
+		fmt.Fprintln(errOut, "gh-post:", parseFailure(err))
 		return exitEnvironment
 	}
 	repo, err := resolveRepo(ctx, r.repo)
@@ -129,15 +129,22 @@ func resolveRepo(ctx context.Context, repo string) (string, error) {
 }
 
 func gh(ctx context.Context, args []string, input []byte) ([]byte, error) {
+	data, _, err := ghRun(ctx, args, input)
+	return data, err
+}
+
+// ghRun also returns stderr, for callers that tell a missing target from a failure.
+func ghRun(ctx context.Context, args []string, input []byte) ([]byte, string, error) {
 	cmd := exec.CommandContext(ctx, "gh", args...)
 	cmd.Stdin = bytes.NewReader(input)
 	// Explicit targets and body input must not be redirected.
 	cmd.Env = cleanEnv(os.Environ())
-	data, err := cmd.Output()
-	if err != nil {
-		return nil, errEnvironment
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	if err := cmd.Run(); err != nil {
+		return nil, stderr.String(), errEnvironment
 	}
-	return data, nil
+	return stdout.Bytes(), stderr.String(), nil
 }
 
 func cleanEnv(env []string) []string {
@@ -191,6 +198,9 @@ func post(ctx context.Context, r request, body []byte, identities string, out, e
 	defer log.Close()
 	if r.isPRStateChange() {
 		return r.changePRState(ctx, body, login, log, out, errOut)
+	}
+	if r.isLabelChange() {
+		return r.changeLabels(ctx, log, out, errOut)
 	}
 	return postContent(ctx, r, body, log, out, errOut)
 }

@@ -26,7 +26,7 @@ var (
 )
 
 func (r *request) readInput(in io.Reader) ([]byte, error) {
-	if r.operation == prReady {
+	if r.operation == prReady || r.isLabelChange() {
 		return nil, nil
 	}
 	path := r.bodyFile

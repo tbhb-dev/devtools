@@ -11,7 +11,7 @@ import (
 )
 
 var errUsage = errors.New(
-	"expected issue create|comment|edit, pr create|edit|comment|review|ready|close, comment edit, review edit, or release create|edit; use only supported flags and file input",
+	"expected issue create|comment|edit|label, pr create|edit|comment|review|ready|close|label, comment edit, review edit, or release create|edit; use only supported flags and file input",
 )
 
 type request struct {
@@ -24,6 +24,8 @@ type request struct {
 	commit      string
 	head        string
 	commentFile string
+	add         []string
+	remove      []string
 	flags       []string
 	text        []string
 }
@@ -35,6 +37,8 @@ const (
 	prReview       = "pr review"
 	prReady        = "pr ready"
 	prClose        = "pr close"
+	issueLabel     = "issue label"
+	prLabel        = "pr label"
 	issueCreate    = "issue create"
 	prCreate       = "pr create"
 	commentEdit    = "comment edit"
@@ -121,6 +125,8 @@ func (r *request) addValue(key, value string) error {
 		r.commentFile = value
 	case "--kind":
 		r.kind = value
+	case addFlag, removeFlag:
+		r.addLabel(key, value)
 	default:
 		r.flags = append(r.flags, key, value)
 		r.text = append(r.text, value)
@@ -189,7 +195,7 @@ func allowed(operation string) (map[string]bool, map[string]bool, bool) {
 		values = append(values, "--title")
 		switches = []string{draftFlag, "--prerelease"}
 	default:
-		return nil, nil, false
+		return labelFlags(operation)
 	}
 	v, s := map[string]bool{}, map[string]bool{}
 	for _, k := range values {
@@ -237,6 +243,9 @@ func (r *request) validateOperands() error {
 	}
 	if r.operation == reviewEdit && !regexp.MustCompile(`^[1-9][0-9]*$`).MatchString(r.reviewID) {
 		return errUsage
+	}
+	if r.isLabelChange() {
+		return r.validateLabels()
 	}
 	return nil
 }
