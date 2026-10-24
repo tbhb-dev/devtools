@@ -187,7 +187,7 @@ To verify adoption, create a draft at a Vale-scoped path, run `mise run lint-dra
 
 ### Update to the next release
 
-For the next release, run `mise run devtools:update-pins <version>`. In a new linked worktree, run `mise trust` and `vale sync` first so the ignored Vale styles are present before lint or commit gates run.
+For the next release, run `mise run devtools:update-pins v0.19.0`, replacing the version with the release you are moving to. The task accepts the tag with or without its leading `v`, so `0.19.0` and `v0.19.0` do the same thing. It writes the `v`-prefixed form, which is the spelling `devtools:check-pins` requires. In a new linked worktree, run `mise trust` and `vale sync` first so the ignored Vale styles are present before lint or commit gates run.
 
 Upgrading to v0.13.0 requires the preceding `commit-lint` declaration. Add it before running `devtools:update-pins`. The update and pin-check tasks now treat it as a required site alongside `guard-markdown`.
 
