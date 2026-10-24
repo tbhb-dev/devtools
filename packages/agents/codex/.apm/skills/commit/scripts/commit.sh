@@ -133,9 +133,14 @@ dt_commit_lint "$draft" "$rerun_gates"
 # the pre-commit staged hook. A root commit (also when amended) has no parent.
 export DEVTOOLS_LEAK_MODE=staged
 if [ "$mode" = amend ]; then
-  parents=$(gitr rev-list --parents -n 1 HEAD)
-  if [[ $parents == *" "* ]]; then
-    DEVTOOLS_LEAK_BASE=$(gitr rev-parse --verify 'HEAD~1^{tree}')
+  # rev-list hides parents at a shallow boundary; the commit header does not.
+  header=$(gitr cat-file -p HEAD) || exit 2
+  parent=$(awk '/^$/ { exit } /^parent / { print $2; exit }' <<<"$header") || exit 2
+  if [ -n "$parent" ]; then
+    DEVTOOLS_LEAK_BASE=$(gitr rev-parse --verify "${parent}^{tree}") || {
+      printf 'commit: could not resolve the amend parent tree; the leak scan is incomplete\n' >&2
+      exit 2
+    }
   else
     DEVTOOLS_LEAK_BASE=$(gitr hash-object -w -t tree --stdin </dev/null)
   fi

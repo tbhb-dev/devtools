@@ -836,6 +836,7 @@ hook_repo() {
 	command -v mise >/dev/null
 	mkdir -p .devtools/scripts .devtools/tasks
 	cp "$checker" .devtools/scripts/check-leaks.sh
+	cp "$BATS_TEST_DIRNAME/leak-base-lists.py" .devtools/scripts/
 	cp "$BATS_TEST_DIRNAME/install-pre-push.sh" .devtools/scripts/install-pre-push.sh
 	# Exercise the published setup, including consumers without the leak tasks.
 	cp "$repo_root/.devtools/tasks/"{git-hooks,leaks}.toml .devtools/tasks/
@@ -1677,4 +1678,53 @@ private_base() {
 	fake sort 'exit 1'
 	run_check --staged
 	[ "$status" -eq 2 ]
+}
+
+@test "staged task retains a private list entry removed from base mise configuration" {
+	printf '[task_config]\nincludes = ["%s/.devtools/tasks/leaks.toml"]\n[env]\nO11Y_PRIVATE_STRINGS = "kestrel99,mango-secret"\n' "$repo_root" >mise.toml
+	export DEVTOOLS_DIR="$repo_root/.devtools"
+	git add -- mise.toml
+	git commit -qm 'test: base private list'
+	sed -i 's/kestrel99,mango-secret/mango-secret/' mise.toml
+	printf 'kestrel99\n' >new.txt
+	git add -- mise.toml new.txt
+	mise trust -q "$work/mise.toml"
+	DEVTOOLS_LEAK_MODE=staged run mise run --quiet devtools:lint-leaks
+	[ "$status" -eq 1 ]
+	[[ "$output" == *'new.txt:1: private literal O11Y_PRIVATE_STRINGS'* ]]
+	no_secrets
+}
+
+@test "staged scanning finds new submodule entries despite diff.ignoreSubmodules all" {
+	git config diff.ignoreSubmodules all
+	git update-index --add --cacheinfo "160000,$base,kestrel99"
+	run_check --staged
+	[ "$status" -eq 1 ]
+	[[ "$output" =~ path#[0-9a-f]{8}:path:\ private\ literal\ O11Y_PRIVATE_STRINGS\ entry\ 6 ]]
+}
+
+@test "staged scanning retains base lists when checkout configuration is deleted" {
+	mkdir -p .config/mise/conf.d
+	printf '[env]\nPROJECT_PRIVATE_STRINGS = "kestrel99,mango-secret"\n' >.config/mise/conf.d/private.toml
+	git add -- .config/mise/conf.d/private.toml
+	git commit -qm 'test: base private list'
+	git rm -q .config/mise/conf.d/private.toml
+	printf 'kestrel99\n' >new.txt
+	git add -- new.txt
+	unset O11Y_PRIVATE_STRINGS
+	run_check --staged
+	[ "$status" -eq 1 ]
+	[[ "$output" == *'new.txt:1: private literal PROJECT_PRIVATE_STRINGS base entry 1'* ]]
+}
+
+@test "staged scanning fails closed on an unreadable base private list blob" {
+	printf '[env]\nPROJECT_PRIVATE_STRINGS = "kestrel99,mango-secret"\n' >mise.toml
+	git add -- mise.toml
+	git commit -qm 'test: base private list'
+	oid=$(git rev-parse HEAD:mise.toml)
+	real=$(command -v git)
+	fake git "[ \"\$1\" = cat-file ] && [ \"\$3\" = $oid ] && exit 1; exec $real \"\$@\""
+	run_check --staged
+	[ "$status" -eq 2 ]
+	[[ "$output" == *'could not read base private lists'* ]]
 }

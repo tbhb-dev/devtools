@@ -122,20 +122,6 @@ for name in $names; do
   done
 done
 
-if ((loaded == 0)); then
-  msg="no private values loaded (*_PRIVATE_STRINGS unset); only the publishable patterns are checked, so a host name, login or path outside those shapes passes"
-  # On a machine that has the settings file, the values just didn't reach
-  # this process. Say so, because that is a local setup mistake, not CI.
-  if [[ -n $top && -f $top/mise.local.toml ]]; then
-    msg="$msg. mise.local.toml exists here but its values are not in the environment; run the check through mise (mise run devtools:lint-leaks) so it can read them"
-  fi
-  echo "check-leaks: $msg" >&2
-  if [[ ${GITHUB_ACTIONS-} == true ]]; then
-    echo "::notice title=leak check::$msg"
-  fi
-
-fi
-
 # scan reads the record stream the producers write and prints findings.
 # A record starting with \001 opens a file (the rest is its label), one
 # starting with \002 is a path to scan as text of its own, and every other
@@ -299,7 +285,7 @@ emit_file() {
 emit_tree() {
   local f tree_skip
   load_leak_skip
-  git ls-files -z --cached --others --exclude-standard >"$tmp/list"
+  git -c diff.ignoreSubmodules=none ls-files -z --cached --others --exclude-standard >"$tmp/list"
   while IFS= read -r -d '' f; do
     [[ $f =~ $tree_skip ]] && continue
     if [[ -f $f && ! -L $f ]]; then
@@ -317,7 +303,7 @@ emit_staged() {
   local meta st old_path new_path old_label new_label
   local -a m
   # The raw listing pins index blob IDs and rename pairs for the scan.
-  git diff --cached --no-ext-diff --raw --no-abbrev -z -M --diff-filter=ACMRTU "$base_tree" >"$tmp/raw"
+  git -c diff.ignoreSubmodules=none diff --ignore-submodules=none --cached --no-ext-diff --raw --no-abbrev -z -M --diff-filter=ACMRTU "$base_tree" >"$tmp/raw"
   while IFS= read -r -d '' meta; do
     read -r -a m <<<"${meta#:}"
     st=${m[4]}
@@ -534,7 +520,7 @@ while (($#)); do
   shift
 done
 
-script_dir=$(dirname "${BASH_SOURCE[0]}")
+script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=.devtools/scripts/leak-skip.sh
 if [[ $mode == tree ]]; then source "$script_dir/leak-skip.sh"; fi
 if [[ $mode != files ]]; then
@@ -567,6 +553,13 @@ if [[ $mode == staged ]]; then
     [[ $kind == blob && $permissions != 120000 ]] || die "could not read valid pattern configuration"
     git cat-file blob "$oid" >"$tmp/$path"
   done <"$tmp/config-list"
+  # Union exported lists with the base configuration; removing a list
+  # entry in the checkout must not waive an occurrence in the index.
+  TMPDIR=$tmp uv run --script "$script_dir/leak-base-lists.py" "$base_tree" "$needles" >"$tmp/base-needles" 2>"$tmp/list-error" ||
+    die "could not read base private lists; the result is incomplete"
+  while IFS=$'\t' read -r name entry; do
+    add_needle "$name" "$entry"
+  done <"$tmp/base-needles"
   config_root=$tmp
 else
   config_root=$top
@@ -576,6 +569,20 @@ if [[ -n $config_root && -f $config_root/.leak-allow ]]; then
   [[ -n $pattern_exempt ]] || pattern_exempt='^$'
 fi
 if [[ -n $config_root && -f $config_root/.leak-patterns ]]; then patterns=$config_root/.leak-patterns; fi
+
+if ((loaded == 0)); then
+  msg="no private values loaded (*_PRIVATE_STRINGS unset); only the publishable patterns are checked, so a host name, login or path outside those shapes passes"
+  # On a machine that has the settings file, the values just didn't reach
+  # this process. Say so, because that is a local setup mistake, not CI.
+  if [[ -n $top && -f $top/mise.local.toml ]]; then
+    msg="$msg. mise.local.toml exists here but its values are not in the environment; run the check through mise (mise run devtools:lint-leaks) so it can read them"
+  fi
+  echo "check-leaks: $msg" >&2
+  if [[ ${GITHUB_ACTIONS-} == true ]]; then
+    echo "::notice title=leak check::$msg"
+  fi
+
+fi
 
 # Validate EREs before producers use the allow list. awk diagnostics can
 # repeat a malformed expression, so replace them with a fixed error.

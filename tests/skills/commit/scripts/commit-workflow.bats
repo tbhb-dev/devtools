@@ -488,3 +488,22 @@ STUB
   [ "$status" -eq 0 ]
   [ "$(cat "$SCOPE_LOG")" = "$(printf 'devtools:lint-leaks staged %s\nlint staged %s' "$expected" "$expected")" ]
 }
+
+@test "amend refuses a shallow boundary whose real parent is unavailable" {
+  initial_commit
+  stage tracked.txt second
+  git commit --quiet -m 'test: second state'
+  git clone --quiet --depth=1 "file://$REPO" "$BATS_TEST_TMPDIR/shallow"
+  cd "$BATS_TEST_TMPDIR/shallow"
+  git config user.name Tester
+  git config user.email tester@example.com
+  printf 'test: bind the review\n\nSigned-off-by: Tester <tester@example.com>\n' >COMMIT_AGENTMSG
+  stage tracked.txt reviewed
+  start=$(git rev-parse HEAD)
+  bash "$SCRIPTS/review.sh" --amend
+  run bash "$SCRIPTS/commit.sh" --amend --dry-run
+  [ "$status" -eq 2 ]
+  [[ "$output" == *'could not resolve the amend parent tree'* ]]
+  [ "$(git rev-parse HEAD)" = "$start" ]
+  ! grep -q '^devtools:lint-leaks$' "$GATE_LOG"
+}
