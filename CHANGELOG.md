@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file. See [conven
 - - -
 <!-- release -->
 
+## [v0.19.0](https://github.com/tbhb-dev/devtools/compare/5aea47b1fe48161e4d6269a85da38d5bf8011669..v0.19.0) - 2026-10-24
+
+### Features
+
+- (**merge**) pass merge targets to delegation checkers (#500) - ([5aea47b](https://github.com/tbhb-dev/devtools/commit/5aea47b1fe48161e4d6269a85da38d5bf8011669)) - tbhb.dev Agent
+
+### Bug Fixes
+
+- (**leaks**) compare the commit leak scan against the base (#637) - ([78b2ac6](https://github.com/tbhb-dev/devtools/commit/78b2ac62225533807bc38551c253b7aa06cc415c)) - tbhb.dev Agent
+
+- - -
+
+<!-- release -->
+
 ## [v0.18.0](https://github.com/tbhb-dev/devtools/compare/3f8e9b7b6369482d2e588ae3a71b4e5264b88d22..v0.18.0) - 2026-10-24
 
 ### Features
