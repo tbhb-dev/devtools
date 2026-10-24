@@ -186,7 +186,7 @@ To verify adoption, create a draft at a Vale-scoped path, run `mise run lint-dra
 
 ### Update to the next release
 
-For the next release, run `mise run devtools:update-pins <version>`.
+For the next release, run `mise run devtools:update-pins <version>`. It rewrites tracked prose naming the previous pinned release and lists each changed file and line. Mentions of other versions are unchanged for a manual edit.
 
 Upgrading to v0.13.0 requires the preceding `commit-lint` declaration. Add it before running `devtools:update-pins`. The update and pin-check tasks now treat it as a required site alongside `guard-markdown`.
 
