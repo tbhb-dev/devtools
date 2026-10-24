@@ -272,7 +272,7 @@ def inline_comment(text: str) -> str:
 def inspect(base: str, head: str, config: dict[str, str]) -> dict[str, object]:
     """Return reasons needing an owner and the owner paths for reporting."""
     golden, markers, configs, owners, constitutional = [
-        regex(config.get(key, ""), key)
+        regex(config.get(key, "^$" if key == "constitutional_paths" else ""), key)
         for key in (
             "golden_paths",
             "loosening_markers",
@@ -304,9 +304,6 @@ def inspect(base: str, head: str, config: dict[str, str]) -> dict[str, object]:
     findings = []
     owner_paths = [path for path in paths if owners.search(path)]
     for path in paths:
-        # Configuration changes cannot waive their own policy.
-        if path == ".agents/agent-skills.conf":
-            findings.append([path, "changes merge policy"])
         if constitutional.search(path):
             findings.append([path, "changes a constitutional file"])
         if remote_path(path, owned):

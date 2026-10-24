@@ -292,6 +292,31 @@ LOCK
   [[ "$output" == *"Policy pattern golden_paths must not be empty"* ]]
 }
 
+@test "AC6 unset constitutional_paths reads as ^$ while a present empty key fails" {
+  local config
+  change constitution.txt baseline
+  config=$(policy_config | jq 'del(.constitutional_paths)')
+  run uv run --quiet --script "$POLICY" inspect "$BASE_OID" "$HEAD_OID" <<<"$config"
+  [ "$status" -eq 0 ]
+  jq -e '.findings == []' <<<"$output"
+
+  config=$(policy_config | jq '.constitutional_paths = ""')
+  run uv run --quiet --script "$POLICY" inspect "$BASE_OID" "$HEAD_OID" <<<"$config"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"merge policy unreadable: Policy pattern constitutional_paths must not be empty"* ]] || return 1
+
+  sed 's/^constitutional_paths = .*/constitutional_paths =/' .agents/agent-skills.conf >.agents/agent-skills.conf.tmp
+  mv .agents/agent-skills.conf.tmp .agents/agent-skills.conf
+  git add -- .agents/agent-skills.conf
+  git commit --quiet -m 'test: empty constitutional_paths'
+  HEAD_OID=$(git rev-parse HEAD)
+  git push --quiet origin topic
+  pr ".headRefOid=\"$HEAD_OID\" | .reviews[0].commit.oid=\"$HEAD_OID\""
+  run bash "$AGENT/preflight.sh" 7
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"merge policy unreadable: Policy pattern constitutional_paths must not be empty"* ]]
+}
+
 @test "top-level policy refusals include the exception message" {
   run uv run --quiet --script "$POLICY" unknown
   [ "$status" -eq 1 ]
