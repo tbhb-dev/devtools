@@ -1695,6 +1695,32 @@ private_base() {
 	no_secrets
 }
 
+@test "staged task retains private list entries from file sources in base mise configuration" {
+	printf '[task_config]\nincludes = ["%s/.devtools/tasks/leaks.toml"]\n[env._]\nfile = ".env"\n' "$repo_root" >mise.toml
+	printf 'PROJECT_PRIVATE_STRINGS=ab#kestrel99,mango-secret\n' >.env
+	export DEVTOOLS_DIR="$repo_root/.devtools"
+	git add -- mise.toml .env
+	git commit -qm 'test: base private list file'
+	sed -i 's/ab#kestrel99,mango-secret/mango-secret/' .env
+	printf 'ab#kestrel99\n' >new.txt
+	git add -- .env new.txt
+	unset O11Y_PRIVATE_STRINGS
+	mise trust -q "$work/mise.toml"
+	DEVTOOLS_LEAK_MODE=staged run mise run --quiet devtools:lint-leaks
+	[ "$status" -eq 1 ]
+	[[ "$output" == *'new.txt:1: private literal PROJECT_PRIVATE_STRINGS entry 1'* ]]
+	no_secrets
+}
+
+@test "staged scanning fails closed on a missing base environment file" {
+	printf '[env._]\nfile = ".env"\n' >mise.toml
+	git add -- mise.toml
+	git commit -qm 'test: missing base environment file'
+	run_check --staged
+	[ "$status" -eq 2 ]
+	[[ "$output" == *'could not read base private lists'* ]]
+}
+
 @test "staged scanning finds new submodule entries despite diff.ignoreSubmodules all" {
 	git config diff.ignoreSubmodules all
 	git update-index --add --cacheinfo "160000,$base,kestrel99"
@@ -1714,7 +1740,7 @@ private_base() {
 	unset O11Y_PRIVATE_STRINGS
 	run_check --staged
 	[ "$status" -eq 1 ]
-	[[ "$output" == *'new.txt:1: private literal PROJECT_PRIVATE_STRINGS base entry 1'* ]]
+	[[ "$output" == *'new.txt:1: private literal PROJECT_PRIVATE_STRINGS entry 1'* ]]
 }
 
 @test "staged scanning fails closed on an unreadable base private list blob" {
