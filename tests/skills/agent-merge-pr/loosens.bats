@@ -280,9 +280,17 @@ PY
 }
 
 @test "AC1 constitutional_paths ^$ lets a PR edit agent-skills.conf on exact-head App approval" {
-  local config
-  config=$(sed 's/^constitutional_paths = .*/constitutional_paths = ^$/' .agents/agent-skills.conf)
-  change .agents/agent-skills.conf "$config"
+  git checkout --quiet main
+  sed 's/^constitutional_paths = .*/constitutional_paths = ^$/' .agents/agent-skills.conf >.agents/agent-skills.conf.tmp
+  mv .agents/agent-skills.conf.tmp .agents/agent-skills.conf
+  git add -- .agents/agent-skills.conf
+  git commit --quiet -m 'test: set base constitutional_paths to ^$'
+  BASE_OID=$(git rev-parse HEAD)
+  base_at "$BASE_OID"
+  git checkout --quiet topic
+  git rebase --quiet main
+  git push --quiet --force origin main topic
+  change .agents/agent-skills.conf "$(sed 's|^owner_paths = .*|owner_paths = ^custom/|' .agents/agent-skills.conf)"
   app_no
   run bash "$AGENT/preflight.sh" 7
   [ "$status" -eq 0 ]
@@ -296,9 +304,17 @@ PY
 }
 
 @test "AC2 constitutional_paths matching agent-skills.conf holds the PR with needs-owner" {
-  local config
-  config=$(sed 's|^constitutional_paths = .*|constitutional_paths = ^[.]agents/agent-skills[.]conf$|' .agents/agent-skills.conf)
-  change .agents/agent-skills.conf "$config"
+  git checkout --quiet main
+  sed 's|^constitutional_paths = .*|constitutional_paths = ^[.]agents/agent-skills[.]conf$|' .agents/agent-skills.conf >.agents/agent-skills.conf.tmp
+  mv .agents/agent-skills.conf.tmp .agents/agent-skills.conf
+  git add -- .agents/agent-skills.conf
+  git commit --quiet -m 'test: protect agent-skills.conf at base'
+  BASE_OID=$(git rev-parse HEAD)
+  base_at "$BASE_OID"
+  git checkout --quiet topic
+  git rebase --quiet main
+  git push --quiet --force origin main topic
+  change .agents/agent-skills.conf "$(sed 's|^owner_paths = .*|owner_paths = ^custom/|' .agents/agent-skills.conf)"
   app_no
   run bash "$AGENT/preflight.sh" 7
   [ "$status" -ne 0 ]
@@ -358,4 +374,45 @@ PY
   run bash "$AGENT/merge.sh" 7
   [ "$status" -eq 0 ]
   [ -f "$GH_FIXTURES/merged" ]
+}
+
+@test "AC7 base constitutional_paths holds a PR that sets the key to ^$ or removes it" {
+  git checkout --quiet main
+  sed 's|^constitutional_paths = .*|constitutional_paths = ^[.]agents/agent-skills[.]conf$|' .agents/agent-skills.conf >.agents/agent-skills.conf.tmp
+  mv .agents/agent-skills.conf.tmp .agents/agent-skills.conf
+  git add -- .agents/agent-skills.conf
+  git commit --quiet -m 'test: protect agent-skills.conf at base'
+  BASE_OID=$(git rev-parse HEAD)
+  base_at "$BASE_OID"
+  git checkout --quiet topic
+  git rebase --quiet main
+  git push --quiet --force origin main topic
+
+  local base_config
+  base_config=$(cat .agents/agent-skills.conf)
+  change .agents/agent-skills.conf "$(printf '%s\n' "$base_config" | sed 's/^constitutional_paths = .*/constitutional_paths = ^$/; s|^owner_paths = .*|owner_paths = ^custom/|')"
+  app_no
+  run evaluate_policy
+  [ "$status" -eq 0 ]
+  jq -e '.owner_required == true and any(.findings[]; .[0] == ".agents/agent-skills.conf" and .[1] == "changes a constitutional file")' <<<"$output"
+  run bash "$AGENT/preflight.sh" 7
+  [ "$status" -ne 0 ]
+  [[ "$output" == *needs-owner* ]] || return 1
+  [[ "$output" == *'changes a constitutional file'* ]] || return 1
+  run bash "$AGENT/review.sh" 7
+  [ "$status" -ne 0 ]
+  [[ "$output" == *needs-owner* ]] || return 1
+
+  change .agents/agent-skills.conf "$(printf '%s\n' "$base_config" | sed '/^constitutional_paths = /d; s|^owner_paths = .*|owner_paths = ^other/|')"
+  app_no
+  run evaluate_policy
+  [ "$status" -eq 0 ]
+  jq -e '.owner_required == true and any(.findings[]; .[0] == ".agents/agent-skills.conf" and .[1] == "changes a constitutional file")' <<<"$output"
+  run bash "$AGENT/preflight.sh" 7
+  [ "$status" -ne 0 ]
+  [[ "$output" == *needs-owner* ]] || return 1
+  [[ "$output" == *'changes a constitutional file'* ]] || return 1
+  run bash "$AGENT/review.sh" 7
+  [ "$status" -ne 0 ]
+  [[ "$output" == *needs-owner* ]]
 }

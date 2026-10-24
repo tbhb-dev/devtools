@@ -140,12 +140,8 @@ ma_gates() {
   if [ "$final" != true ]; then
     mp_local_diff "$base_oid" "$head" "$st" || return $?
     config='{}'
-    for key in golden_paths constitutional_paths loosening_markers gate_config_paths owner_paths disposable_ignored; do
-      if [ "$key" = constitutional_paths ]; then
-        value=$(dt_repo_conf "$key" '^$') || return $?
-      else
-        value=$(dt_repo_conf "$key") || return $?
-      fi
+    for key in golden_paths loosening_markers gate_config_paths owner_paths disposable_ignored; do
+      value=$(dt_repo_conf "$key") || return $?
       config=$(printf '%s' "$config" | jq --arg key "$key" --arg value "$value" '. + {($key):$value}') || return $?
     done
     ma_policy inspect "$base_oid" "$head" <<<"$config" >"$st/merge.policy.json" || return $?
