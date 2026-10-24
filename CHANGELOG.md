@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file. See [conven
 - - -
 <!-- release -->
 
+## [v0.17.0](https://github.com/tbhb-dev/devtools/compare/36c82760c4b0c6551ef7509fa84c695f055ef1e0..v0.17.0) - 2026-10-24
+
+### Features
+
+- (**agy-otel**) record hook events in a local spool (#512) - ([36c8276](https://github.com/tbhb-dev/devtools/commit/36c82760c4b0c6551ef7509fa84c695f055ef1e0)) - tbhb.dev Agent
+
+### Bug Fixes
+
+- (**ci**) keep reusable scan CodeQL pins aligned (#461) - ([fc7ae83](https://github.com/tbhb-dev/devtools/commit/fc7ae830e8c8faa50ca7216785854c7455ee114e)) - tbhb.dev Agent
+- (**commitlint**) accept generated subjects on merge commits (#454) - ([ca875c4](https://github.com/tbhb-dev/devtools/commit/ca875c45f656926ca118f07c7a41a65a63cd22fa)) - tbhb.dev Agent
+- (**gh-post**) resolve App identities from stored credentials (#577) - ([b30ca00](https://github.com/tbhb-dev/devtools/commit/b30ca00da23b2e86830c9d78cc1cbeeed487c21b)) - tbhb.dev Agent
+- (**renovate**) group devtools Go tool pins with releases (#508) - ([14e6860](https://github.com/tbhb-dev/devtools/commit/14e6860be44c602d6e1db22cb3cd8562db5d6763)) - tbhb.dev Agent
+
+- - -
+
+<!-- release -->
+
 ## [v0.16.0](https://github.com/tbhb-dev/devtools/compare/226a50c0b33c0b2733b2886dec2d72d711e362de..v0.16.0) - 2026-10-23
 
 ### Features
