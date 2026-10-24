@@ -213,12 +213,20 @@ YAML
 }
 
 @test "update leaves prose for a manual edit reported by check" {
-  printf '# adapted from tbhb-dev/devtools v0.10.0\n' > tombi.toml
-  git add -- tombi.toml
+  printf '# adapted from tbhb-dev/devtools v0.10.0\n' > README.md
+  git add -- README.md
   run env usage_version=v0.11.0 bash "${BATS_TEST_TMPDIR}/update.sh"
   [ "$status" -eq 1 ]
-  grep -Fxq '# adapted from tbhb-dev/devtools v0.10.0' tombi.toml
-  [[ "$output" == *'tombi.toml:1'*'pinned v0.11.0'* ]]
+  grep -Fxq '# adapted from tbhb-dev/devtools v0.10.0' README.md
+  [[ "$output" == *'README.md:1'*'pinned v0.11.0'* ]]
+}
+
+@test "update rewrites adapted tombi.toml for the new release" {
+  printf '#:schema tombi://www.schemastore.org/tombi.json\n# Standard tombi config (tombi 1.2.0) adapted from tbhb-dev/devtools v0.10.0.\n' > tombi.toml
+  git add -- tombi.toml
+  run env usage_version=v0.11.0 bash "${BATS_TEST_TMPDIR}/update.sh"
+  [ "$status" -eq 0 ]
+  grep -Fxq '# Standard tombi config (tombi 1.2.0) adapted from tbhb-dev/devtools v0.11.0.' tombi.toml
 }
 
 @test "check and update require a managed gh-post pin" {

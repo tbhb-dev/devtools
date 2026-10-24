@@ -12,6 +12,7 @@
 #   .pre-commit-config.yaml          rev: <sha>  # frozen: vX.Y.Z
 #   .github/workflows/*.y*ml         four `uses: ...@<sha> # vX.Y.Z`
 #   .github/renovate.json5           the preset extends, `...json5#<ref>`
+#   tombi.toml                       the adapted header comment, `tbhb-dev/devtools vX.Y.Z`
 #
 # Most of those hold a commit SHA beside a tag comment, so moving a
 # version resolves a tag to a commit rather than substituting text. A
@@ -118,6 +119,21 @@ edit() {
 # lines, so each is one substitution.
 if [ -f apm.yml ]; then
   edit apm.yml sed -E "s@(tbhb-dev/devtools(/packages/agents/(common|claude|codex|agy))?#)v[^[:space:]\"']+@\\1$version@"
+fi
+
+# The adapted tombi header names the release it came from. Bash does the
+# substitution so the line needs no further sed expression.
+move_tombi_version() {
+  local line
+  while IFS= read -r line || [ -n "$line" ]; do
+    if [[ $line =~ ^(.*tbhb-dev/devtools[[:space:]]+)v[0-9]+\.[0-9]+\.[0-9]+(.*)$ ]]; then
+      line=${BASH_REMATCH[1]}$version${BASH_REMATCH[2]}
+    fi
+    printf '%s\n' "$line"
+  done < "$1"
+}
+if [ -f tombi.toml ]; then
+  move_tombi_version tombi.toml > tombi.toml.pins.tmp && mv tombi.toml.pins.tmp tombi.toml
 fi
 
 edit mise.toml sed -E "s|^(\"go:github.com/tbhb-dev/devtools/cmd/guard-markdown\"[[:space:]]*=[[:space:]]*)\"[^\"]*\"|\\1\"$version\"|"
