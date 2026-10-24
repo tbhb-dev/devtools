@@ -17,7 +17,6 @@ setup() {
 case "$1 $2" in
 "auth status") exit 0 ;;
 "api graphql") echo agent ;;
-"api rate_limit") echo 1792195200 ;;
 "pr checks")
   n=$(($(cat "$CHECKS/count" 2>/dev/null || echo 0) + 1))
   printf '%s\n' "$n" >"$CHECKS/count"
@@ -104,12 +103,13 @@ calls() { cat "$CHECKS/count"; }
   [[ "$output" == *"FAILED #7 with 1 failing check(s)"* ]]
 }
 
-@test "quota exhaustion stops the watcher with reset and distinct status" {
+@test "quota exhaustion stops the watcher with a distinct status" {
   : >"$CHECKS/1"
-  printf 'HTTP 403: API rate limit exceeded\n' >"$CHECKS/1.err"
+  printf 'gh: API rate limit exceeded for user ID 1. (HTTP 403)\n' >"$CHECKS/1.err"
   run bash "$SCRIPT" 7
   [ "$status" -eq 76 ]
-  [[ "$output" == *"reset time: 1792195200"* ]]
+  [[ "$output" == *"primary GraphQL rate limit"* ]]
+  [[ "$output" == *"the reset time isn't known from the failure"* ]]
   [ "$(calls)" -eq 1 ]
 }
 

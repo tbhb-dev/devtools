@@ -97,8 +97,7 @@ case "${args[0]} ${args[1]:-}" in
   if [ "$filter" = .defaultBranchRef.name ]; then echo main; else cat "$F/repository"; fi ;;
 "pr merge") source "$MERGE_STUB"; gh_merge ;;
 
-"api rate_limit") echo 1792195200 ;;
-"api user") echo 'HTTP 403: API rate limit exceeded' >&2; exit 1 ;;
+"api user") echo 'gh: API rate limit exceeded for user ID 1. (HTTP 403)' >&2; exit 1 ;;
 "api graphql")
   if [ -n "${GH_GRAPHQL_ERROR:-}" ]; then
     echo "$GH_GRAPHQL_ERROR" >&2
