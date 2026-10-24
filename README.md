@@ -155,7 +155,7 @@ Keep any other task includes the project needs. Both prose tasks have default bo
 
 Each consumer defines its prose policy.
 
-Supply `.vale.ini`, `.cspell.jsonc` and the Markdown lint config. Scope Vale to the draft paths and run `vale sync` to install its styles and the published `ai-tells-agent.tmpl` template. Draft lint checks that rules cover the target path before running Vale, cspell, and rumdl. For corrections carrying `replace_with`, the replacement task checks the original span before applying them. It leaves other findings for an author. It needs uv and Python 3.14 or later. uv can provision the interpreter.
+Supply `.vale.ini`, `.cspell.jsonc` and the Markdown lint config. Scope Vale to the draft paths and run `vale sync` to install its styles and the published `ai-tells-agent.tmpl` template. Because Git ignores the synced styles, run `vale sync` in each new linked worktree before running prose or draft lint. Draft lint checks that rules cover the target path before running Vale, cspell, and rumdl. For corrections carrying `replace_with`, the replacement task checks the original span before applying them. It leaves other findings for an author. It needs uv and Python 3.14 or later. uv can provision the interpreter.
 
 ### Deploy agent packages
 
@@ -179,6 +179,7 @@ Keep tag references and commit references aligned. The pin tasks read these form
 | `.pre-commit-config.yaml` | Full commit SHA with `# frozen: vX.Y.Z` |
 | `.github/workflows/*.yml` or `*.yaml` | devtools `uses` calls use a full commit SHA with `# vX.Y.Z` |
 | `.github/renovate.json5` | devtools preset ref uses `#vX.Y.Z`, or a commit SHA with a `// vX.Y.Z` comment |
+| `tombi.toml` | Optional adaptation header naming `tbhb-dev/devtools vX.Y.Z` |
 
 ### Verify adoption
 
@@ -186,11 +187,11 @@ To verify adoption, create a draft at a Vale-scoped path, run `mise run lint-dra
 
 ### Update to the next release
 
-For the next release, run `mise run devtools:update-pins <version>`.
+For the next release, run `mise run devtools:update-pins <version>`. In a new linked worktree, run `mise trust` and `vale sync` first so the ignored Vale styles are present before lint or commit gates run.
 
 Upgrading to v0.13.0 requires the preceding `commit-lint` declaration. Add it before running `devtools:update-pins`. The update and pin-check tasks now treat it as a required site alongside `guard-markdown`.
 
-It resolves the tag and moves APM, tool, vendir, hook, workflow, and preset pins. It then syncs the payload and refreshes configured lock platforms. After installing the tools and reconciling APM, it checks the new pins. The consumer must select `apm.toml` alongside `pins.toml`. It no longer needs to supply an `apm-sync` task. Review and commit the resulting files. Unpinned Renovate presets remain unpinned and cause a disagreement with versioned sites.
+It resolves the tag and moves APM, tool, vendir, hook, workflow, and preset pins, along with the adaptation header in `tombi.toml` when present. It then syncs the payload and refreshes configured lock platforms. After installing the tools and reconciling APM, it checks the new pins. The consumer must select `apm.toml` alongside `pins.toml`. It no longer needs to supply an `apm-sync` task. Review and commit the resulting files. Unpinned Renovate presets remain unpinned and cause a disagreement with versioned sites.
 
 Wire `devtools:check-pins`, `devtools:check-vendored`, `devtools:check-toolchain` and `devtools:lint-apm` into the consumer's combined lint task. Keep local policy outside the vendored directories.
 
