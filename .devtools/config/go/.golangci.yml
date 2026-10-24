@@ -28,6 +28,8 @@ formatters:
       module-path: example.com/project
       extra:
         group-params: true
+        clothe-returns: true
+        balance-calls: true
     goimports:
       local-prefixes:
         - example.com/project
