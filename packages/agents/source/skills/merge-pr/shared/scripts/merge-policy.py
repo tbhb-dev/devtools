@@ -275,13 +275,13 @@ PIN_MISE = re.compile(
 PIN_WORKFLOW = re.compile(
     r"^(\s*(?:-\s+)?uses:\s*tbhb-dev/devtools/[^@\s]+@)"
     r"[0-9a-f]{7,40}"
-    r"(\s*#\s*)v[0-9]+\.[0-9]+\.[0-9]+(\s*)$"
+    r"(\s*#\s*)v[0-9]+\.[0-9]+\.[0-9]+(\s.*|)$"
 )
 PIN_TOMBI = re.compile(r"^( *#.*\btbhb-dev/devtools +)v[0-9]+\.[0-9]+\.[0-9]+(.*)$")
 PIN_RENOVATE = re.compile(
     r'^(\s*"github>tbhb-dev/devtools//\.github/[^/"]+\.json5#)'
     r"(?:[0-9a-f]{7,40}|v[0-9]+\.[0-9]+\.[0-9]+)"
-    r'(",?\s*//\s*)v[0-9]+\.[0-9]+\.[0-9]+(\s*)$'
+    r'(",?\s*//\s*)v[0-9]+\.[0-9]+\.[0-9]+(\s.*|)$'
 )
 PIN_VENDIR_CONTEXT = re.compile(
     r"^( *)(- +)?url: +https://github\.com/tbhb-dev/devtools(?: +#.*| *)$"
@@ -430,12 +430,12 @@ def constitutional_paths(base: str) -> re.Pattern[str]:
 def scan_loosening(
     path: str,
     diff: str,
-    markers: re.Pattern[str],
-    configs: re.Pattern[str],
+    patterns: tuple[re.Pattern[str], re.Pattern[str]],
     base: str,
     paths: list[str],
 ) -> list[list[str]]:
     """Return suppression, exclusion, and removed-gate findings from a file diff."""
+    markers, configs = patterns
     findings: list[list[str]] = []
     lines = [
         line
@@ -528,7 +528,7 @@ def inspect(base: str, head: str, config: dict[str, str]) -> dict[str, object]:
         if golden.search(path):
             findings.append([path, "changes a golden file"])
             non_pin_findings = non_pin_findings or not pin_only
-        loosening = scan_loosening(path, diff, markers, configs, base, paths)
+        loosening = scan_loosening(path, diff, (markers, configs), base, paths)
         if loosening:
             findings.extend(loosening)
             non_pin_findings = True

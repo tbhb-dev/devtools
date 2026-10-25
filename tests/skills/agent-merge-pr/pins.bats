@@ -24,8 +24,18 @@ YAML
 jobs:
   lint:
     uses: tbhb-dev/devtools/.github/workflows/lint.yml@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa # v0.10.0
+  lint-extra:
+    uses: tbhb-dev/devtools/.github/workflows/lint.yml@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa # v0.10.0 extra
 YAML
 	cp .github/workflows/ci.yaml .github/workflows/ci.yml
+	local line
+	while IFS= read -r line; do
+		if [[ "$line" == *'renovate-go-config.json5'* ]]; then
+			line=${line/v0.10.0/v0.10.0 extra}
+		fi
+		printf '%s\n' "$line"
+	done <.github/renovate.json5 >renovate.tmp
+	mv renovate.tmp .github/renovate.json5
 	cat >.pre-commit-config.yaml <<'YAML'
 repos:
   - repo: https://github.com/tbhb-dev/devtools
@@ -87,6 +97,25 @@ pin_only() {
 
 @test "AC1 Renovate preset pin replacements have no finding" {
 	pin_only .github/renovate.json5
+}
+
+@test "AC2 changed workflow comment suffix preserves findings" {
+	changed_suffix .github/workflows/ci.yml
+}
+
+@test "AC2 changed Renovate comment suffix preserves findings" {
+	changed_suffix .github/renovate.json5
+}
+
+changed_suffix() {
+	bump "$1"
+	local line
+	while IFS= read -r line; do
+		printf '%s\n' "${line/ extra/ changed}"
+	done <"$1" >"$1.tmp"
+	mv "$1.tmp" "$1"
+	inspect "$1"
+	findings_are "[[\"$1\", \"changes a constitutional file\"], [\"$1\", \"changes a golden file\"]]"
 }
 
 @test "AC1 vendir pin replacements use the preceding devtools URL" {
@@ -372,6 +401,11 @@ apm.yml
 mise.toml
 tombi.toml
 vendir.yml' ]
+	# The task must retain the suffix in both supported comment forms.
+	run grep -F '# v0.11.0 extra' .github/workflows/ci.yaml .github/workflows/ci.yml
+	[ "$status" -eq 0 ]
+	run grep -F '// v0.11.0 extra' .github/renovate.json5
+	[ "$status" -eq 0 ]
 	inspect apm.yml mise.toml tombi.toml .github vendir.yml .pre-commit-config.yaml
 	findings_are '[]'
 	[[ "$output" == *'"owner_paths": ["mise.toml"]}' ]]
