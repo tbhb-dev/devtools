@@ -494,7 +494,6 @@ extends = "devtools:lint-squash-msg"
 # exits 0 -- byte for byte what a clean document produces.
 [tasks.lint-draft]
 extends = "devtools:lint-draft"
-run = "bash tools/lint-draft.sh $usage_file"
 
 # About a third of a typical vale run needs no judgment: the rule's own
 # action holds the correction, and the output template already prints it
