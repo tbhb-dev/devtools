@@ -244,6 +244,20 @@ REMOVED_GATE = re.compile(
     r"^\s*(?:-\s*id\s*:|(?:-\s*)?[\"']?mise run (?:lint|check|test)|"
     r"(?:lint|check|test)[\w-]*\s*=)"
 )
+LOCK_CHECKSUM = re.compile(r"^\s*checksum\s*=")
+
+
+def vendored_nolint(
+    path: str, base: str, paths: list[str], comment: str, markers: re.Pattern[str]
+) -> bool:
+    """Exempt only `nolint` upstream wrote in a Go file the diff re-vendors."""
+    return (
+        path.startswith("vendor/")
+        and path.endswith(".go")
+        and "vendor/modules.txt" in paths
+        and bool(git("ls-tree", base, "--", "vendor/modules.txt"))
+        and all(match.group(0) == "nolint" for match in markers.finditer(comment))
+    )
 
 
 def inline_comment(text: str) -> str:
@@ -334,14 +348,29 @@ def inspect(base: str, head: str, config: dict[str, str]) -> dict[str, object]:
             "--",
             path,
         ).decode("utf-8", "surrogateescape")
-        for line in diff.splitlines():
-            if line.startswith(("+++", "---")) or not line.startswith(("+", "-")):
-                continue
+        lines = [
+            line
+            for line in diff.split("\n")
+            if not line.startswith(("+++", "---")) and line.startswith(("+", "-"))
+        ]
+        # Re-recording every removed checksum replaces them; it removes no gate.
+        replaced = PurePosixPath(path).name == "mise.lock" and sum(
+            line.startswith("+") and bool(LOCK_CHECKSUM.match(line[1:]))
+            for line in lines
+        ) >= sum(
+            line.startswith("-") and bool(LOCK_CHECKSUM.match(line[1:]))
+            for line in lines
+        )
+        for line in lines:
             text = line[1:]
             if COMMENT.match(text):
                 continue
+            comment = inline_comment(text)
             if line.startswith("+") and (
-                markers.search(inline_comment(text))
+                (
+                    markers.search(comment)
+                    and not vendored_nolint(path, base, paths, comment, markers)
+                )
                 or (configs.search(path) and EXCLUSION.search(text))
             ):
                 findings.append([path, "adds a suppression or exclusion"])
@@ -349,6 +378,7 @@ def inspect(base: str, head: str, config: dict[str, str]) -> dict[str, object]:
                 line.startswith("-")
                 and configs.search(path)
                 and REMOVED_GATE.search(text)
+                and not (replaced and LOCK_CHECKSUM.match(text))
             ):
                 findings.append([path, "removes a hook or gate"])
     return {"findings": findings, "owner_paths": owner_paths}
