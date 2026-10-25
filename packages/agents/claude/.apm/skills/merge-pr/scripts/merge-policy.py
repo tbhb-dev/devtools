@@ -270,32 +270,37 @@ PIN_APM = re.compile(
 PIN_MISE = re.compile(
     r'^("go:github\.com/tbhb-dev/devtools/cmd/'
     r'(?:guard-markdown|commit-lint|gh-post|agentrepo)"\s*=\s*)'
-    r'"v[0-9]+\.[0-9]+\.[0-9]+"(\s*)$'
+    r'"v[0-9]+\.[0-9]+\.[0-9]+"(\s*(?:#.*)?)$'
 )
 PIN_WORKFLOW = re.compile(
     r"^(\s*(?:-\s+)?uses:\s*tbhb-dev/devtools/[^@\s]+@)"
     r"[0-9a-f]{7,40}"
     r"(\s*#\s*)v[0-9]+\.[0-9]+\.[0-9]+(\s*)$"
 )
+PIN_TOMBI = re.compile(r"^( *#.*\btbhb-dev/devtools +)v[0-9]+\.[0-9]+\.[0-9]+(.*)$")
 PIN_RENOVATE = re.compile(
     r'^(\s*"github>tbhb-dev/devtools//\.github/[^/"]+\.json5#)'
-    r"[0-9a-f]{7,40}"
+    r"(?:[0-9a-f]{7,40}|v[0-9]+\.[0-9]+\.[0-9]+)"
     r'(",?\s*//\s*)v[0-9]+\.[0-9]+\.[0-9]+(\s*)$'
 )
 PIN_VENDIR_CONTEXT = re.compile(
-    r"^\s*(?:-\s+)?url:\s*https://github\.com/tbhb-dev/devtools(?:\s|$)"
+    r"^( *)(- +)?url: +https://github\.com/tbhb-dev/devtools(?: +#.*| *)$"
 )
-PIN_VENDIR = re.compile(r"^(\s*ref:\s*)v[0-9]+\.[0-9]+\.[0-9]+(\s*)$")
+PIN_VENDIR = re.compile(r"^( *ref:\s*)v[0-9]+\.[0-9]+\.[0-9]+(\s*)$")
 PIN_PRECOMMIT_CONTEXT = re.compile(
-    r"^\s*(?:-\s+)?repo:\s*https://github\.com/tbhb-dev/devtools(?:\s|$)"
+    r"^( *)(- +)?repo: +https://github\.com/tbhb-dev/devtools(?: +#.*| *)$"
 )
 PIN_PRECOMMIT = re.compile(
-    r"^(\s*rev:\s*)[0-9a-f]{7,40}(\s+#\s*frozen:\s*)v[0-9]+\.[0-9]+\.[0-9]+(\s*)$"
+    r"^( *rev:\s*)[0-9a-f]{7,40}(\s+#\s*frozen:\s*)v[0-9]+\.[0-9]+\.[0-9]+(\s*)$"
 )
 PIN_PATTERNS: dict[str, tuple[re.Pattern[str], str]] = {
     "apm.yml": (PIN_APM, r"\g<1><VERSION>\g<3>"),
     "mise.toml": (PIN_MISE, r'\g<1>"<VERSION>"\g<2>'),
-    ".github/renovate.json5": (PIN_RENOVATE, r"\g<1><SHA>\g<2><VERSION>\g<3>"),
+    "tombi.toml": (PIN_TOMBI, r"\g<1><VERSION>\g<2>"),
+    ".github/renovate.json5": (
+        PIN_RENOVATE,
+        r"\g<1><REF>\g<2><VERSION>\g<3>",
+    ),
 }
 PIN_CONTEXT_PATTERNS: dict[str, tuple[re.Pattern[str], re.Pattern[str], str]] = {
     "vendir.yml": (PIN_VENDIR_CONTEXT, PIN_VENDIR, r"\g<1><VERSION>\g<2>"),
@@ -320,11 +325,22 @@ def pin_skeleton(path: str, line: str) -> str | None:
 
 def pin_block(path: str, context: str, minus: list[str], plus: list[str]) -> bool:
     """Accept only in-place devtools version pin replacements in pins.toml form."""
+    # These separators can introduce YAML content inside a physical diff line.
+    if any(
+        re.search(r"[\r\v\f\x1c-\x1e\x85\u2028\u2029]", line)
+        for line in [context, *minus, *plus]
+    ):
+        return False
     if not minus or len(minus) != len(plus):
         return False
     if path in PIN_CONTEXT_PATTERNS:
         ctx_re, line_re, template = PIN_CONTEXT_PATTERNS[path]
-        if len(minus) != 1 or not ctx_re.match(context):
+        ctx_match = ctx_re.fullmatch(context)
+        if len(minus) != 1 or ctx_match is None:
+            return False
+        # A sequence marker contributes to the repository key's column.
+        column = len(ctx_match[1]) + len(ctx_match[2] or "")
+        if any(len(line) - len(line.lstrip(" ")) != column for line in [*minus, *plus]):
             return False
         old_match = line_re.fullmatch(minus[0])
         new_match = line_re.fullmatch(plus[0])
@@ -345,7 +361,7 @@ def diff_blocks(diff: str) -> list[tuple[str, list[str], list[str]]] | None:
     in_hunk = False
     minus: list[str] = []
     plus: list[str] = []
-    for line in diff.splitlines():
+    for line in diff.removesuffix("\n").split("\n"):
         if not in_hunk and line.startswith(
             ("diff --git ", "index ", "--- a/", "+++ b/")
         ):

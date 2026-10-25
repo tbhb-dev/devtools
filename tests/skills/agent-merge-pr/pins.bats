@@ -13,7 +13,7 @@ setup() {
 	mkdir -p .agents .github/workflows
 	cp -R "$ROOT/tests/tasks/fixtures/pins/." .
 	cp "$ROOT/.devtools/vendir.yml" vendir.yml
-	printf '\n"go:github.com/tbhb-dev/devtools/cmd/agentrepo" = "v0.10.0"\n' >>mise.toml
+	printf '\n"go:github.com/tbhb-dev/devtools/cmd/agentrepo" = "v0.10.0" # tool pin\n' >>mise.toml
 	cat >>apm.yml <<'YAML'
   - tbhb-dev/devtools/packages/agents/common#v0.10.0
   - 'tbhb-dev/devtools/packages/agents/agy#v0.10.0'
@@ -33,9 +33,10 @@ repos:
     hooks:
       - id: guard-markdown
 YAML
-	printf 'constitutional_paths = ^(apm[.]yml|mise[.]toml|[.]github/|vendir[.]yml|[.]pre-commit-config[.]yaml|protected[.]txt)\n' >.agents/agent-skills.conf
+	printf '# adapted from tbhb-dev/devtools v0.10.0.\n' >tombi.toml
+	printf 'constitutional_paths = ^(apm[.]yml|mise[.]toml|tombi[.]toml|[.]github/|vendir[.]yml|[.]pre-commit-config[.]yaml|protected[.]txt)\n' >.agents/agent-skills.conf
 	printf 'baseline\n' >protected.txt
-	git add -- .agents/agent-skills.conf apm.yml mise.toml .github vendir.yml .pre-commit-config.yaml protected.txt
+	git add -- .agents/agent-skills.conf apm.yml mise.toml .github vendir.yml .pre-commit-config.yaml tombi.toml protected.txt
 	git commit --quiet -m 'test: consumer pin fixtures'
 	BASE=$(git rev-parse HEAD)
 }
@@ -53,7 +54,7 @@ inspect() {
 	git add -- "$@"
 	git commit --quiet -m 'test: edit pins'
 	run uv run --quiet --script "$POLICY" inspect "$BASE" HEAD <<'JSON'
-{"golden_paths":"^(apm[.]yml|mise[.]toml|[.]github/|vendir[.]yml|[.]pre-commit-config[.]yaml|protected[.]txt)","loosening_markers":"nolint","gate_config_paths":".*","owner_paths":"^mise[.]toml$","disposable_ignored":"^cache/"}
+{"golden_paths":"^(apm[.]yml|mise[.]toml|tombi[.]toml|[.]github/|vendir[.]yml|[.]pre-commit-config[.]yaml|protected[.]txt)","loosening_markers":"nolint","gate_config_paths":".*","owner_paths":"^mise[.]toml$","disposable_ignored":"^cache/"}
 JSON
 	[ "$status" -eq 0 ]
 }
@@ -96,6 +97,115 @@ pin_only() {
 	pin_only .pre-commit-config.yaml
 }
 
+@test "AC2 embedded CR preserves protected findings" {
+	separator_attack '\r'
+}
+
+@test "AC2 embedded NEL preserves protected findings" {
+	separator_attack '\302\205'
+}
+
+@test "AC2 embedded Unicode line separator preserves protected findings" {
+	separator_attack '\342\200\250'
+}
+
+@test "AC2 embedded Unicode paragraph separator preserves protected findings" {
+	separator_attack '\342\200\251'
+}
+
+separator_attack() {
+	bump .github/workflows/ci.yml
+	printf '    uses: tbhb-dev/devtools/.github/workflows/lint.yml@bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb # v0.11.0%b    secrets: inherit\n' "$1" >.github/workflows/ci.yml.tmp
+	# Replace the pin's physical line while retaining its surrounding YAML.
+	head -n 2 .github/workflows/ci.yml >.github/workflows/ci.yml.head
+	cat .github/workflows/ci.yml.head .github/workflows/ci.yml.tmp >.github/workflows/ci.yml
+	inspect .github/workflows/ci.yml
+	findings_are '[[".github/workflows/ci.yml", "changes a constitutional file"], [".github/workflows/ci.yml", "changes a golden file"]]'
+}
+
+@test "AC4 nested unrelated URL before vendir ref preserves findings" {
+	cat >vendir.yml <<'YAML'
+contents:
+  - git:
+      url: https://github.com/example/other
+      secretRef:
+        url: https://github.com/tbhb-dev/devtools
+      ref: v0.10.0
+YAML
+	git add -- vendir.yml
+	git commit --quiet -m 'test: nested vendir context'
+	BASE=$(git rev-parse HEAD)
+	bump vendir.yml
+	inspect vendir.yml
+	findings_are '[["vendir.yml", "changes a constitutional file"], ["vendir.yml", "changes a golden file"]]'
+}
+
+@test "AC4 nested unrelated repository before pre-commit rev preserves findings" {
+	cat >.pre-commit-config.yaml <<'YAML'
+repos:
+  - repo: https://github.com/example/other
+    metadata:
+      repo: https://github.com/tbhb-dev/devtools
+    rev: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa  # frozen: v0.10.0
+YAML
+	git add -- .pre-commit-config.yaml
+	git commit --quiet -m 'test: nested pre-commit context'
+	BASE=$(git rev-parse HEAD)
+	bump .pre-commit-config.yaml
+	inspect .pre-commit-config.yaml
+	findings_are '[[".pre-commit-config.yaml", "changes a constitutional file"], [".pre-commit-config.yaml", "changes a golden file"]]'
+}
+
+@test "AC4 non-comment repository URL suffix preserves findings" {
+	printf 'git:\n  url: https://github.com/tbhb-dev/devtools extra\n  ref: v0.10.0\n' >vendir.yml
+	git add -- vendir.yml
+	git commit --quiet -m 'test: ambiguous URL suffix'
+	BASE=$(git rev-parse HEAD)
+	bump vendir.yml
+	inspect vendir.yml
+	findings_are '[["vendir.yml", "changes a constitutional file"], ["vendir.yml", "changes a golden file"]]'
+}
+
+@test "AC4 non-comment pre-commit repository suffix preserves findings" {
+	printf 'repos:\n  - repo: https://github.com/tbhb-dev/devtools extra\n    rev: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa  # frozen: v0.10.0\n' >.pre-commit-config.yaml
+	git add -- .pre-commit-config.yaml
+	git commit --quiet -m 'test: ambiguous repository suffix'
+	BASE=$(git rev-parse HEAD)
+	bump .pre-commit-config.yaml
+	inspect .pre-commit-config.yaml
+	findings_are '[[".pre-commit-config.yaml", "changes a constitutional file"], [".pre-commit-config.yaml", "changes a golden file"]]'
+}
+
+@test "AC1 tombi adaptation header replacement has no finding" {
+	pin_only tombi.toml
+}
+
+@test "AC1 Renovate tag ref replacements have no finding" {
+	tag_renovate
+	bump .github/renovate.json5
+	sed 's/#v0.11.0/#bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/g' .github/renovate.json5 >renovate.tmp
+	mv renovate.tmp .github/renovate.json5
+	inspect .github/renovate.json5
+	findings_are '[]'
+}
+
+@test "AC1 mise replacement preserves its comment" {
+	sed 's/"v0.10.0"$/"v0.10.0" # tool pin/' mise.toml >mise.tmp
+	mv mise.tmp mise.toml
+	git add -- mise.toml
+	git commit --quiet -m 'test: comment on mise pins'
+	BASE=$(git rev-parse HEAD)
+	pin_only mise.toml
+}
+
+tag_renovate() {
+	sed 's/#aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/#v0.10.0/g' .github/renovate.json5 >renovate.tmp
+	mv renovate.tmp .github/renovate.json5
+	git add -- .github/renovate.json5
+	git commit --quiet -m 'test: Renovate tag refs'
+	BASE=$(git rev-parse HEAD)
+}
+
 @test "AC2 pin plus a non-pin line in the same protected file preserves all findings" {
 	bump mise.toml
 	printf 'go = "1.27.3"\n' >>mise.toml
@@ -125,7 +235,14 @@ pin_only() {
 }
 
 @test "AC3 unrecognized pin form preserves findings" {
-	printf '[tools]\n"go:github.com/tbhb-dev/devtools/cmd/guard-markdown" = "main"\n' >mise.toml
+	local line
+	while IFS= read -r line; do
+		if [[ "$line" == '"go:github.com/tbhb-dev/devtools/cmd/guard-markdown"'* ]]; then
+			line=${line/\"v0.10.0\"/\"main\"}
+		fi
+		printf '%s\n' "$line"
+	done <mise.toml >mise.toml.tmp
+	mv mise.toml.tmp mise.toml
 	inspect mise.toml
 	findings_are '[["mise.toml", "changes a constitutional file"], ["mise.toml", "changes a golden file"]]'
 }
@@ -176,11 +293,20 @@ pin_only() {
 	done
 }
 
-@test "AC5 pin-looking suppression edits still produce the original findings" {
-	bump .github/workflows/ci.yml
-	printf '    uses: tbhb-dev/devtools/.github/workflows/test.yml@bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb # v0.11.0 nolint\n' >>.github/workflows/ci.yml
-	inspect .github/workflows/ci.yml
-	findings_are '[[".github/workflows/ci.yml", "changes a constitutional file"], [".github/workflows/ci.yml", "changes a golden file"], [".github/workflows/ci.yml", "adds a suppression or exclusion"]]'
+@test "AC5 recognized replacement with unchanged suppression preserves all findings" {
+	printf '\n"go:github.com/tbhb-dev/devtools/cmd/guard-markdown" = "v0.10.0" # nolint\n' >mise.toml
+	git add -- mise.toml
+	git commit --quiet -m 'test: existing suppression on a tool pin'
+	BASE=$(git rev-parse HEAD)
+	bump mise.toml
+	inspect mise.toml
+	findings_are '[["mise.toml", "changes a constitutional file"], ["mise.toml", "changes a golden file"], ["mise.toml", "adds a suppression or exclusion"]]'
+	# The same diff must qualify as a pin replacement independently of the scan.
+	run uv run --quiet --script "$POLICY" inspect "$BASE" HEAD <<'JSON'
+{"golden_paths":"^mise[.]toml$","loosening_markers":"^$","gate_config_paths":".*","owner_paths":"^mise[.]toml$","disposable_ignored":"^cache/"}
+JSON
+	[ "$status" -eq 0 ]
+	findings_are '[]'
 }
 
 extract_task() {
@@ -198,6 +324,19 @@ extract_task() {
 }
 
 @test "AC6 actual update-pins rewrites every fixture and the reader accepts its diff" {
+	tag_renovate
+	# Keep both tag and SHA preset refs in the synchronization fixture.
+	local line
+	while IFS= read -r line; do
+		if [[ "$line" == *'renovate-go-config.json5'* ]]; then
+			line=${line/\#v0.10.0/\#aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}
+		fi
+		printf '%s\n' "$line"
+	done <.github/renovate.json5 >renovate.tmp
+	mv renovate.tmp .github/renovate.json5
+	git add -- .github/renovate.json5
+	git commit --quiet -m 'test: both preset ref forms'
+	BASE=$(git rev-parse HEAD)
 	extract_task devtools:update-pins >"$BATS_TEST_TMPDIR/update.sh"
 	extract_task devtools:check-pins >"$BATS_TEST_TMPDIR/check.sh"
 	local real_git
@@ -231,8 +370,9 @@ STUB
 .pre-commit-config.yaml
 apm.yml
 mise.toml
+tombi.toml
 vendir.yml' ]
-	inspect apm.yml mise.toml .github vendir.yml .pre-commit-config.yaml
+	inspect apm.yml mise.toml tombi.toml .github vendir.yml .pre-commit-config.yaml
 	findings_are '[]'
 	[[ "$output" == *'"owner_paths": ["mise.toml"]}' ]]
 }
