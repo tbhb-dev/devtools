@@ -475,39 +475,6 @@ dt_run_reviewer() {
   esac
 }
 
-# dt_verdict <reply-file>: print pass, changes, or unreadable.
-#
-# Strict, because a reply can quote the draft or the diff, and either
-# can contain the words of a passing verdict. A pass is a reply whose
-# only non-blank line is the verdict. Changes are a reply whose first
-# non-blank line says so. Anything else is no verdict.
-dt_verdict() {
-  # A NUL or another control byte can end a line early for one reader
-  # and not another. A reply carrying one is no verdict.
-  local filtered_bytes bytes filtered
-  filtered=$(tr -d '\000-\010\013\014\016-\037' <"$1" && printf '.') || return $?
-  filtered=${filtered%.}
-  filtered_bytes=$(printf '%s' "$filtered" | wc -c) || return $?
-  bytes=$(wc -c <"$1") || return $?
-  if [ "$filtered_bytes" -ne "$bytes" ]; then
-    printf 'unreadable\n'
-    return 0
-  fi
-  awk '
-    {
-      sub(/\r$/, "")
-      sub(/[ \t]+$/, "")
-      if ($0 == "") next
-      line[++n] = $0
-    }
-    END {
-      if (n == 1 && line[1] == "VERDICT: PASS") print "pass"
-      else if (n >= 1 && line[1] == "VERDICT: CHANGES REQUIRED") print "changes"
-      else print "unreadable"
-    }
-  ' "$1"
-}
-
 # dt_new_inputs <kind>: a fresh directory for one review's gathered
 # inputs, so one run never overwrites what another's reviewer is reading.
 dt_new_inputs() {
@@ -603,7 +570,7 @@ dt_review() {
     live_config=$(dt_repo_digest) || return 5
     [ "$live_config" = "$repo_digest" ] || return 5
   fi
-  verdict=$(dt_verdict "$reply") || return 4
+  verdict=$("$_DEVTOOLS_AGENTREPO_BIN" review verdict --file "$reply") || return 4
   case $verdict in
   pass)
     printf 'subject %s\ndraft %s\nverdict pass\n' "$subject" "$before" >"$verdict_record"

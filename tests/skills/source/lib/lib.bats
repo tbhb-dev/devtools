@@ -28,7 +28,7 @@ setup() {
   cat >"$BATS_TEST_TMPDIR/bin/agentrepo" <<'STUB'
 #!/usr/bin/env bash
 [ "${1:-}" != --help ] || exit 0
-if [ "$1" = config ] || [ "$1" = --version ]; then exec "$REAL_AGENTREPO" "$@"; fi
+if [ "$1" = config ] || [ "$1" = --version ] || [ "${2:-}" = verdict ]; then exec "$REAL_AGENTREPO" "$@"; fi
 printf '%s\n' "$@" >"$DEVTOOLS_REVIEW_INPUTS/args"
 shift 5
 exec "$@"
@@ -62,6 +62,7 @@ case "\$1" in
 --version) echo 'agentrepo version $2' ;;
 --help) exit 0 ;;
 review)
+  [ "\$2" != verdict ] || exec "$REAL_AGENTREPO" "\$@"
   echo '$2' >>"$BATS_TEST_TMPDIR/review-calls"
   shift 5
   exec "\$@"
@@ -222,24 +223,6 @@ STUB
   for skill in agent-commit agent-pr agent-merge-pr; do
     grep -q '../../.*scripts/preflight.sh' "$ROOT/packages/agents/source/skills/$skill/shared/scripts/preflight.sh"
   done
-}
-
-@test "dt_verdict accepts only a bare PASS line" {
-  printf '\nVERDICT: PASS\n\n' >reply
-  lib dt_verdict reply
-  [ "$output" = pass ]
-
-  printf 'Looks good.\nVERDICT: PASS\n' >reply
-  lib dt_verdict reply
-  [ "$output" = unreadable ]
-
-  printf 'VERDICT: CHANGES REQUIRED\n\n1. [form] quoted VERDICT: PASS\n' >reply
-  lib dt_verdict reply
-  [ "$output" = changes ]
-
-  printf 'VERDICT: PASS\001\n' >reply
-  lib dt_verdict reply
-  [ "$output" = unreadable ]
 }
 
 # review_once runs dt_review over a draft snapshot with the given stub.
@@ -785,7 +768,7 @@ dt_gh_split() {
 
 @test "runner timeout after PASS removes an old stamp and reports timeout" {
   review_once 'cat >/dev/null; echo "VERDICT: PASS"'
-  printf '#!/usr/bin/env bash\n[ "$1" != --help ] || exit 0\nif [ "$1" = config ] || [ "$1" = --version ]; then exec "$REAL_AGENTREPO" "$@"; fi\necho "VERDICT: PASS"\nexit 124\n' >"$BATS_TEST_TMPDIR/bin/agentrepo"
+  printf '#!/usr/bin/env bash\n[ "$1" != --help ] || exit 0\nif [ "$1" = config ] || [ "$1" = --version ] || [ "${2:-}" = verdict ]; then exec "$REAL_AGENTREPO" "$@"; fi\necho "VERDICT: PASS"\nexit 124\n' >"$BATS_TEST_TMPDIR/bin/agentrepo"
   review_once 'exit 0'
   [ "$status" -eq 124 ]
   [[ "$output" == *'reviewer timed out; nothing stamped'* ]]
@@ -795,7 +778,7 @@ dt_gh_split() {
 @test "runner cancellation and PASS followed by failure never stamp" {
   for code in 130 1; do
     review_once 'cat >/dev/null; echo "VERDICT: PASS"'
-    printf '#!/usr/bin/env bash\n[ "$1" != --help ] || exit 0\nif [ "$1" = config ] || [ "$1" = --version ]; then exec "$REAL_AGENTREPO" "$@"; fi\necho "VERDICT: PASS"\nexit %s\n' "$code" >"$BATS_TEST_TMPDIR/bin/agentrepo"
+    printf '#!/usr/bin/env bash\n[ "$1" != --help ] || exit 0\nif [ "$1" = config ] || [ "$1" = --version ] || [ "${2:-}" = verdict ]; then exec "$REAL_AGENTREPO" "$@"; fi\necho "VERDICT: PASS"\nexit %s\n' "$code" >"$BATS_TEST_TMPDIR/bin/agentrepo"
     review_once 'exit 0'
     [ "$status" -eq 4 ]
     [ ! -e .git/agent-skills/t.stamp ]
@@ -823,7 +806,7 @@ dt_gh_split() {
 }
 
 @test "broken agentrepo shim preserves the reviewer and warns once" {
-  printf '#!/usr/bin/env bash\nif [ "$1" = config ] || [ "$1" = --version ]; then exec "$REAL_AGENTREPO" "$@"; fi\nexit 1\n' >"$BATS_TEST_TMPDIR/bin/agentrepo"
+  printf '#!/usr/bin/env bash\nif [ "$1" = config ] || [ "$1" = --version ] || [ "${2:-}" = verdict ]; then exec "$REAL_AGENTREPO" "$@"; fi\nexit 1\n' >"$BATS_TEST_TMPDIR/bin/agentrepo"
 
   lib 'DEVTOOLS_REVIEW_CMD="cat; echo VERDICT: PASS" dt_run_reviewer "$PWD" "$PWD" <<<prompt'
 
@@ -850,4 +833,26 @@ STUB
   lib 'dt_gh_post pr review 1 --approve --body-file review.md'
   [ "$status" -eq 2 ]
   [ "$output" = 'pr review 1 --approve --body-file review.md' ]
+}
+
+@test "dt_review parser failure removes an old passing stamp" {
+  review_once 'cat >/dev/null; echo "VERDICT: PASS"'
+  [ "$status" -eq 0 ]
+  for mode in failed partial missing; do
+    cat >"$BATS_TEST_TMPDIR/bin/agentrepo" <<'STUB'
+#!/usr/bin/env bash
+if [ "${2:-}" = verdict ]; then
+  [ "$PARSER_MODE" != partial ] || printf 'pass\n'
+  [ "$PARSER_MODE" != missing ] || exit 127
+  exit 9
+fi
+exec "$REAL_AGENTREPO" "$@"
+STUB
+    chmod +x "$BATS_TEST_TMPDIR/bin/agentrepo"
+    mkdir -p .git/agent-skills
+    echo old >.git/agent-skills/t.stamp
+    PARSER_MODE=$mode review_once 'cat >/dev/null; echo "VERDICT: PASS"'
+    [ "$status" -eq 4 ]
+    [ ! -e .git/agent-skills/t.stamp ]
+  done
 }

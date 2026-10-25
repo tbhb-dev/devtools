@@ -60,12 +60,6 @@ reject() {
   reject 'awk() { echo criteria; return 9; }' 'dt_review_prompt criteria args inputs'
 }
 
-@test "verdict rejects failed byte readers even if their output looks valid" {
-  printf 'VERDICT: PASS\n' >reply
-  reject 'tr() { command tr "$@"; return 9; }' 'dt_verdict reply'
-  reject 'wc() { command wc "$@"; return 9; }' 'dt_verdict reply'
-}
-
 @test "stamp validation rejects a matching digest or binding printed before failure" {
   mkdir -p .git/agent-skills
   printf 'draft abc\n' >.git/agent-skills/t.stamp
