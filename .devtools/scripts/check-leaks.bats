@@ -1806,16 +1806,64 @@ publish_commit() {
 	[[ $output == *'blob.dat:binary: private literal'* ]]
 }
 
+@test "scoped and whole-object pushes reject followed tag annotations" {
+	git init --bare -q "$work/origin.git"
+	git remote add origin "$work/origin.git"
+	git push -q origin main
+	export DEVTOOLS_LEAK_BASE=$base
+	git commit -q --allow-empty -m 'test: clean addition'
+	git tag -a release-fixture -m 'kestrel99'
+	tag_oid=$(git rev-parse release-fixture)
+	git config push.followTags true
+	cat >.git/hooks/pre-push <<HOOK
+#!/usr/bin/env bash
+exec bash "$checker" --pre-push-hook "\$@"
+HOOK
+	chmod +x .git/hooks/pre-push
+	git config core.hooksPath .git/hooks
+	for scope in '' publish; do
+		DEVTOOLS_LEAK_MODE=$scope run git push origin main
+		[ "$status" -ne 0 ]
+		[[ $output == *"tag ${tag_oid:0:7}:"*'private literal'* ]]
+		no_secrets
+		[ "$(git --git-dir=origin.git rev-parse main)" = "$base" ]
+		[ -z "$(git --git-dir=origin.git tag --list)" ]
+	done
+}
+
+@test "scoped and whole-object pushes reject tags of non-commit payloads" {
+	export DEVTOOLS_LEAK_BASE=$base
+	printf 'kestrel99\n' >payload.txt
+	git add -- payload.txt
+	for kind in blob tree; do
+		payload=$(git rev-parse :payload.txt)
+		if [ "$kind" = tree ]; then
+			payload=$(git write-tree)
+		fi
+		git tag -a "payload-$kind" "$payload" -m 'test payload'
+		printf 'refs/tags/payload-%s %s refs/tags/payload-%s %040d\n' "$kind" "$(git rev-parse "payload-$kind")" "$kind" 0 >lines
+		for scope in '' publish; do
+			DEVTOOLS_LEAK_MODE=$scope run bash -c 'bash "$1" --pre-push-hook <"$2"' _ "$checker" lines
+			[ "$status" -eq 1 ]
+			[[ $output == *'private literal O11Y_PRIVATE_STRINGS entry 6'* ]]
+			no_secrets
+		done
+	done
+}
+
 @test "AC3 publication needs a readable, complete base" {
 	publish_base
 	DEVTOOLS_LEAK_BASE= run_check --publish
 	[ "$status" -eq 2 ]
+	[[ $output == *"the publication scan needs a base commit"* ]]
 	DEVTOOLS_LEAK_BASE=missing-base run_check --publish
 	[ "$status" -eq 2 ]
+	[[ $output == *"could not read the base"* ]]
 	git clone -q --depth 1 "file://$work" shallow
 	cd shallow
 	DEVTOOLS_LEAK_BASE=HEAD run_check --publish
 	[ "$status" -eq 2 ]
+	[[ $output == *"the repository is shallow, so the scan can't be complete"* ]]
 }
 
 @test "AC4 the scan reads commits, never a staged removal" {

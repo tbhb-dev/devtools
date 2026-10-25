@@ -47,7 +47,7 @@
 #                                  a scan of HEAD
 #   check-leaks.sh FILE...         scan exactly those files
 #
-# Range and push scans read whole objects through git cat-file, never a
+# Range and unscoped push scans read whole objects through git cat-file, never a
 # diff, so nothing git shows differently from what it sends can hide a
 # value. A missing or unreadable object, a failed git command, a shallow
 # repository, or a count of objects read that differs from the count
@@ -512,18 +512,14 @@ emit_pre_push() {
       lref=
     done
   fi
-  if [[ -n $publish_scope ]]; then
-    if ((count == 0)); then
-      if [[ -z $hook ]]; then emit_publish HEAD; fi
-    else
-      while read -r loid _; do emit_publish "$loid"; done <"$tmp/lines"
-    fi
-    return 0
-  fi
   if ((count == 0)); then
     # A hook run with no ref lines has nothing to push. A manual run has no
     # lines either, and scans everything reachable from HEAD.
     if [[ -n $hook ]]; then return 0; fi
+    if [[ -n $publish_scope ]]; then
+      emit_publish HEAD
+      return 0
+    fi
     add_objects HEAD
   else
     if [[ -n $ask && -n $url ]]; then
@@ -540,7 +536,19 @@ emit_pre_push() {
         cat "$tmp/known"
         if [[ ! $roid =~ ^0+$ ]] && git cat-file -e "$roid"; then printf '^%s\n' "$roid"; fi
       } >"$tmp/revs"
-      git rev-list --objects --stdin <"$tmp/revs" >>"$tmp/objs"
+      git rev-list --objects --stdin <"$tmp/revs" >"$tmp/outgoing"
+      if [[ -n $publish_scope ]] && oid=$(git rev-parse --verify --quiet "${loid}^{commit}"); then
+        emit_publish "$oid"
+        # Commit additions have their own comparison. Outgoing tag objects
+        # still need whole-object scanning, including nested annotations.
+        # Keep unknown object types too, so emit_objects can reject them.
+        awk '{ print $1 }' "$tmp/outgoing" |
+          git cat-file --batch-check='%(objectname) %(objecttype)' |
+          awk '$2 != "commit" && $2 != "tree" && $2 != "blob" { print $1 }' >>"$tmp/objs"
+      else
+        # Tags targeting trees or blobs publish payloads outside any commit.
+        cat "$tmp/outgoing" >>"$tmp/objs"
+      fi
     done <"$tmp/lines"
   fi
   emit_objects

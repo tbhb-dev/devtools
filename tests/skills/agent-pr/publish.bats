@@ -126,3 +126,14 @@ HOOK
     [ "$(cat "$GATE_LOG")" = $'lint-pr-description\ndevtools:lint-leaks\ndevtools:gitleaks\nlint\nreview' ]
   done
 }
+
+@test "agent PR without either base ref exits 2 before any push (#651)" {
+  git update-ref -d refs/remotes/origin/main
+  git branch -D main
+  run bash "$SCRIPTS/publish.sh"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"origin/main is missing; the leak scan is incomplete. Nothing was pushed."* ]]
+  [ -z "$(remote_topic)" ]
+  refute_grep '^devtools:lint-leaks' "$GATE_LOG"
+  refute_grep '^pr create ' "$GH_LOG"
+}

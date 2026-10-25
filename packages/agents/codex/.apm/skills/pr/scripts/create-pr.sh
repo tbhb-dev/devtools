@@ -112,6 +112,22 @@ branch=$(gitr symbolic-ref -q --short HEAD) || die "HEAD is detached. Check out 
 base=$(pr_field "$draft" base)
 [ -n "$base" ] || die "the draft's frontmatter carries no base."
 [ "$branch" != "$base" ] || die "${branch} is the base branch. Publish a topic branch."
+# The private-strings scans compare against the merge base with origin's
+# copy of the base branch, never a local branch and never a fetch. A base
+# that can't be read ends the publication before anything is pushed.
+leak_incomplete() {
+  printf 'create-pr: %s; the leak scan is incomplete. Nothing was pushed.\n' "$1" >&2
+  exit 2
+}
+if [ "$check_description" = false ]; then
+  leak_shallow=$(gitr rev-parse --is-shallow-repository) || leak_incomplete "the repository can't be read"
+  [ "$leak_shallow" = false ] || leak_incomplete "the repository is shallow"
+  leak_tip=$(gitr rev-parse --verify --quiet "refs/remotes/origin/${base}^{commit}") ||
+    leak_incomplete "origin/${base} is missing"
+  leak_base=$(gitr merge-base HEAD "$leak_tip") && [ -n "$leak_base" ] ||
+    leak_incomplete "HEAD and origin/${base} share no history"
+fi
+
 base_ref=$(pr_base_ref "$base")
 pr_agent_range "$base_ref"
 [ -n "$base_ref" ] || die "the draft's base, ${base}, names no local or origin branch."
@@ -131,22 +147,6 @@ check_identity() {
 }
 
 check_identity
-
-# The private-strings scans compare against the merge base with origin's
-# copy of the base branch, never a local branch and never a fetch. A base
-# that can't be read ends the publication before anything is pushed.
-leak_incomplete() {
-  printf 'create-pr: %s; the leak scan is incomplete. Nothing was pushed.\n' "$1" >&2
-  exit 2
-}
-if [ "$check_description" = false ]; then
-  leak_shallow=$(gitr rev-parse --is-shallow-repository) || leak_incomplete "the repository can't be read"
-  [ "$leak_shallow" = false ] || leak_incomplete "the repository is shallow"
-  leak_tip=$(gitr rev-parse --verify --quiet "refs/remotes/origin/${base}^{commit}") ||
-    leak_incomplete "origin/${base} is missing"
-  leak_base=$(gitr merge-base HEAD "$leak_tip") && [ -n "$leak_base" ] ||
-    leak_incomplete "HEAD and origin/${base} share no history"
-fi
 
 # Cheap description checks precede scans, review, and tests.
 step "validating PR_AGENTDESC.md"
