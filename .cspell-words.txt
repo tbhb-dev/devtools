@@ -8,6 +8,7 @@ CWD
 EDITMSG
 ENV
 Equalf
+Errln
 Errorf
 Honnef
 JUnit

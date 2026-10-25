@@ -1,4 +1,17 @@
 #!/usr/bin/env bash
+if [ "$#" -eq 0 ] || { [ "$#" -eq 1 ] && [ "$1" = --staged ]; }; then
+  printf 'usage: marker-scan.sh [--staged] <path> [path ...]\n' >&2
+  exit 2
+fi
+if agentrepo markers scan '' >/dev/null 2>&1; then
+  output=$(agentrepo markers scan "$@")
+  status=$?
+  [ -z "$output" ] || printf '%s\n' "$output"
+  [ "$status" -eq 0 ] || { [ "$status" -eq 1 ] && [ -n "$output" ]; } || printf 'marker-scan.sh: agentrepo markers scan failed (exit %s)\n' "$status"
+  exit "$status"
+fi
+
+# Keep the fallback until #333 and #544 land and the N-2 window passes.
 # marker-scan — find conflict markers in a set of paths, and know which
 # markers are a file's subject rather than its damage.
 #

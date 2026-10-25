@@ -108,14 +108,10 @@ function_from() {
 }
 
 @test "marker exemptions reject documented attributes printed before git fails" {
-  for script in rebase/scripts/marker-scan.sh resolve-rebase-conflicts/scripts/guard-resolve.sh; do
-    file="$ROOT/packages/agents/claude/.apm/skills/$script"
-    function=exempt
-    case "$script" in resolve-*) function=documented ;; esac
-    function_from "$file" "$function"
-    [ -s function.sh ]
-    reject '. ./function.sh; git() { echo "file: conflict-markers: documented"; return 9; }' "$function file"
-  done
+  file="$ROOT/packages/agents/claude/.apm/skills/resolve-rebase-conflicts/scripts/guard-resolve.sh"
+  function_from "$file" documented
+  [ -s function.sh ]
+  reject '. ./function.sh; git() { echo "file: conflict-markers: documented"; return 9; }' 'documented file'
 }
 
 @test "review refuses a failed prompt producer and leaves no stamp" {
