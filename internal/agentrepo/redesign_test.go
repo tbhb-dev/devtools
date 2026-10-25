@@ -63,6 +63,19 @@ func TestRedesign(t *testing.T) {
 				})
 			}
 			require.NoError(t, os.WriteFile(file, []byte(record), 0o600))
+			for _, bad := range []string{"03", "+3"} {
+				bounded := "subject tree:example\nbound 3\n" + strings.Repeat("finding "+digest+"\n", 3)
+				require.NoError(t, os.WriteFile(file, []byte(bounded), 0o600))
+				conf := []byte("review_max_rounds = " + bad + "\n")
+				require.NoError(t, os.WriteFile(".agents/agent-skills.conf", conf, 0o600))
+				code, output = invoke("Rewrite the rationale")
+				require.NotZero(t, code, "AC1 bound "+bad+": "+output)
+				data, err := os.ReadFile(file)
+				require.NoError(t, err)
+				require.Equal(t, bounded, string(data), "AC1 bound "+bad)
+			}
+			require.NoError(t, os.WriteFile(".agents/agent-skills.conf", []byte("review_max_rounds = 2\n"), 0o600))
+			require.NoError(t, os.WriteFile(file, []byte(record), 0o600))
 			code, output = invoke(" ")
 			require.NotZero(t, code, output)
 			before := time.Now().UTC().Add(-time.Second)

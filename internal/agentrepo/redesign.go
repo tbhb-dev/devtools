@@ -84,8 +84,8 @@ func startRedesign(cmd *cobra.Command, kind, reason string) error {
 	if err != nil {
 		return fmt.Errorf("review bound: %w", err)
 	}
-	bound, err := strconv.Atoi(value)
-	if err != nil || bound < 1 || bound > 9 {
+	bound, ok := singleDigitBound(value)
+	if !ok {
 		return errRedesignBound
 	}
 	event, err := redesignEvent(data, kind, reason, bound)
@@ -143,4 +143,10 @@ func redesignEvent(data []byte, kind, reason string, bound int) ([]byte, error) 
 		return nil, fmt.Errorf("encode redesign: %w", err)
 	}
 	return append(append([]byte("redesign "), encoded...), '\n'), nil
+}
+
+// singleDigitBound accepts one digit from 1 to 9, as the review scripts do.
+func singleDigitBound(value string) (int, bool) {
+	bound, err := strconv.Atoi(value)
+	return bound, err == nil && len(value) == 1 && bound >= 1
 }
