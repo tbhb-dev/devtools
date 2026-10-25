@@ -7,7 +7,7 @@ IFS=$' \t\n'
 set -o pipefail
 
 # Every snapshot passed to ma_gates must request this complete set. The gate
-# reads some fields directly and the rest through ma_approved and agentrepo.
+# reads some fields directly and the rest through agentrepo.
 readonly MA_GATE_FIELDS=state,isDraft,mergeable,mergeStateStatus,headRefOid,baseRefName,labels,reviews,statusCheckRollup
 
 # Only an explicit operator confirmation may bypass the unattended gates.
@@ -95,17 +95,6 @@ ma_login() {
   printf '%s\n' "$login"
 }
 
-# Latest decisive review, on the exact head, from machine-selected authority.
-ma_approved() {
-  [ -n "$2" ] || return 1
-  jq -e --arg login "$2" --arg head "$3" --arg type "${4:-}" '
-    [.reviews[] | select(.author.login == $login) |
-      select(.state == "APPROVED" or .state == "CHANGES_REQUESTED" or .state == "DISMISSED")]
-    | sort_by(.submittedAt) | last | .state == "APPROVED" and .commit.oid == $head
-      and ($type == "" or .author.__typename == $type)
-  ' "$1" >/dev/null
-}
-
 ma_identity() {
   local want actual
   want=$(dt_conf gh_login) || return $?
@@ -132,7 +121,7 @@ ma_gates() {
   '' | Bot | User) ;;
   *) dt_die "required_reviewer_type must be Bot or User when set" ;;
   esac
-  ma_approved "$view" "$reviewer" "$head" "$reviewer_type" || dt_die "WAITING_REVIEW: $reviewer must approve the current head"
+  "$_DEVTOOLS_AGENTREPO_BIN" merge approval --file "$view" --login "$reviewer" --head "$head" --author-type "$reviewer_type" || dt_die "WAITING_REVIEW: $reviewer must approve the current head"
   label=$(dt_owner_review_label) || return $?
   if jq -e --arg label "$label" '.labels | any(.name == $label)' "$view" >/dev/null; then
     dt_die "needs-owner: the PR has the owner-review label"
@@ -152,7 +141,7 @@ ma_gates() {
   if jq -e '.owner_required' <<<"$MA_POLICY" >/dev/null; then
     jq -r '.findings[] | @json' <<<"$MA_POLICY" >&2
     value=$(ma_login merge_owner) || return $?
-    ma_approved "$view" "$value" "$head" || dt_die "needs-owner: golden files or loosened gates require merge_owner approval on the current head"
+    "$_DEVTOOLS_AGENTREPO_BIN" merge approval --file "$view" --login "$value" --head "$head" || dt_die "needs-owner: golden files or loosened gates require merge_owner approval on the current head"
     MA_OWNER_OVERRIDE=$value
     printf 'owner override: %s approved %s\n' "$value" "$head"
   fi

@@ -407,3 +407,21 @@ LOCK
     done
   done
 }
+
+@test "later stale-head decisive review withdraws required approval" {
+  pr '.reviews += [{author:{login:"reviewer"},state:"CHANGES_REQUESTED",commit:{oid:"old"},submittedAt:"2026-01-03T00:00:00Z"}]'
+  run bash "$AGENT/review.sh" 7
+  [ "$status" -ne 0 ]
+  [[ "$output" == *WAITING_REVIEW* ]]
+  [ ! -e "$GH_FIXTURES/merged" ]
+}
+
+@test "equal timestamp selects the later decisive review in snapshot order" {
+  pr '.reviews += [.reviews[0] + {state:"DISMISSED"}]'
+  run bash "$AGENT/review.sh" 7
+  [ "$status" -ne 0 ]
+  [[ "$output" == *WAITING_REVIEW* ]]
+  pr '.reviews |= reverse'
+  run bash "$AGENT/review.sh" 7
+  [ "$status" -eq 0 ]
+}
