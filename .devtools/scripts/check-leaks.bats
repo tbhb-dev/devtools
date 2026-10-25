@@ -539,6 +539,127 @@ run_check() {
 	[ "$status" -eq 0 ]
 }
 
+# Exercise Git quoting independently of blob contents. The name literal is
+# confined to the tree object, while the pattern is confined to the blob.
+quoted_object_path() {
+	local path=$1 stripped=$2 mode=$3 display oid
+	display=${path//\\/\\\\}
+	display=${display//$'\n'/\\n}
+	display=${display//$'\r'/\\r}
+	printf '%s\n' "$stripped" >.leak-allow
+	printf 'connect 10.1.2.3\n' >payload
+	oid=$(git hash-object -w payload)
+	git update-index --add --cacheinfo "100644,$oid,$path"
+	git commit -qm 'test: quoted path'
+	if [[ $mode == range ]]; then
+		GITHUB_ACTIONS=true run_check --range "$base..HEAD"
+	else
+		run_check --pre-push </dev/null
+	fi
+	[ "$status" -eq 1 ]
+	[[ $output == *"$display:1: pattern: private IPv4 address"* ]]
+
+	# read -r loads literals from a line, so a newline cannot be in one.
+	# Use the suffix after the newline; Git renders the newline as backslash-n.
+	export O11Y_PRIVATE_STRINGS=${path#*$'\n'}
+	if [[ $mode == range ]]; then
+		GITHUB_ACTIONS=true run_check --range "$base..HEAD"
+	else
+		run_check --pre-push </dev/null
+	fi
+	[ "$status" -eq 1 ]
+	[[ $output =~ path#[0-9a-f]{8}:path:\ private\ literal\ O11Y_PRIVATE_STRINGS\ entry\ 1 ]]
+	[[ $output =~ path#[0-9a-f]{8}:1:\ pattern:\ private\ IPv4\ address ]]
+	no_value "$display"
+
+	# A real expression over the original bytes still exempts the blob.
+	printf '^ho.+[.]txt$\n' >.leak-allow
+	O11Y_PRIVATE_STRINGS='' run_check --range "$base..HEAD"
+	[ "$status" -eq 0 ]
+	O11Y_PRIVATE_STRINGS='' run_check --pre-push </dev/null
+	[ "$status" -eq 0 ]
+}
+
+@test "quoted object paths: CI range tab" {
+	quoted_object_path $'ho\tel.txt' hotel range
+}
+
+@test "quoted object paths: CI range newline" {
+	quoted_object_path $'ho\nest.txt' honest range
+}
+
+@test "quoted object paths: CI range double quote" {
+	quoted_object_path 'ho"tel.txt' hotel range
+}
+
+@test "quoted object paths: CI range backslash" {
+	quoted_object_path 'ho\tel.txt' hotel range
+}
+
+@test "quoted object paths: CI range non-UTF-8 byte" {
+	quoted_object_path $'ho\\\377tel.txt' hotel range
+}
+
+@test "quoted object paths: unscoped pre-push tab" {
+	quoted_object_path $'ho\tel.txt' hotel push
+}
+
+@test "quoted object paths: unscoped pre-push newline" {
+	quoted_object_path $'ho\nest.txt' honest push
+}
+
+@test "quoted object paths: unscoped pre-push double quote" {
+	quoted_object_path 'ho"tel.txt' hotel push
+}
+
+@test "quoted object paths: unscoped pre-push backslash" {
+	quoted_object_path 'ho\tel.txt' hotel push
+}
+
+@test "quoted object paths: unscoped pre-push non-UTF-8 byte" {
+	quoted_object_path $'ho\\\377tel.txt' hotel push
+}
+
+@test "quoted object paths: tagged trees use original names without a commit" {
+	local path=$'ho\tel.txt' oid tree tag
+	printf 'connect 10.1.2.3\n' >payload
+	oid=$(git hash-object -w payload)
+	git update-index --add --cacheinfo "100644,$oid,$path"
+	tree=$(git write-tree)
+	git tag -a payload "$tree" -m 'test: tree payload'
+	tag=$(git rev-parse refs/tags/payload)
+	printf 'hotel\n' >.leak-allow
+	export O11Y_PRIVATE_STRINGS=$path
+	run_check --range "$base..$tag"
+	[ "$status" -eq 1 ]
+	[[ $output =~ path#[0-9a-f]{8}:path:\ private\ literal ]]
+	[[ $output =~ path#[0-9a-f]{8}:1:\ pattern:\ private\ IPv4\ address ]]
+	printf 'refs/tags/payload %s refs/tags/payload %s\n' "$tag" "$base" >lines
+	run_check --pre-push <lines
+	[ "$status" -eq 1 ]
+	[[ $output =~ path#[0-9a-f]{8}:path:\ private\ literal ]]
+	[[ $output =~ path#[0-9a-f]{8}:1:\ pattern:\ private\ IPv4\ address ]]
+}
+
+@test "quoted object paths: shared blobs prefer a non-exempt original name" {
+	local oid mode
+	printf 'connect 10.1.2.3\n' >payload
+	oid=$(git hash-object -w payload)
+	git update-index --add --cacheinfo "100644,$oid,a\\allowed.txt"
+	git update-index --add --cacheinfo "100644,$oid,z\\other.txt"
+	git commit -qm 'test: shared blob'
+	printf '%s\n' '^a\\allowed[.]txt$' >.leak-allow
+	for mode in --range --pre-push; do
+		if [[ $mode == --range ]]; then
+			run_check "$mode" "$base..HEAD"
+		else
+			run_check "$mode" </dev/null
+		fi
+		[ "$status" -eq 1 ]
+		[[ $output == *'z\\other.txt:1: pattern: private IPv4 address'* ]]
+	done
+}
+
 # --- disclosure ---------------------------------------------------------
 
 @test "a path that matches a rule is replaced by an opaque identifier" {

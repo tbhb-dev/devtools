@@ -149,13 +149,31 @@ for name in $names; do
   done
 done
 
+# Shared by the scanner and object path selection.
+path_decoder='
+    # Undo record-stream escaping before matching original path bytes.
+    function path_bytes(s,    out, i, c) {
+      out = ""
+      for (i = 1; i <= length(s); i++) {
+        c = substr(s, i, 1)
+        if (c == "\\") {
+          c = substr(s, ++i, 1)
+          if (c == "n") c = "\n"
+          else if (c == "r") c = "\r"
+        }
+        out = out c
+      }
+      return out
+    }
+'
+
 # scan reads the record stream the producers write and prints findings.
 # A record starting with \001 opens a file (the rest is its label), one
 # starting with \002 is a path to scan as text of its own, and every other
 # record is "<line number or "binary"><TAB><text>". Staged streams use
 # \003 and \004 to switch between base budgets and index findings.
 scan() {
-  PATTERN_EXEMPT=$pattern_exempt NEEDLES=$needles PATTERNS=$patterns awk '
+  PATTERN_EXEMPT=$pattern_exempt NEEDLES=$needles PATTERNS=$patterns awk "$path_decoder"'
     BEGIN {
       nf = ENVIRON["NEEDLES"]
       while ((r = (getline l < nf)) > 0) {
@@ -233,20 +251,6 @@ scan() {
       for (i = 1; i <= nc; i++) {
         if (low ~ custom[i]) report("pattern: repository rule " i)
       }
-    }
-    # Undo record-stream escaping before matching original path bytes.
-    function path_bytes(s,    out, i, c) {
-      out = ""
-      for (i = 1; i <= length(s); i++) {
-        c = substr(s, i, 1)
-        if (c == "\\") {
-          c = substr(s, ++i, 1)
-          if (c == "n") c = "\n"
-          else if (c == "r") c = "\r"
-        }
-        out = out c
-      }
-      return out
     }
     # Match the original location; use escaped text only for display.
     function locate(full, display) {
@@ -377,36 +381,46 @@ emit_staged() {
   done <"$tmp/raw"
 }
 
-# emit_objects: the object ids in $tmp/objs, one "oid[ path]" per line as
-# rev-list --objects prints them, scanned whole.
-#
-# rev-list gives an object only the first path it meets, so the paths come
-# from the trees instead: every entry of every listed commit's tree, with
+# emit_objects: the object ids in $tmp/objs, one per line, scanned whole.
+# Paths come only from NUL-delimited tree entries, never rev-list hints.
+# Enumerate commits and standalone trees (including tagged trees), with
 # gitlinks listed but not entered. Each path is scanned as text of its own,
 # and an object in the scanned set is pattern-scanned unless every path
-# that uses it is exempt. An object the destination already has is out of
-# scope, by design. Every object is then read through one cat-file --batch and
-# scanned in full; a tree is read too, because the names inside it are
-# what shows a file renamed without any change to its content.
+# that uses it is exempt. Objects the destination has stay out of scope.
+# Every object is read through cat-file --batch and scanned in full.
 emit_objects() {
-  local c
+  local c kind entry meta path oid label
+  local -a m
   awk '!seen[$1]++' "$tmp/objs" >"$tmp/uniq"
-  awk '{ print $1 }' "$tmp/uniq" | git cat-file --batch-check='%(objectname) %(objecttype)' >"$tmp/types"
+  git cat-file --batch-check='%(objectname) %(objecttype)' <"$tmp/uniq" >"$tmp/types"
   # Anything but a tree, blob, commit or tag (a "missing" answer included)
   # is an object the scan could not account for.
   if awk '$2 != "blob" && $2 != "tree" && $2 != "commit" && $2 != "tag" { bad = 1 } END { exit !bad }' "$tmp/types"; then
     return 1
   fi
-  awk '$2 == "commit" { print $1 }' "$tmp/types" >"$tmp/commits"
-  while read -r c; do
-    git -c core.quotepath=off ls-tree -r -t --full-tree "$c"
-  done <"$tmp/commits" |
-    awk '{ t = index($0, "\t"); split(substr($0, 1, t - 1), f, " "); print f[3] " " substr($0, t + 1) }' |
-    awk '!seen[$0]++' >"$tmp/pairs"
-  # Paths, escaped for the record stream: those from the trees, then any
-  # rev-list found for an object no commit's tree holds (a tagged blob).
-  cat "$tmp/pairs" "$tmp/uniq" |
-    awk 'index($0, " ") { p = substr($0, index($0, " ") + 1); gsub(/\\/, "\\\\", p); if (!(p in seen)) { seen[p] = 1; print "\002" p } }'
+  : >"$tmp/all-pairs"
+  : >"$tmp/children"
+  while read -r c kind; do
+    [[ $kind == commit || $kind == tree ]] || continue
+    git ls-tree -r -t -z --full-tree "$c" >"$tmp/tree"
+    while IFS= read -r -d '' entry; do
+      meta=${entry%%$'\t'*}
+      path=${entry#*$'\t'}
+      read -r -a m <<<"$meta"
+      oid=${m[2]}
+      label=$(esc "$path")
+      printf '%s %s %s\n' "$c" "$oid" "$label" >>"$tmp/all-pairs"
+      if [[ ${m[1]} == tree ]]; then printf '%s\n' "$oid" >>"$tmp/children"; fi
+    done <"$tmp/tree"
+  done <"$tmp/types"
+  # A subtree is reached with its full path through a root, not also under
+  # a shorter name of its own. Commit roots may repeat a tree root; dedupe
+  # the resulting object/path pairs without losing any use of a blob.
+  awk 'FILENAME == ARGV[1] { child[$1] = 1; next }
+      FILENAME == ARGV[2] { if ($2 == "commit" || ($2 == "tree" && !($1 in child))) root[$1] = 1; next }
+      $1 in root { p = substr($0, index($0, " ") + 1); if (!seen[p]++) print p }' \
+    "$tmp/children" "$tmp/types" "$tmp/all-pairs" >"$tmp/pairs"
+  awk '{ p = substr($0, index($0, " ") + 1); if (!seen[p]++) print "\002" p }' "$tmp/pairs"
   awk '{ print $1 }' "$tmp/types" >"$tmp/toread"
   git cat-file --batch <"$tmp/toread" >"$tmp/batch"
   # A header line is "<oid> <type> <size>". Object bodies are scanned as
@@ -414,7 +428,7 @@ emit_objects() {
   # refused by the type check above, and one that vanishes since leaves a
   # header unseen, which the count catches. A body can't forge a pass,
   # since every line is scanned whichever object it is credited to.
-  tr '\0' '\n' <"$tmp/batch" | PAIRS=$tmp/pairs NAMES=$tmp/uniq TYPES=$tmp/types PATTERN_EXEMPT=$pattern_exempt awk '
+  tr '\0' '\n' <"$tmp/batch" | PAIRS=$tmp/pairs TYPES=$tmp/types PATTERN_EXEMPT=$pattern_exempt awk "$path_decoder"'
     function load(file, kind,    r, l, sp, p, o) {
       while ((r = (getline l < file)) > 0) {
         if (kind == "types") { split(l, f, " "); want[f[1]] = f[2]; nwant++; continue }
@@ -423,7 +437,7 @@ emit_objects() {
         o = substr(l, 1, sp - 1)
         p = substr(l, sp + 1)
         # Prefer a path that is not exempt, so patterns run if any use is.
-        if (!(o in chosen) || (chosen[o] ~ exempt && p !~ exempt)) chosen[o] = p
+        if (!(o in chosen) || (path_bytes(chosen[o]) ~ exempt && path_bytes(p) !~ exempt)) chosen[o] = p
       }
       if (r < 0) bad = 1
       close(file)
@@ -432,14 +446,13 @@ emit_objects() {
       exempt = "^\\.devtools/scripts/check-leaks\\.bats$|" ENVIRON["PATTERN_EXEMPT"]
       load(ENVIRON["TYPES"], "types")
       load(ENVIRON["PAIRS"], "paths")
-      load(ENVIRON["NAMES"], "paths")
     }
     (NF == 3 && $1 in want && !($1 in got) && $2 == want[$1] && $3 ~ /^[0-9]+$/) {
       oid = $1
       got[oid] = 1
       ngot++
       n = 0
-      if (($2 == "blob" || $2 == "tree") && chosen[oid] != "") { label = chosen[oid]; gsub(/\\/, "\\\\", label) }
+      if (($2 == "blob" || $2 == "tree") && chosen[oid] != "") label = chosen[oid]
       else label = $2 " " substr(oid, 1, 7)
       printf "\001%s\n", label
       next
@@ -495,7 +508,7 @@ emit_publish() {
 
 # add_objects REV-LIST-ARGS...: list the objects git would reach.
 add_objects() {
-  git rev-list --objects "$@" >>"$tmp/objs"
+  git rev-list --objects --no-object-names "$@" >>"$tmp/objs"
 }
 
 # Refuse a shallow repository: its boundary commits hide history.
@@ -572,7 +585,7 @@ emit_pre_push() {
         cat "$tmp/known"
         if [[ ! $roid =~ ^0+$ ]] && git cat-file -e "$roid"; then printf '^%s\n' "$roid"; fi
       } >"$tmp/revs"
-      git rev-list --objects --stdin <"$tmp/revs" >"$tmp/outgoing"
+      git rev-list --objects --no-object-names --stdin <"$tmp/revs" >"$tmp/outgoing"
       if [[ -n $publish_scope ]] && oid=$(git rev-parse --verify --quiet "${loid}^{commit}"); then
         emit_publish "$oid"
         # Commit additions have their own comparison. Outgoing tag objects
