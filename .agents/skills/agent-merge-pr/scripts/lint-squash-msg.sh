@@ -16,7 +16,7 @@ IFS=$' \t\n'
 # filesystem attacks by the same OS user remain outside this boundary.
 merge_bootstrap() {
   local enabled=${DEVTOOLS_UNATTENDED-${DT_UNATTENDED:-0}} arg number='' branch base repository relative parent
-  local entry_dir entry_name
+  local entry_dir entry_name mode path
   entry_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd) || return $?
   entry_name=${BASH_SOURCE[0]##*/}
   MERGE_LIB=$entry_dir/lib.sh
@@ -66,8 +66,12 @@ merge_bootstrap() {
   MERGE_SNAPSHOT=$(mktemp -d "${TMPDIR:-/tmp}/devtools-merge.XXXXXX") || return $?
   MERGE_STATUS=0
   trap 'MERGE_STATUS=$?; rm -rf -- "$MERGE_SNAPSHOT"; exit "$MERGE_STATUS"' EXIT
-  git archive "$base" -- "$relative" "$parent/agent-merge-pr" >"$MERGE_SNAPSHOT/base.tar" || return $?
-  tar -xf "$MERGE_SNAPSHOT/base.tar" -C "$MERGE_SNAPSHOT" || return $?
+  git ls-tree -rz "$base" -- "$relative" "$parent/agent-merge-pr" >"$MERGE_SNAPSHOT/files" || return $?
+  while IFS=$' \t' read -r -d '' mode _ _ path; do
+    mkdir -p "$MERGE_SNAPSHOT/${path%/*}" || return $?
+    git cat-file blob "$base:$path" >"$MERGE_SNAPSHOT/$path" || return $?
+    if [ "$mode" = 100755 ]; then chmod +x "$MERGE_SNAPSHOT/$path" || return $?; fi
+  done <"$MERGE_SNAPSHOT/files"
   MERGE_LIB=$MERGE_SNAPSHOT/$relative/scripts/lib.sh
   uv run --quiet --script "$MERGE_SNAPSHOT/$relative/scripts/merge-policy.py" integrity "$base" "$entry_dir" || return $?
   # shellcheck disable=SC2034 # the base library uses this path at each integrity gate

@@ -95,6 +95,7 @@ integrity_change() {
 
 @test "preflight refuses a verifier that accepts every checkout before sourcing helpers" {
   sed '/^def integrity(base: str, scripts: str) -> None:/a\
+    __import__("pathlib").Path(__import__("os").environ["GH_FIXTURES"], "untrusted-reader").touch()\
     return
 ' "$POLICY" >"$POLICY.new"
   mv "$POLICY.new" "$POLICY"
@@ -106,6 +107,7 @@ integrity_change() {
   [[ "$output" == *"merge integrity:"* ]]
   [[ "$output" != *"requires a clean tree"* ]]
   [ ! -f "$GH_FIXTURES/untrusted" ]
+  [ ! -f "$GH_FIXTURES/untrusted-reader" ]
 }
 
 @test "remote integrity refuses a committed pull-request helper edit" {
@@ -270,6 +272,27 @@ refuse_attack_during_delegation() {
   [ "$status" -ne 0 ]
   [[ "$output" == *"merge integrity:"* ]]
   [ ! -f "$GH_FIXTURES/untrusted" ]
+}
+
+@test "unattended bootstrap reads pinned base blobs without archive extraction" {
+  local entry
+  export BOOTSTRAP_GIT
+  BOOTSTRAP_GIT=$(command -v git)
+  cat >"$BATS_TEST_TMPDIR/bin/git" <<'STUB'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >>"$GH_FIXTURES/bootstrap-git.log"
+if [ "$1" = archive ]; then exit 1; fi
+exec "$BOOTSTRAP_GIT" "$@"
+STUB
+  printf '#!/usr/bin/env bash\nexit 1\n' >"$BATS_TEST_TMPDIR/bin/tar"
+  chmod +x "$BATS_TEST_TMPDIR/bin/git" "$BATS_TEST_TMPDIR/bin/tar"
+  for entry in "$SCRIPTS" "$AGENT"; do
+    : >"$GH_FIXTURES/bootstrap-git.log"
+    run env DEVTOOLS_UNATTENDED=1 bash "$entry/preflight.sh" 7
+    [ "$status" -eq 0 ]
+    grep -Fx "cat-file blob $BASE_OID:.claude/skills/merge-pr/scripts/lib.sh" "$GH_FIXTURES/bootstrap-git.log"
+    grep -Fx "cat-file blob $BASE_OID:.claude/skills/merge-pr/scripts/merge-policy.py" "$GH_FIXTURES/bootstrap-git.log"
+  done
 }
 
 @test "successful unattended preflight removes its bootstrap snapshots" {
