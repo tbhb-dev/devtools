@@ -539,125 +539,32 @@ run_check() {
 	[ "$status" -eq 0 ]
 }
 
-# Exercise Git quoting independently of blob contents. The name literal is
-# confined to the tree object, while the pattern is confined to the blob.
-quoted_object_path() {
-	local path=$1 stripped=$2 mode=$3 display oid
-	display=${path//\\/\\\\}
-	display=${display//$'\n'/\\n}
-	display=${display//$'\r'/\\r}
-	printf '%s\n' "$stripped" >.leak-allow
-	printf 'connect 10.1.2.3\n' >payload
-	oid=$(git hash-object -w payload)
-	git update-index --add --cacheinfo "100644,$oid,$path"
-	git commit -qm 'test: quoted path'
-	if [[ $mode == range ]]; then
-		GITHUB_ACTIONS=true run_check --range "$base..HEAD"
-	else
-		run_check --pre-push </dev/null
-	fi
+# Run these unchanged-mode fixtures against either scanner.
+whole_object_check() {
+	run bash "${CHECK_LEAKS_BASELINE:-$checker}" "$@"
+	no_secrets
 	[ "$status" -eq 1 ]
-	[[ $output == *"$display:1: pattern: private IPv4 address"* ]]
-
-	# read -r loads literals from a line, so a newline cannot be in one.
-	# Use the suffix after the newline; Git renders the newline as backslash-n.
-	export O11Y_PRIVATE_STRINGS=${path#*$'\n'}
-	if [[ $mode == range ]]; then
-		GITHUB_ACTIONS=true run_check --range "$base..HEAD"
-	else
-		run_check --pre-push </dev/null
-	fi
-	[ "$status" -eq 1 ]
-	[[ $output =~ path#[0-9a-f]{8}:path:\ private\ literal\ O11Y_PRIVATE_STRINGS\ entry\ 1 ]]
-	[[ $output =~ path#[0-9a-f]{8}:1:\ pattern:\ private\ IPv4\ address ]]
-	no_value "$display"
-
-	# A real expression over the original bytes still exempts the blob.
-	printf '^ho.+[.]txt$\n' >.leak-allow
-	O11Y_PRIVATE_STRINGS='' run_check --range "$base..HEAD"
-	[ "$status" -eq 0 ]
-	O11Y_PRIVATE_STRINGS='' run_check --pre-push </dev/null
-	[ "$status" -eq 0 ]
+	[[ $output == *'pattern: private IPv4 address'* ]]
 }
 
-@test "quoted object paths: CI range tab" {
-	quoted_object_path $'ho\tel.txt' hotel range
+@test "AC6 whole-object tab-name allowances match main" {
+	printf '%s%s%s\n' safe t file >.leak-allow
+	printf 'connect 10.1.2.3\n' >$'safe\tfile.txt'
+	git add -- $'safe\tfile.txt'
+	git commit -qm 'test: tab name'
+	GITHUB_ACTIONS=true whole_object_check --range "$base..HEAD"
+	whole_object_check --pre-push </dev/null
 }
 
-@test "quoted object paths: CI range newline" {
-	quoted_object_path $'ho\nest.txt' honest range
-}
-
-@test "quoted object paths: CI range double quote" {
-	quoted_object_path 'ho"tel.txt' hotel range
-}
-
-@test "quoted object paths: CI range backslash" {
-	quoted_object_path 'ho\tel.txt' hotel range
-}
-
-@test "quoted object paths: CI range non-UTF-8 byte" {
-	quoted_object_path $'ho\\\377tel.txt' hotel range
-}
-
-@test "quoted object paths: unscoped pre-push tab" {
-	quoted_object_path $'ho\tel.txt' hotel push
-}
-
-@test "quoted object paths: unscoped pre-push newline" {
-	quoted_object_path $'ho\nest.txt' honest push
-}
-
-@test "quoted object paths: unscoped pre-push double quote" {
-	quoted_object_path 'ho"tel.txt' hotel push
-}
-
-@test "quoted object paths: unscoped pre-push backslash" {
-	quoted_object_path 'ho\tel.txt' hotel push
-}
-
-@test "quoted object paths: unscoped pre-push non-UTF-8 byte" {
-	quoted_object_path $'ho\\\377tel.txt' hotel push
-}
-
-@test "quoted object paths: tagged trees use original names without a commit" {
-	local path=$'ho\tel.txt' oid tree tag
-	printf 'connect 10.1.2.3\n' >payload
-	oid=$(git hash-object -w payload)
-	git update-index --add --cacheinfo "100644,$oid,$path"
-	tree=$(git write-tree)
-	git tag -a payload "$tree" -m 'test: tree payload'
-	tag=$(git rev-parse refs/tags/payload)
-	printf 'hotel\n' >.leak-allow
-	export O11Y_PRIVATE_STRINGS=$path
-	run_check --range "$base..$tag"
-	[ "$status" -eq 1 ]
-	[[ $output =~ path#[0-9a-f]{8}:path:\ private\ literal ]]
-	[[ $output =~ path#[0-9a-f]{8}:1:\ pattern:\ private\ IPv4\ address ]]
-	printf 'refs/tags/payload %s refs/tags/payload %s\n' "$tag" "$base" >lines
-	run_check --pre-push <lines
-	[ "$status" -eq 1 ]
-	[[ $output =~ path#[0-9a-f]{8}:path:\ private\ literal ]]
-	[[ $output =~ path#[0-9a-f]{8}:1:\ pattern:\ private\ IPv4\ address ]]
-}
-
-@test "quoted object paths: shared blobs prefer a non-exempt original name" {
-	local oid mode
-	printf 'connect 10.1.2.3\n' >payload
-	oid=$(git hash-object -w payload)
-	git update-index --add --cacheinfo "100644,$oid,a\\allowed.txt"
-	git update-index --add --cacheinfo "100644,$oid,z\\other.txt"
-	git commit -qm 'test: shared blob'
-	printf '%s\n' '^a\\allowed[.]txt$' >.leak-allow
-	for mode in --range --pre-push; do
-		if [[ $mode == --range ]]; then
-			run_check "$mode" "$base..HEAD"
-		else
-			run_check "$mode" </dev/null
-		fi
-		[ "$status" -eq 1 ]
-		[[ $output == *'z\\other.txt:1: pattern: private IPv4 address'* ]]
-	done
+@test "AC6 whole-object tag-then-commit shared subtree matches main" {
+	printf '^allowed(/|$)\n' >.leak-allow
+	mkdir allowed
+	printf 'connect 10.1.2.3\n' >allowed/file.txt
+	git add -- allowed/file.txt
+	git commit -qm 'test: shared subtree'
+	git tag -a payload HEAD:allowed -m 'test: tree payload'
+	printf 'refs/tags/payload %s refs/tags/payload %s\nrefs/heads/main %s refs/heads/main %s\n' "$(git rev-parse payload)" "$base" "$(git rev-parse HEAD)" "$base" >lines
+	whole_object_check --pre-push-hook <lines
 }
 
 # --- disclosure ---------------------------------------------------------
@@ -1822,15 +1729,23 @@ publish_base() {
 }
 
 publish_commit() {
-	git commit -qm "test: $1"
+	local message=$1
+	shift
+	if (($#)); then git add -- "$@"; fi
+	git commit -qm "test: $message"
+}
+
+publish_finding() {
+	run_check --publish
+	[ "$status" -eq 1 ]
+	[[ $output == *"$1"* ]]
 }
 
 @test "AC1 publication passes when the branch adds no value, whatever the base holds" {
 	publish_base
 	printf 'kestrel99\nclean\nchanged\n' >existing.txt
 	git mv zebra-host-01.txt renamed.txt
-	git add -- existing.txt
-	publish_commit 'edit a file holding a base value'
+	publish_commit 'edit a file holding a base value' existing.txt
 	run_check --publish
 	[ "$status" -eq 0 ]
 	[ -z "$output" ]
@@ -1843,11 +1758,8 @@ publish_commit() {
 @test "AC2 an added line is named by its number" {
 	publish_base
 	printf 'kestrel99\n' >>existing.txt
-	git add -- existing.txt
-	publish_commit 'add a line'
-	run_check --publish
-	[ "$status" -eq 1 ]
-	[[ $output == *'existing.txt:3: private literal O11Y_PRIVATE_STRINGS entry 6'* ]]
+	publish_commit 'add a line' existing.txt
+	publish_finding 'existing.txt:3: private literal O11Y_PRIVATE_STRINGS entry 6'
 	# The pre-push hook finds it too.
 	printf 'refs/heads/main %s refs/heads/main %s\n' "$(git rev-parse HEAD)" "$base" >lines
 	DEVTOOLS_LEAK_MODE=publish run bash -c 'bash "$1" --pre-push-hook <"$2"' _ "$checker" lines
@@ -1858,8 +1770,7 @@ publish_commit() {
 @test "AC2 an added path name is opaque" {
 	publish_base
 	: >mango-secret.txt
-	git add -- mango-secret.txt
-	publish_commit 'add a file'
+	publish_commit 'add a file' mango-secret.txt
 	run_check --publish
 	[ "$status" -eq 1 ]
 	[[ $output =~ path#[0-9a-f]{8}:path:\ private\ literal ]]
@@ -1874,12 +1785,8 @@ publish_commit() {
 	[[ $output =~ path#[0-9a-f]{8}:path:\ private\ literal ]]
 }
 
-@test "AC2 an added empty filename matches a backslash literal before escaping" {
-	publish_base
+publication_path_finding() {
 	export O11Y_PRIVATE_STRINGS='fixture\secret'
-	: >'fixture\secret.txt'
-	git add -- 'fixture\secret.txt'
-	publish_commit 'add an empty file'
 	for mode in --publish --pre-push-hook; do
 		printf 'refs/heads/main %s refs/heads/main %s\n' "$(git rev-parse HEAD)" "$DEVTOOLS_LEAK_BASE" >lines
 		DEVTOOLS_LEAK_MODE=publish run_check "$mode" <lines
@@ -1890,19 +1797,18 @@ publish_commit() {
 	done
 }
 
+@test "AC2 an added empty filename matches a backslash literal before escaping" {
+	publish_base
+	: >'fixture\secret.txt'
+	publish_commit 'add an empty file' 'fixture\secret.txt'
+	publication_path_finding
+}
+
 @test "AC2 a rename target matches a backslash literal before escaping" {
 	publish_base
-	export O11Y_PRIVATE_STRINGS='fixture\secret'
 	git mv plain.txt 'fixture\secret.txt'
 	publish_commit 'rename a file'
-	for mode in --publish --pre-push-hook; do
-		printf 'refs/heads/main %s refs/heads/main %s\n' "$(git rev-parse HEAD)" "$DEVTOOLS_LEAK_BASE" >lines
-		DEVTOOLS_LEAK_MODE=publish run_check "$mode" <lines
-		[ "$status" -eq 1 ]
-		[[ $output =~ path#[0-9a-f]{8}:path:\ private\ literal\ O11Y_PRIVATE_STRINGS\ entry\ 1 ]]
-		no_value 'fixture\secret'
-		no_value 'fixture\\secret'
-	done
+	publication_path_finding
 }
 
 @test "AC2 a commit message names the commit" {
@@ -1916,24 +1822,17 @@ publish_commit() {
 @test "AC2 a later commit that removes the value doesn't clear it" {
 	publish_base
 	printf 'kestrel99\nclean\nkestrel99\n' >existing.txt
-	git add -- existing.txt
-	publish_commit 'add a value'
+	publish_commit 'add a value' existing.txt
 	printf 'kestrel99\nclean\n' >existing.txt
-	git add -- existing.txt
-	publish_commit 'remove it again'
-	run_check --publish
-	[ "$status" -eq 1 ]
-	[[ $output == *'existing.txt:3: private literal'* ]]
+	publish_commit 'remove it again' existing.txt
+	publish_finding 'existing.txt:3: private literal'
 }
 
 @test "AC2 a removed base occurrence doesn't offset an added one" {
 	publish_base
 	printf 'clean\nkestrel99\n' >existing.txt
-	git add -- existing.txt
-	publish_commit 'move the value'
-	run_check --publish
-	[ "$status" -eq 1 ]
-	[[ $output == *'existing.txt:2: private literal'* ]]
+	publish_commit 'move the value' existing.txt
+	publish_finding 'existing.txt:2: private literal'
 }
 
 @test "AC2 a deleted and re-added file is scanned whole" {
@@ -1941,21 +1840,15 @@ publish_commit() {
 	git rm -q -- existing.txt
 	publish_commit 'delete'
 	git show "$DEVTOOLS_LEAK_BASE:existing.txt" >existing.txt
-	git add -- existing.txt
-	publish_commit 're-add'
-	run_check --publish
-	[ "$status" -eq 1 ]
-	[[ $output == *'existing.txt:1: private literal'* ]]
+	publish_commit 're-add' existing.txt
+	publish_finding 'existing.txt:1: private literal'
 }
 
 @test "AC2 an added binary file is named by the binary marker" {
 	publish_base
 	printf 'xx\0kestrel99\0yy' >blob.dat
-	git add -- blob.dat
-	publish_commit 'add binary'
-	run_check --publish
-	[ "$status" -eq 1 ]
-	[[ $output == *'blob.dat:binary: private literal'* ]]
+	publish_commit 'add binary' blob.dat
+	publish_finding 'blob.dat:binary: private literal'
 }
 
 @test "scoped and whole-object pushes reject followed tag annotations" {
@@ -2022,29 +1915,22 @@ HOOK
 	publish_base
 	printf '* -diff\n' >.gitattributes
 	printf 'kestrel99\nclean\nkestrel99\n' >existing.txt
-	git add -- .gitattributes existing.txt
-	publish_commit 'add a value under a -diff attribute'
-	run_check --publish
-	[ "$status" -eq 1 ]
-	[[ $output == *'existing.txt:3'* ]]
+	publish_commit 'add a value under a -diff attribute' .gitattributes existing.txt
+	publish_finding 'existing.txt:3'
 }
 
 @test "AC2 a low core.bigFileThreshold can't hide an added line" {
 	publish_base
 	git config core.bigFileThreshold 1
 	printf 'kestrel99\nclean\nkestrel99\n' >existing.txt
-	git add -- existing.txt
-	publish_commit 'add a value to a file over the threshold'
-	run_check --publish
-	[ "$status" -eq 1 ]
-	[[ $output == *'existing.txt:3'* ]]
+	publish_commit 'add a value to a file over the threshold' existing.txt
+	publish_finding 'existing.txt:3'
 }
 
 @test "AC2 GIT_DIFF_OPTS context can't shift the reported line" {
 	publish_base
 	printf 'one\ntwo\nkestrel99\nfour\nfive\nsix\n' >plain.txt
-	git add -- plain.txt
-	publish_commit 'add a value at line 3'
+	publish_commit 'add a value at line 3' plain.txt
 	GIT_DIFF_OPTS=-u3 run_check --publish
 	[ "$status" -eq 1 ]
 	[[ $output == *'plain.txt:3'* ]]
@@ -2053,19 +1939,15 @@ HOOK
 @test "AC2 inter-hunk context can't shift the reported line" {
 	publish_base
 	printf 'changed\ntwo\nthree\nfour\nkestrel99\nsix\n' >plain.txt
-	git add -- plain.txt
-	publish_commit 'add a value at line 5'
+	publish_commit 'add a value at line 5' plain.txt
 	git config diff.interHunkContext 10
-	run_check --publish
-	[ "$status" -eq 1 ]
-	[[ $output == *'plain.txt:5: private literal O11Y_PRIVATE_STRINGS entry 6'* ]]
+	publish_finding 'plain.txt:5: private literal O11Y_PRIVATE_STRINGS entry 6'
 }
 
 @test "AC2 an unreadable diff order file can't leak a value or hide its line" {
 	publish_base
 	printf 'one\ntwo\nkestrel99\nfour\nfive\nsix\n' >plain.txt
-	git add -- plain.txt
-	publish_commit 'add a value at line 3'
+	publish_commit 'add a value at line 3' plain.txt
 	git config diff.orderFile "$work/mango-secret/missing"
 	mkdir scratch
 	TMPDIR="$work/scratch" run_check --publish
@@ -2078,8 +1960,7 @@ HOOK
 	publish_base
 	printf '* -diff\n' >.gitattributes
 	printf 'changed\ntwo\nthree\nfour\nkestrel99\nsix\n' >plain.txt
-	git add -- .gitattributes plain.txt
-	publish_commit 'add a value under hostile diff settings'
+	publish_commit 'add a value under hostile diff settings' .gitattributes plain.txt
 	git config core.bigFileThreshold 1
 	git config diff.interHunkContext 10
 	git config diff.orderFile "$work/mango-secret/missing"
@@ -2094,8 +1975,7 @@ HOOK
 @test "AC4 the scan reads commits, never a staged removal" {
 	publish_base
 	printf 'kestrel99\n' >>existing.txt
-	git add -- existing.txt
-	publish_commit 'add a value'
+	publish_commit 'add a value' existing.txt
 	printf 'kestrel99\nclean\n' >existing.txt
 	git add -- existing.txt
 	run_check --publish
@@ -2111,11 +1991,8 @@ HOOK
 	printf 'forbidden-fixture\n' >new.txt
 	printf '^new.txt$\n' >.leak-allow
 	: >.leak-patterns
-	git add -- new.txt .leak-allow .leak-patterns
-	publish_commit 'try to remove the base rule'
-	run_check --publish
-	[ "$status" -eq 1 ]
-	[[ $output == *'new.txt:1: pattern: repository rule 1'* ]]
+	publish_commit 'try to remove the base rule' new.txt .leak-allow .leak-patterns
+	publish_finding 'new.txt:1: pattern: repository rule 1'
 	DEVTOOLS_LEAK_MODE=publish run_check --pre-push </dev/null
 	[ "$status" -eq 1 ]
 	[[ $output == *'new.txt:1: pattern: repository rule 1'* ]]
@@ -2124,8 +2001,7 @@ HOOK
 @test "AC6 publication keeps matched content inside its private temp directory" {
 	publish_base
 	printf 'kestrel99\n' >>existing.txt
-	git add -- existing.txt
-	publish_commit 'add a value'
+	publish_commit 'add a value' existing.txt
 	mkdir scratch
 	TMPDIR="$work/scratch" run_check --publish
 	[ "$status" -eq 1 ]
@@ -2135,8 +2011,7 @@ HOOK
 @test "AC6 the task scopes only on request and the range scan still scans everything added" {
 	publish_base
 	printf 'clean\nmore\n' >existing.txt
-	git add -- existing.txt
-	publish_commit 'edit'
+	publish_commit 'edit' existing.txt
 	printf '[task_config]\nincludes = ["%s/.devtools/tasks/leaks.toml"]\n' "$repo_root" >mise.toml
 	export DEVTOOLS_DIR="$repo_root/.devtools"
 	mise trust -q "$work/mise.toml"

@@ -75,24 +75,6 @@ exec 3>&2
 # Bash 3.2 applies errexit to `command` even when the caller tests its status.
 git() { env git "$@" 2>/dev/null; }
 
-# scan_diff FORMAT ARGS...: raw metadata or a zero-context text patch.
-# Keep every scan diff on the same settings and quiet git wrapper. --text
-# overrides repository -diff attributes and core.bigFileThreshold; callers
-# still scan NUL-containing blobs whole. -M preserves rename base budgets
-# and exposes rename targets for path scanning. -O/dev/null also overrides
-# an empty diff.orderFile, which git otherwise tries to open as a path.
-scan_diff() (
-  local format=$1
-  shift
-  unset GIT_DIFF_OPTS GIT_EXTERNAL_DIFF GIT_ATTR_SOURCE
-  if [[ $format == raw ]]; then
-    set -- --no-patch --raw --no-abbrev -z "$@"
-  fi
-  git -c diff.orderFile= -c diff.interHunkContext=0 -c core.attributesFile=/dev/null \
-    -c diff.ignoreSubmodules=none diff --text --no-ext-diff --no-textconv \
-    -U0 -O/dev/null --no-color --no-relative --ignore-submodules=none -M --diff-filter=ACMRTU "$@"
-)
-
 top=$(git rev-parse --show-toplevel || true)
 finished=
 die() {
@@ -149,31 +131,13 @@ for name in $names; do
   done
 done
 
-# Shared by the scanner and object path selection.
-path_decoder='
-    # Undo record-stream escaping before matching original path bytes.
-    function path_bytes(s,    out, i, c) {
-      out = ""
-      for (i = 1; i <= length(s); i++) {
-        c = substr(s, i, 1)
-        if (c == "\\") {
-          c = substr(s, ++i, 1)
-          if (c == "n") c = "\n"
-          else if (c == "r") c = "\r"
-        }
-        out = out c
-      }
-      return out
-    }
-'
-
 # scan reads the record stream the producers write and prints findings.
 # A record starting with \001 opens a file (the rest is its label), one
 # starting with \002 is a path to scan as text of its own, and every other
 # record is "<line number or "binary"><TAB><text>". Staged streams use
 # \003 and \004 to switch between base budgets and index findings.
 scan() {
-  PATTERN_EXEMPT=$pattern_exempt NEEDLES=$needles PATTERNS=$patterns awk "$path_decoder"'
+  PATTERN_EXEMPT=$pattern_exempt NEEDLES=$needles PATTERNS=$patterns awk '
     BEGIN {
       nf = ENVIRON["NEEDLES"]
       while ((r = (getline l < nf)) > 0) {
@@ -252,23 +216,23 @@ scan() {
         if (low ~ custom[i]) report("pattern: repository rule " i)
       }
     }
-    # Match the original location; use escaped text only for display.
-    function locate(full, display) {
+    # Name a location: as given, unless the name itself matches a rule.
+    function locate(full,    n) {
       quiet = 1; hits = 0
       # Exemptions silence findings, never the sanitizing of a location.
       check(tolower("/" full), 0)
       quiet = 0
-      return hits ? opaque(full) : display
+      return hits ? opaque(full) : full
     }
     # With the private values unread, say nothing: any finding or location
     # would come from an incomplete set, and the END rule reports the failure.
     unreadable { next }
     /^\003/ { phase = "base"; next }
     /^\004/ { phase = "index"; next }
-    /^\001/ { full = path_bytes(substr($0, 2)); label = locate(full, substr($0, 2)); skip = (full ~ exempt); next }
+    /^\001/ { full = substr($0, 2); label = locate(full); skip = (full ~ exempt); next }
     /^\002/ {
-      full = path_bytes(substr($0, 2))
-      label = locate(full, substr($0, 2))
+      full = substr($0, 2)
+      label = locate(full)
       lineno = "path"
       # The leading slash lets the path patterns see a top-level directory.
       check(tolower("/" full), (full ~ exempt))
@@ -277,9 +241,7 @@ scan() {
     {
       t = index($0, "\t")
       lineno = substr($0, 1, t - 1)
-      text = substr($0, t + 1)
-      if (lineno == "path") text = path_bytes(text)
-      check(tolower(text), skip)
+      check(tolower(substr($0, t + 1)), skip)
     }
     END {
       if (unreadable) { print "check-leaks: could not read the private values; the result is incomplete" > "/dev/stderr"; exit 2 }
@@ -350,7 +312,7 @@ emit_staged() {
   local meta st old_path new_path old_label new_label
   local -a m
   # The raw listing pins index blob IDs and rename pairs for the scan.
-  scan_diff raw --cached "$base_tree" >"$tmp/raw"
+  git -c diff.ignoreSubmodules=none diff --ignore-submodules=none --cached --no-ext-diff --raw --no-abbrev -z -M --diff-filter=ACMRTU "$base_tree" >"$tmp/raw"
   while IFS= read -r -d '' meta; do
     read -r -a m <<<"${meta#:}"
     st=${m[4]}
@@ -381,46 +343,36 @@ emit_staged() {
   done <"$tmp/raw"
 }
 
-# emit_objects: the object ids in $tmp/objs, one per line, scanned whole.
-# Paths come only from NUL-delimited tree entries, never rev-list hints.
-# Enumerate commits and standalone trees (including tagged trees), with
+# emit_objects: the object ids in $tmp/objs, one "oid[ path]" per line as
+# rev-list --objects prints them, scanned whole.
+#
+# rev-list gives an object only the first path it meets, so the paths come
+# from the trees instead: every entry of every listed commit's tree, with
 # gitlinks listed but not entered. Each path is scanned as text of its own,
 # and an object in the scanned set is pattern-scanned unless every path
-# that uses it is exempt. Objects the destination has stay out of scope.
-# Every object is read through cat-file --batch and scanned in full.
+# that uses it is exempt. An object the destination already has is out of
+# scope, by design. Every object is then read through one cat-file --batch and
+# scanned in full; a tree is read too, because the names inside it are
+# what shows a file renamed without any change to its content.
 emit_objects() {
-  local c kind entry meta path oid label
-  local -a m
+  local c
   awk '!seen[$1]++' "$tmp/objs" >"$tmp/uniq"
-  git cat-file --batch-check='%(objectname) %(objecttype)' <"$tmp/uniq" >"$tmp/types"
+  awk '{ print $1 }' "$tmp/uniq" | git cat-file --batch-check='%(objectname) %(objecttype)' >"$tmp/types"
   # Anything but a tree, blob, commit or tag (a "missing" answer included)
   # is an object the scan could not account for.
   if awk '$2 != "blob" && $2 != "tree" && $2 != "commit" && $2 != "tag" { bad = 1 } END { exit !bad }' "$tmp/types"; then
     return 1
   fi
-  : >"$tmp/all-pairs"
-  : >"$tmp/children"
-  while read -r c kind; do
-    [[ $kind == commit || $kind == tree ]] || continue
-    git ls-tree -r -t -z --full-tree "$c" >"$tmp/tree"
-    while IFS= read -r -d '' entry; do
-      meta=${entry%%$'\t'*}
-      path=${entry#*$'\t'}
-      read -r -a m <<<"$meta"
-      oid=${m[2]}
-      label=$(esc "$path")
-      printf '%s %s %s\n' "$c" "$oid" "$label" >>"$tmp/all-pairs"
-      if [[ ${m[1]} == tree ]]; then printf '%s\n' "$oid" >>"$tmp/children"; fi
-    done <"$tmp/tree"
-  done <"$tmp/types"
-  # A subtree is reached with its full path through a root, not also under
-  # a shorter name of its own. Commit roots may repeat a tree root; dedupe
-  # the resulting object/path pairs without losing any use of a blob.
-  awk 'FILENAME == ARGV[1] { child[$1] = 1; next }
-      FILENAME == ARGV[2] { if ($2 == "commit" || ($2 == "tree" && !($1 in child))) root[$1] = 1; next }
-      $1 in root { p = substr($0, index($0, " ") + 1); if (!seen[p]++) print p }' \
-    "$tmp/children" "$tmp/types" "$tmp/all-pairs" >"$tmp/pairs"
-  awk '{ p = substr($0, index($0, " ") + 1); if (!seen[p]++) print "\002" p }' "$tmp/pairs"
+  awk '$2 == "commit" { print $1 }' "$tmp/types" >"$tmp/commits"
+  while read -r c; do
+    git -c core.quotepath=off ls-tree -r -t --full-tree "$c"
+  done <"$tmp/commits" |
+    awk '{ t = index($0, "\t"); split(substr($0, 1, t - 1), f, " "); print f[3] " " substr($0, t + 1) }' |
+    awk '!seen[$0]++' >"$tmp/pairs"
+  # Paths, escaped for the record stream: those from the trees, then any
+  # rev-list found for an object no commit's tree holds (a tagged blob).
+  cat "$tmp/pairs" "$tmp/uniq" |
+    awk 'index($0, " ") { p = substr($0, index($0, " ") + 1); gsub(/\\/, "\\\\", p); if (!(p in seen)) { seen[p] = 1; print "\002" p } }'
   awk '{ print $1 }' "$tmp/types" >"$tmp/toread"
   git cat-file --batch <"$tmp/toread" >"$tmp/batch"
   # A header line is "<oid> <type> <size>". Object bodies are scanned as
@@ -428,7 +380,7 @@ emit_objects() {
   # refused by the type check above, and one that vanishes since leaves a
   # header unseen, which the count catches. A body can't forge a pass,
   # since every line is scanned whichever object it is credited to.
-  tr '\0' '\n' <"$tmp/batch" | PAIRS=$tmp/pairs TYPES=$tmp/types PATTERN_EXEMPT=$pattern_exempt awk "$path_decoder"'
+  tr '\0' '\n' <"$tmp/batch" | PAIRS=$tmp/pairs NAMES=$tmp/uniq TYPES=$tmp/types PATTERN_EXEMPT=$pattern_exempt awk '
     function load(file, kind,    r, l, sp, p, o) {
       while ((r = (getline l < file)) > 0) {
         if (kind == "types") { split(l, f, " "); want[f[1]] = f[2]; nwant++; continue }
@@ -437,7 +389,7 @@ emit_objects() {
         o = substr(l, 1, sp - 1)
         p = substr(l, sp + 1)
         # Prefer a path that is not exempt, so patterns run if any use is.
-        if (!(o in chosen) || (path_bytes(chosen[o]) ~ exempt && path_bytes(p) !~ exempt)) chosen[o] = p
+        if (!(o in chosen) || (chosen[o] ~ exempt && p !~ exempt)) chosen[o] = p
       }
       if (r < 0) bad = 1
       close(file)
@@ -446,13 +398,14 @@ emit_objects() {
       exempt = "^\\.devtools/scripts/check-leaks\\.bats$|" ENVIRON["PATTERN_EXEMPT"]
       load(ENVIRON["TYPES"], "types")
       load(ENVIRON["PAIRS"], "paths")
+      load(ENVIRON["NAMES"], "paths")
     }
     (NF == 3 && $1 in want && !($1 in got) && $2 == want[$1] && $3 ~ /^[0-9]+$/) {
       oid = $1
       got[oid] = 1
       ngot++
       n = 0
-      if (($2 == "blob" || $2 == "tree") && chosen[oid] != "") label = chosen[oid]
+      if (($2 == "blob" || $2 == "tree") && chosen[oid] != "") { label = chosen[oid]; gsub(/\\/, "\\\\", label) }
       else label = $2 " " substr(oid, 1, 7)
       printf "\001%s\n", label
       next
@@ -462,53 +415,9 @@ emit_objects() {
   '
 }
 
-# emit_publish TIP: what each commit after the base adds, read from the
-# commit objects. The message is scanned whole. A path is scanned when the
-# commit adds or renames to it. Added lines come from a diff of the two
-# blobs, with no per-file counting, so a removal elsewhere in the file or
-# in a later commit can't offset an addition. A binary or newly added file
-# is scanned whole.
-emit_publish() {
-  local c parent meta st old_path new_path label old_mode new_mode old_oid new_oid empty_tree
-  local -a m
-  require_complete
-  empty_tree=$(git hash-object -t tree --stdin </dev/null)
-  git rev-list --reverse "$1" "^$base_commit" >"$tmp/commits"
-  while read -r c; do
-    git cat-file commit "$c" >"$tmp/obj"
-    printf '\001commit %s\n' "${c:0:7}"
-    emit_body "$tmp/obj"
-    # rev-list hides parents at a shallow boundary; the commit header does not.
-    parent=$(awk '!header_done && /^$/ { header_done = 1 } !header_done && /^parent / && !p { p = $2 } END { print p }' "$tmp/obj")
-    scan_diff raw "${parent:-$empty_tree}" "$c" >"$tmp/raw"
-    while IFS= read -r -d '' meta; do
-      read -r -a m <<<"${meta#:}"
-      old_mode=${m[0]} new_mode=${m[1]} old_oid=${m[2]} new_oid=${m[3]} st=${m[4]}
-      IFS= read -r -d '' new_path
-      if [[ $st == R* || $st == C* ]]; then IFS= read -r -d '' new_path; fi
-      if [[ $st == A* || $st == R* || $st == C* ]]; then emit_path "$new_path"; fi
-      [[ $new_mode != 160000 ]] || continue
-      label=$(esc "$new_path")
-      printf '\001%s\n' "$label"
-      git cat-file blob "$new_oid" >"$tmp/blob"
-      if [[ $old_mode == 160000 || $old_oid =~ ^0+$ ]]; then
-        emit_body "$tmp/blob"
-        continue
-      fi
-      git cat-file blob "$old_oid" >"$tmp/old"
-      if has_nul "$tmp/blob" || has_nul "$tmp/old"; then
-        emit_body "$tmp/blob"
-      else
-        scan_diff patch "$old_oid" "$new_oid" |
-          awk '/^@@/ { split($3, a, ","); n = substr(a[1], 2) + 0; body = 1; next } body && /^\+/ { print n "\t" substr($0, 2); n++ }'
-      fi
-    done <"$tmp/raw"
-  done <"$tmp/commits"
-}
-
 # add_objects REV-LIST-ARGS...: list the objects git would reach.
 add_objects() {
-  git rev-list --objects --no-object-names "$@" >>"$tmp/objs"
+  git rev-list --objects "$@" >>"$tmp/objs"
 }
 
 # Refuse a shallow repository: its boundary commits hide history.
@@ -565,10 +474,6 @@ emit_pre_push() {
     # A hook run with no ref lines has nothing to push. A manual run has no
     # lines either, and scans everything reachable from HEAD.
     if [[ -n $hook ]]; then return 0; fi
-    if [[ -n $publish_scope ]]; then
-      emit_publish HEAD
-      return 0
-    fi
     add_objects HEAD
   else
     if [[ -n $ask && -n $url ]]; then
@@ -585,22 +490,211 @@ emit_pre_push() {
         cat "$tmp/known"
         if [[ ! $roid =~ ^0+$ ]] && git cat-file -e "$roid"; then printf '^%s\n' "$roid"; fi
       } >"$tmp/revs"
-      git rev-list --objects --no-object-names --stdin <"$tmp/revs" >"$tmp/outgoing"
-      if [[ -n $publish_scope ]] && oid=$(git rev-parse --verify --quiet "${loid}^{commit}"); then
-        emit_publish "$oid"
-        # Commit additions have their own comparison. Outgoing tag objects
-        # still need whole-object scanning, including nested annotations.
-        # Keep unknown object types too, so emit_objects can reject them.
-        awk '{ print $1 }' "$tmp/outgoing" |
-          git cat-file --batch-check='%(objectname) %(objecttype)' |
-          awk '$2 != "commit" && $2 != "tree" && $2 != "blob" { print $1 }' >>"$tmp/objs"
-      else
-        # Tags targeting trees or blobs publish payloads outside any commit.
-        cat "$tmp/outgoing" >>"$tmp/objs"
-      fi
+      git rev-list --objects --stdin <"$tmp/revs" >>"$tmp/objs"
     done <"$tmp/lines"
   fi
   emit_objects
+}
+
+# Publication has its own stream and decoder. Whole-object producers and
+# their scanner keep main's encoding, path selection and matching rules.
+# \005 opens a publication file; \006 checks original path bytes. Display
+# labels alone use esc(). Tag payloads go through emit_objects and scan.
+scan_publish() {
+  PATTERN_EXEMPT=$pattern_exempt NEEDLES=$needles PATTERNS=$patterns awk '
+    function path_bytes(s,    out, i, c) {
+      out = ""
+      for (i = 1; i <= length(s); i++) {
+        c = substr(s, i, 1)
+        if (c == "\\") {
+          c = substr(s, ++i, 1)
+          if (c == "n") c = "\n"
+          else if (c == "r") c = "\r"
+        }
+        out = out c
+      }
+      return out
+    }
+    BEGIN {
+      while ((r = (getline l < ENVIRON["NEEDLES"])) > 0) {
+        t = index(l, "\t")
+        name[++nn] = substr(l, 1, t - 1)
+        needle[nn] = tolower(substr(l, t + 1))
+      }
+      if (r < 0) unreadable = 1
+      close(ENVIRON["NEEDLES"])
+      while ((r = (getline l < ENVIRON["PATTERNS"])) > 0)
+        if (l !~ /^#/ && l != "") custom[++nc] = tolower(l)
+      if (r < 0) unreadable = 1
+      close(ENVIRON["PATTERNS"])
+      exempt = "^\\.devtools/scripts/check-leaks\\.bats$|" ENVIRON["PATTERN_EXEMPT"]
+      for (i = 1; i < 256; i++) ord[sprintf("%c", i)] = i
+      op_ref = "op:" "//"
+      oct = "(25[0-5]|2[0-4][0-9]|[01]?[0-9]?[0-9])"
+      dot = "\\."
+      pre = "(^|[^0-9.])"
+      ip10 = "10" dot oct dot oct dot oct
+      ip172 = "172" dot "(1[6-9]|2[0-9]|3[01])" dot oct dot oct
+      ip192 = "192" dot "168" dot oct dot oct
+      ip_tailnet = "100" dot "(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])" dot oct dot oct
+      re_ip = pre "(" ip10 "|" ip172 "|" ip192 ")"
+      re_tailnet = pre ip_tailnet
+      re_ts = "([a-z0-9-]+\\.)+ts\\.net"
+    }
+    function opaque(s,    i, h) {
+      h = 5381
+      for (i = 1; i <= length(s); i++) h = (h * 33 + ord[substr(s, i, 1)]) % 4294967296
+      return sprintf("path#%08x", h)
+    }
+    function report(why) {
+      if (quiet) { hits++; return }
+      printf "%s:%s: %s\n", label, lineno, why
+      findings++
+    }
+    function foreign_ts(s,    m) {
+      while (match(s, re_ts)) {
+        m = substr(s, RSTART, RLENGTH)
+        if (m != "example.ts.net" && m !~ /\.example\.ts\.net$/) return 1
+        s = substr(s, RSTART + RLENGTH)
+      }
+      return 0
+    }
+    function check(low, skip_patterns,    i) {
+      for (i = 1; i <= nn; i++) if (index(low, needle[i])) report("private literal " name[i])
+      if (skip_patterns) return
+      if (index(low, op_ref)) report("pattern: password-manager reference")
+      if (foreign_ts(low)) report("pattern: tailnet host name")
+      if (low ~ re_tailnet) report("pattern: tailnet address")
+      if (low ~ re_ip) report("pattern: private IPv4 address")
+      if (low ~ /-----begin ([a-z0-9]+ )*private key-----/) report("pattern: private-key header")
+      for (i = 1; i <= nc; i++) if (low ~ custom[i]) report("pattern: repository rule " i)
+    }
+    unreadable { next }
+    /^[\005\006]/ {
+      full = path_bytes(substr($0, 2)); skip = (full ~ exempt)
+      quiet = 1; hits = 0
+      check(tolower("/" full), 0)
+      quiet = 0
+      label = hits ? opaque(full) : substr($0, 2)
+      if (substr($0, 1, 1) == "\006") { lineno = "path"; check(tolower("/" full), skip) }
+      next
+    }
+    {
+      t = index($0, "\t")
+      lineno = substr($0, 1, t - 1)
+      check(tolower(substr($0, t + 1)), skip)
+    }
+    END {
+      if (unreadable) { print "check-leaks: could not read the private values; the result is incomplete" > "/dev/stderr"; exit 2 }
+      if (findings) printf "check-leaks: %d finding(s); values are not printed\n", findings > "/dev/stderr"
+      exit findings ? 1 : 0
+    }
+  ' 2>"$tmp/scan-error"
+}
+
+# Diff settings apply only to committed publication blobs.
+publish_diff() (
+  local format=$1
+  shift
+  unset GIT_DIFF_OPTS GIT_EXTERNAL_DIFF GIT_ATTR_SOURCE
+  if [[ $format == raw ]]; then set -- --no-patch --raw --no-abbrev -z "$@"; fi
+  git -c diff.orderFile= -c diff.interHunkContext=0 -c core.attributesFile=/dev/null \
+    -c diff.ignoreSubmodules=none diff --text --no-ext-diff --no-textconv \
+    -U0 -O/dev/null --no-color --no-relative --ignore-submodules=none -M --diff-filter=ACMRTU "$@"
+)
+
+emit_publish() {
+  local c parent meta st new_path label old_mode new_mode old_oid new_oid empty_tree
+  local -a m
+  require_complete
+  empty_tree=$(git hash-object -t tree --stdin </dev/null)
+  git rev-list --reverse "$1" "^$base_commit" >"$tmp/commits"
+  while read -r c; do
+    git cat-file commit "$c" >"$tmp/obj"
+    printf '\005commit %s\n' "${c:0:7}"
+    emit_body "$tmp/obj"
+    # rev-list hides parents at a shallow boundary; the commit header does not.
+    parent=$(awk '!header_done && /^$/ { header_done = 1 } !header_done && /^parent / && !p { p = $2 } END { print p }' "$tmp/obj")
+    publish_diff raw "${parent:-$empty_tree}" "$c" >"$tmp/raw"
+    while IFS= read -r -d '' meta; do
+      read -r -a m <<<"${meta#:}"
+      old_mode=${m[0]} new_mode=${m[1]} old_oid=${m[2]} new_oid=${m[3]} st=${m[4]}
+      IFS= read -r -d '' new_path
+      if [[ $st == R* || $st == C* ]]; then IFS= read -r -d '' new_path; fi
+      label=$(esc "$new_path")
+      if [[ $st == A* || $st == R* || $st == C* ]]; then printf '\006%s\n' "$label"; fi
+      [[ $new_mode != 160000 ]] || continue
+      printf '\005%s\n' "$label"
+      git cat-file blob "$new_oid" >"$tmp/blob"
+      if [[ $old_mode == 160000 || $old_oid =~ ^0+$ ]]; then
+        emit_body "$tmp/blob"
+        continue
+      fi
+      git cat-file blob "$old_oid" >"$tmp/old"
+      if has_nul "$tmp/blob" || has_nul "$tmp/old"; then
+        emit_body "$tmp/blob"
+      else
+        publish_diff patch "$old_oid" "$new_oid" |
+          awk '/^@@/ { split($3, a, ","); n = substr(a[1], 2) + 0; body = 1; next } body && /^\+/ { print n "\t" substr($0, 2); n++ }'
+      fi
+    done <"$tmp/raw"
+  done <"$tmp/commits"
+}
+
+emit_publish_pre_push() {
+  local url=${1-} hook=${2-} lref loid rref roid extra count=0 ask='' oid
+  local re='^([0-9a-f]{40}|[0-9a-f]{64})$'
+  require_complete
+  : >"$tmp/objects"
+  : >"$tmp/objs"
+  : >"$tmp/lines"
+  : >"$tmp/known"
+  if [[ ! -t 0 ]]; then
+    while read -r lref loid rref roid extra || [[ -n ${lref-} ]]; do
+      if [[ -z ${lref-} && -z ${loid-} ]]; then continue; fi
+      if [[ -n ${extra-} || ! $loid =~ $re || ! $roid =~ $re ]]; then
+        die "a ref line from git is malformed"
+      fi
+      count=$((count + 1))
+      # shellcheck disable=SC2312 # esc only rewrites the text
+      printf '\002%s\n' "$(esc "$lref")" "$(esc "$rref")" >>"$tmp/objects"
+      if [[ ! $loid =~ ^0+$ ]]; then
+        printf '%s %s\n' "$loid" "$roid" >>"$tmp/lines"
+        if [[ $roid =~ ^0+$ ]] || ! git cat-file -e "$roid"; then ask=1; fi
+      fi
+      lref=
+    done
+  fi
+  if ((count == 0)); then
+    if [[ -n $hook ]]; then return 0; fi
+    emit_publish HEAD
+    return 0
+  fi
+  if [[ -n $ask && -n $url ]]; then
+    GIT_TERMINAL_PROMPT=0 git ls-remote "$url" >"$tmp/ls"
+    while read -r oid _; do
+      if [[ $oid =~ $re ]] && git cat-file -e "$oid"; then
+        printf '^%s\n' "$oid" >>"$tmp/known"
+      fi
+    done <"$tmp/ls"
+  fi
+  while read -r loid roid; do
+    {
+      printf '%s\n' "$loid"
+      cat "$tmp/known"
+      if [[ ! $roid =~ ^0+$ ]] && git cat-file -e "$roid"; then printf '^%s\n' "$roid"; fi
+    } >"$tmp/revs"
+    git rev-list --objects --stdin <"$tmp/revs" >"$tmp/outgoing"
+    if oid=$(git rev-parse --verify --quiet "${loid}^{commit}"); then
+      emit_publish "$oid"
+      awk '{ print $1 }' "$tmp/outgoing" |
+        git cat-file --batch-check='%(objectname) %(objecttype)' |
+        awk '$2 != "commit" && $2 != "tree" && $2 != "blob" { print $1 }' >>"$tmp/objs"
+    else
+      cat "$tmp/outgoing" >>"$tmp/objs"
+    fi
+  done <"$tmp/lines"
+  emit_objects >>"$tmp/objects"
 }
 
 mode=tree
@@ -722,7 +816,13 @@ tree) emit_tree >"$tmp/stream" ;;
 staged) emit_staged >"$tmp/stream" ;;
 publish) emit_publish HEAD >"$tmp/stream" ;;
 range) emit_range "$range" >"$tmp/stream" ;;
-pre-push) emit_pre_push "$push_url" "$hook" >"$tmp/stream" ;;
+pre-push)
+  if [[ -n $publish_scope ]]; then
+    emit_publish_pre_push "$push_url" "$hook" >"$tmp/stream"
+  else
+    emit_pre_push "$push_url" "$hook" >"$tmp/stream"
+  fi
+  ;;
 files)
   for f in "${files[@]}"; do
     [[ -f $f ]] || die "an argument is not a readable file"
@@ -732,7 +832,16 @@ files)
 esac
 
 rc=0
-scan <"$tmp/stream" || rc=$?
+if [[ -n $publish_scope ]]; then
+  scan_publish <"$tmp/stream" || rc=$?
+  if [[ -f $tmp/objects ]]; then
+    object_rc=0
+    scan <"$tmp/objects" || object_rc=$?
+    if ((object_rc > rc)); then rc=$object_rc; fi
+  fi
+else
+  scan <"$tmp/stream" || rc=$?
+fi
 if ((rc > 1)); then
   echo "check-leaks: could not complete the scan; the result is incomplete" >&2
   rc=2
