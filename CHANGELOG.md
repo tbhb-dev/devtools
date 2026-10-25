@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file. See [conven
 - - -
 <!-- release -->
 
+## [v0.20.0](https://github.com/tbhb-dev/devtools/compare/5ac174d42e2dba009f59db6b66dd0a2a89f290f3..v0.20.0) - 2026-10-25
+
+### Features
+
+- (**gh-post**) add pr ready and pr close verbs (#660) - ([fcf0171](https://github.com/tbhb-dev/devtools/commit/fcf01713454527ae5e465b52f4de9cbe3e67eba2)) - tbhb.dev Agent
+- (**review**) start a logged redesign after the finding bound (#618) - ([2b230ad](https://github.com/tbhb-dev/devtools/commit/2b230ad12a2e3a8b688b66bc3bac1fc81ee19e42)) - tbhb.dev Agent
+
+### Bug Fixes
+
+- (**agents**) report rate limits from the failing GitHub call only (#670) - ([f03d50a](https://github.com/tbhb-dev/devtools/commit/f03d50a8b63d286dadbbd9a47197d36f10ab1345)) - tbhb.dev Agent
+- (**go**) replace deprecated gofumpt extra-rules setting (#455) - ([5ac174d](https://github.com/tbhb-dev/devtools/commit/5ac174d42e2dba009f59db6b66dd0a2a89f290f3)) - tbhb.dev Agent
+- (**merge**) hint at update-branch for skipped required checks (#666) - ([0402076](https://github.com/tbhb-dev/devtools/commit/04020765d00e731a1301268dfd400f057356b88e)) - tbhb.dev Agent
+- (**pins**) document the version spelling update-pins accepts (#674) - ([8a381ca](https://github.com/tbhb-dev/devtools/commit/8a381cace13616c220bc47b69a51e5e177554b6c)) - tbhb.dev Agent
+- (**pins**) rewrite the tombi.toml header in update-pins (#669) - ([8e9063f](https://github.com/tbhb-dev/devtools/commit/8e9063f44e71fd3bf05099d069a6aa9eca372cf6)) - tbhb.dev Agent
+- (**pr**) cite the template in section findings (#653) - ([50f1900](https://github.com/tbhb-dev/devtools/commit/50f1900924916c62cc22007f5a4570b70769367e)) - tbhb.dev Agent
+- (**tasks**) skip worktree syncs without root manifests (#699) - ([3539230](https://github.com/tbhb-dev/devtools/commit/3539230a4553256c5a2898ad5d8bffefb8bdbfa6)) - tbhb.dev Agent
+
+- - -
+
+<!-- release -->
+
 ## [v0.19.0](https://github.com/tbhb-dev/devtools/compare/5aea47b1fe48161e4d6269a85da38d5bf8011669..v0.19.0) - 2026-10-24
 
 ### Features
