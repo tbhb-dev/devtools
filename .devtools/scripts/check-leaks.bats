@@ -1686,3 +1686,172 @@ private_base() {
 	[ "$status" -eq 1 ]
 	[[ "$output" =~ path#[0-9a-f]{8}:path:\ private\ literal\ O11Y_PRIVATE_STRINGS\ entry\ 6 ]]
 }
+
+# The publication scan: a base that already holds list values, and a branch
+# that adds commits on top of it.
+publish_base() {
+	printf 'kestrel99\nclean\n' >existing.txt
+	printf 'quokka-pond\n' >untouched.txt
+	printf 'one\ntwo\nthree\nfour\nfive\nsix\n' >plain.txt
+	: >zebra-host-01.txt
+	git add -- existing.txt untouched.txt plain.txt zebra-host-01.txt
+	git commit -qm 'test: private base'
+	DEVTOOLS_LEAK_BASE=$(git rev-parse HEAD)
+	export DEVTOOLS_LEAK_BASE
+}
+
+publish_commit() {
+	git commit -qm "test: $1"
+}
+
+@test "AC1 publication passes when the branch adds no value, whatever the base holds" {
+	publish_base
+	printf 'kestrel99\nclean\nchanged\n' >existing.txt
+	git mv zebra-host-01.txt renamed.txt
+	git add -- existing.txt
+	publish_commit 'edit a file holding a base value'
+	run_check --publish
+	[ "$status" -eq 0 ]
+	[ -z "$output" ]
+	git rev-parse HEAD >head.oid
+	printf 'refs/heads/main %s refs/heads/main %s\n' "$(cat head.oid)" "$base" >lines
+	DEVTOOLS_LEAK_MODE=publish run bash -c 'bash "$1" --pre-push-hook <"$2"' _ "$checker" lines
+	[ "$status" -eq 0 ]
+}
+
+@test "AC2 an added line is named by its number" {
+	publish_base
+	printf 'kestrel99\n' >>existing.txt
+	git add -- existing.txt
+	publish_commit 'add a line'
+	run_check --publish
+	[ "$status" -eq 1 ]
+	[[ $output == *'existing.txt:3: private literal O11Y_PRIVATE_STRINGS entry 6'* ]]
+	# The pre-push hook finds it too.
+	printf 'refs/heads/main %s refs/heads/main %s\n' "$(git rev-parse HEAD)" "$base" >lines
+	DEVTOOLS_LEAK_MODE=publish run bash -c 'bash "$1" --pre-push-hook <"$2"' _ "$checker" lines
+	[ "$status" -eq 1 ]
+	[[ $output == *'existing.txt:3: private literal'* ]]
+}
+
+@test "AC2 an added path name is opaque" {
+	publish_base
+	: >mango-secret.txt
+	git add -- mango-secret.txt
+	publish_commit 'add a file'
+	run_check --publish
+	[ "$status" -eq 1 ]
+	[[ $output =~ path#[0-9a-f]{8}:path:\ private\ literal ]]
+}
+
+@test "AC2 a rename target is checked" {
+	publish_base
+	git mv plain.txt kestrel99.txt
+	publish_commit 'rename a file'
+	run_check --publish
+	[ "$status" -eq 1 ]
+	[[ $output =~ path#[0-9a-f]{8}:path:\ private\ literal ]]
+}
+
+@test "AC2 a commit message names the commit" {
+	publish_base
+	git commit -q --allow-empty -m 'test: mention kestrel99'
+	run_check --publish
+	[ "$status" -eq 1 ]
+	[[ $output =~ commit\ [0-9a-f]{7}:[0-9]+:\ private\ literal ]]
+}
+
+@test "AC2 a later commit that removes the value doesn't clear it" {
+	publish_base
+	printf 'kestrel99\nclean\nkestrel99\n' >existing.txt
+	git add -- existing.txt
+	publish_commit 'add a value'
+	printf 'kestrel99\nclean\n' >existing.txt
+	git add -- existing.txt
+	publish_commit 'remove it again'
+	run_check --publish
+	[ "$status" -eq 1 ]
+	[[ $output == *'existing.txt:3: private literal'* ]]
+}
+
+@test "AC2 a removed base occurrence doesn't offset an added one" {
+	publish_base
+	printf 'clean\nkestrel99\n' >existing.txt
+	git add -- existing.txt
+	publish_commit 'move the value'
+	run_check --publish
+	[ "$status" -eq 1 ]
+	[[ $output == *'existing.txt:2: private literal'* ]]
+}
+
+@test "AC2 a deleted and re-added file is scanned whole" {
+	publish_base
+	git rm -q -- existing.txt
+	publish_commit 'delete'
+	git show "$DEVTOOLS_LEAK_BASE:existing.txt" >existing.txt
+	git add -- existing.txt
+	publish_commit 're-add'
+	run_check --publish
+	[ "$status" -eq 1 ]
+	[[ $output == *'existing.txt:1: private literal'* ]]
+}
+
+@test "AC2 an added binary file is named by the binary marker" {
+	publish_base
+	printf 'xx\0kestrel99\0yy' >blob.dat
+	git add -- blob.dat
+	publish_commit 'add binary'
+	run_check --publish
+	[ "$status" -eq 1 ]
+	[[ $output == *'blob.dat:binary: private literal'* ]]
+}
+
+@test "AC3 publication needs a readable, complete base" {
+	publish_base
+	DEVTOOLS_LEAK_BASE= run_check --publish
+	[ "$status" -eq 2 ]
+	DEVTOOLS_LEAK_BASE=missing-base run_check --publish
+	[ "$status" -eq 2 ]
+	git clone -q --depth 1 "file://$work" shallow
+	cd shallow
+	DEVTOOLS_LEAK_BASE=HEAD run_check --publish
+	[ "$status" -eq 2 ]
+}
+
+@test "AC4 the scan reads commits, never a staged removal" {
+	publish_base
+	printf 'kestrel99\n' >>existing.txt
+	git add -- existing.txt
+	publish_commit 'add a value'
+	printf 'kestrel99\nclean\n' >existing.txt
+	git add -- existing.txt
+	run_check --publish
+	[ "$status" -eq 1 ]
+}
+
+@test "AC6 publication keeps matched content inside its private temp directory" {
+	publish_base
+	printf 'kestrel99\n' >>existing.txt
+	git add -- existing.txt
+	publish_commit 'add a value'
+	mkdir scratch
+	TMPDIR="$work/scratch" run_check --publish
+	[ "$status" -eq 1 ]
+	[ -z "$(find scratch -type f -print)" ]
+}
+
+@test "AC6 the task scopes only on request and the range scan still scans everything added" {
+	publish_base
+	printf 'clean\nmore\n' >existing.txt
+	git add -- existing.txt
+	publish_commit 'edit'
+	printf '[task_config]\nincludes = ["%s/.devtools/tasks/leaks.toml"]\n' "$repo_root" >mise.toml
+	export DEVTOOLS_DIR="$repo_root/.devtools"
+	mise trust -q "$work/mise.toml"
+	run mise run --quiet devtools:lint-leaks
+	[ "$status" -eq 1 ]
+	DEVTOOLS_LEAK_MODE=publish run mise run --quiet devtools:lint-leaks
+	[ "$status" -eq 0 ]
+	run_check --range "$base..HEAD"
+	[ "$status" -eq 1 ]
+}

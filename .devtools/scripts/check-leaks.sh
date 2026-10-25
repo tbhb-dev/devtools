@@ -20,6 +20,13 @@
 #                                  untracked files git does not ignore
 #   check-leaks.sh --staged        compare staged blobs against the commit base
 #   check-leaks.sh --range A..B    scan every object the range adds
+#   check-leaks.sh --publish       scan what the commits after the base add,
+#                                  where DEVTOOLS_LEAK_BASE names the base
+#                                  commit: each commit's message, the names
+#                                  it adds and the lines it adds, never the
+#                                  index. With DEVTOOLS_LEAK_MODE=publish,
+#                                  --pre-push and --pre-push-hook scan the
+#                                  pushed commits the same way
 #   check-leaks.sh --pre-push [REMOTE [URL]]
 #                                  scan what a push sends. Reads the
 #                                  "local-ref local-oid remote-ref
@@ -406,6 +413,50 @@ emit_objects() {
   '
 }
 
+# emit_publish TIP: what each commit after the base adds, read from the
+# commit objects. The message is scanned whole. A path is scanned when the
+# commit adds or renames to it. Added lines come from a diff of the two
+# blobs, with no per-file counting, so a removal elsewhere in the file or
+# in a later commit can't offset an addition. A binary or newly added file
+# is scanned whole.
+emit_publish() {
+  local c parent meta st old_path new_path label old_mode new_mode old_oid new_oid empty_tree
+  local -a m
+  require_complete
+  empty_tree=$(git hash-object -t tree --stdin </dev/null)
+  git rev-list --reverse "$1" "^$base_commit" >"$tmp/commits"
+  while read -r c; do
+    git cat-file commit "$c" >"$tmp/obj"
+    printf '\001commit %s\n' "${c:0:7}"
+    emit_body "$tmp/obj"
+    # rev-list hides parents at a shallow boundary; the commit header does not.
+    parent=$(awk '!header_done && /^$/ { header_done = 1 } !header_done && /^parent / && !p { p = $2 } END { print p }' "$tmp/obj")
+    git -c diff.ignoreSubmodules=none diff-tree --ignore-submodules=none -r -z -M --raw --no-abbrev --no-ext-diff --diff-filter=ACMRT "${parent:-$empty_tree}" "$c" >"$tmp/raw"
+    while IFS= read -r -d '' meta; do
+      read -r -a m <<<"${meta#:}"
+      old_mode=${m[0]} new_mode=${m[1]} old_oid=${m[2]} new_oid=${m[3]} st=${m[4]}
+      IFS= read -r -d '' new_path
+      if [[ $st == R* || $st == C* ]]; then IFS= read -r -d '' new_path; fi
+      if [[ $st == A* || $st == R* || $st == C* ]]; then emit_path "$new_path"; fi
+      [[ $new_mode != 160000 ]] || continue
+      label=$(esc "$new_path")
+      printf '\001%s\n' "$label"
+      git cat-file blob "$new_oid" >"$tmp/blob"
+      if [[ $old_mode == 160000 || $old_oid =~ ^0+$ ]]; then
+        emit_body "$tmp/blob"
+        continue
+      fi
+      git cat-file blob "$old_oid" >"$tmp/old"
+      if has_nul "$tmp/blob" || has_nul "$tmp/old"; then
+        emit_body "$tmp/blob"
+      else
+        git diff --no-ext-diff --no-textconv --no-color -U0 "$old_oid" "$new_oid" |
+          awk '/^@@/ { split($3, a, ","); n = substr(a[1], 2) + 0; body = 1; next } body && /^\+/ { print n "\t" substr($0, 2); n++ }'
+      fi
+    done <"$tmp/raw"
+  done <"$tmp/commits"
+}
+
 # add_objects REV-LIST-ARGS...: list the objects git would reach.
 add_objects() {
   git rev-list --objects "$@" >>"$tmp/objs"
@@ -461,6 +512,14 @@ emit_pre_push() {
       lref=
     done
   fi
+  if [[ -n $publish_scope ]]; then
+    if ((count == 0)); then
+      if [[ -z $hook ]]; then emit_publish HEAD; fi
+    else
+      while read -r loid _; do emit_publish "$loid"; done <"$tmp/lines"
+    fi
+    return 0
+  fi
   if ((count == 0)); then
     # A hook run with no ref lines has nothing to push. A manual run has no
     # lines either, and scans everything reachable from HEAD.
@@ -495,6 +554,7 @@ files=()
 while (($#)); do
   case $1 in
   --staged) mode=staged ;;
+  --publish) mode=publish ;;
   --range)
     shift
     (($#)) || die "--range needs A..B"
@@ -533,8 +593,16 @@ fi
 # above. Other modes retain their checkout configuration.
 pattern_exempt='^$'
 patterns=/dev/null
-if [[ $mode == staged ]]; then
-  if [[ -n ${DEVTOOLS_LEAK_BASE-} ]]; then
+# A publication scan reads the commits after DEVTOOLS_LEAK_BASE, a commit.
+# It never falls back to another base, so a missing one ends the scan.
+publish_scope=
+if [[ $mode == publish || ($mode == pre-push && ${DEVTOOLS_LEAK_MODE-} == publish) ]]; then publish_scope=1; fi
+if [[ $mode == staged || -n $publish_scope ]]; then
+  if [[ -n $publish_scope ]]; then
+    [[ -n ${DEVTOOLS_LEAK_BASE-} ]] || die "the publication scan needs a base commit"
+    base_commit=$(git rev-parse --verify "${DEVTOOLS_LEAK_BASE}^{commit}") || die "could not read the base"
+    base_tree=$(git rev-parse --verify "${base_commit}^{tree}")
+  elif [[ -n ${DEVTOOLS_LEAK_BASE-} ]]; then
     base_tree=$(git rev-parse --verify "${DEVTOOLS_LEAK_BASE}^{tree}")
   elif git rev-parse --verify HEAD >"$tmp/head"; then
     base_tree=$(git rev-parse --verify 'HEAD^{tree}')
@@ -595,6 +663,7 @@ fi
 case $mode in
 tree) emit_tree >"$tmp/stream" ;;
 staged) emit_staged >"$tmp/stream" ;;
+publish) emit_publish HEAD >"$tmp/stream" ;;
 range) emit_range "$range" >"$tmp/stream" ;;
 pre-push) emit_pre_push "$push_url" "$hook" >"$tmp/stream" ;;
 files)

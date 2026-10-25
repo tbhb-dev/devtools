@@ -121,8 +121,8 @@ HOOK
     : >"$GATE_LOG"
     run bash "$SCRIPTS/publish.sh" --dry-run
     [ "$status" -eq 0 ]
-    [[ "$output" == *"mise run lint passed at"*"(reused)"* ]]
+    [[ "$output" != *"mise run lint passed at"* ]]
     [[ "$output" == *"mise run test passed at"*"(reused)"* ]]
-    [ "$(cat "$GATE_LOG")" = $'lint-pr-description\ndevtools:lint-leaks\ndevtools:gitleaks\nreview' ]
+    [ "$(cat "$GATE_LOG")" = $'lint-pr-description\ndevtools:lint-leaks\ndevtools:gitleaks\nlint\nreview' ]
   done
 }
