@@ -72,3 +72,50 @@ func TestReadError(t *testing.T) {
 		t.Fatal(got, out.String())
 	}
 }
+
+const (
+	skippedRollup = `{"headRefOid":"head","statusCheckRollup":[` +
+		`{"__typename":"CheckRun","name":"validate","status":"COMPLETED","conclusion":"SKIPPED"}]}`
+	passingRollup = `{"headRefOid":"head","statusCheckRollup":[` +
+		`{"__typename":"CheckRun","name":"validate","status":"COMPLETED","conclusion":"SUCCESS"}]}`
+)
+
+func evaluateHint(input string, extra ...string) (int, string) {
+	args := append([]string{"checks", "evaluate", "--required", "validate"}, extra...)
+	var out, stderr bytes.Buffer
+	code := agentrepo.Run(args, strings.NewReader(input), &out, &stderr)
+	return code, stderr.String()
+}
+
+func TestStaleHintSkipped(t *testing.T) {
+	t.Parallel()
+	code, stderr := evaluateHint(skippedRollup, "--pr", "7", "--base", "base", "--merge-base", "old")
+	if code != 1 {
+		t.Fatalf("code %d stderr %s", code, stderr)
+	}
+	for _, line := range []string{
+		"skipped required check: validate",
+		"merge base differs from base commit: yes",
+		"run: gh pr update-branch 7",
+	} {
+		if !strings.Contains(stderr, line) {
+			t.Fatalf("missing %q in stderr %s", line, stderr)
+		}
+	}
+}
+
+func TestStaleHintAfterUpdateBranch(t *testing.T) {
+	t.Parallel()
+	code, stderr := evaluateHint(passingRollup, "--pr", "7", "--base", "base", "--merge-base", "base")
+	if code != 0 || stderr != "" {
+		t.Fatalf("code %d stderr %s", code, stderr)
+	}
+}
+
+func TestStaleHintNeedsPullRequest(t *testing.T) {
+	t.Parallel()
+	code, stderr := evaluateHint(skippedRollup)
+	if code != 1 || stderr != "" {
+		t.Fatalf("code %d stderr %s", code, stderr)
+	}
+}

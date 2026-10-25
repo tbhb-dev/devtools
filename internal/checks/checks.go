@@ -42,6 +42,11 @@ var errInput = errors.New("invalid rollup")
 type Result struct {
 	Outcome Outcome  `json:"outcome"`
 	Names   []string `json:"names,omitempty"`
+	// Skipped names the required checks that concluded SKIPPED. On a Failed
+	// result they're a subset of Names. On a MissingRequired result Names holds
+	// the absent checks and Skipped the skipped ones. It informs a hint only. The
+	// outcome is unchanged with or without it.
+	Skipped []string `json:"skipped,omitempty"`
 	Error   string   `json:"error,omitempty"`
 }
 
@@ -157,10 +162,14 @@ func Evaluate(data []byte, expectedHead string, required []string) Result {
 		}
 	}
 	if len(missing) > 0 {
-		return named(MissingRequired, missing)
+		r := named(MissingRequired, missing)
+		r.Skipped = skippedRequired(latest, needed)
+		return r
 	}
 	if len(bad) > 0 {
-		return named(Failed, bad)
+		r := named(Failed, bad)
+		r.Skipped = skippedRequired(latest, needed)
+		return r
 	}
 	if len(waiting) > 0 {
 		return named(Pending, waiting)
@@ -194,12 +203,55 @@ func verdict(e Entry, required bool) int {
 }
 
 func named(outcome Outcome, names map[string]bool) Result {
-	r := Result{Outcome: outcome}
-	for name := range names {
-		r.Names = append(r.Names, name)
+	return Result{Outcome: outcome, Names: sortedNames(names)}
+}
+
+// skippedRequired names the required checks whose latest run concluded SKIPPED.
+func skippedRequired(latest map[key]Entry, needed map[string]bool) []string {
+	skipped := make(map[string]bool)
+	for k, e := range latest {
+		if needed[k.name] && e.Type == checkRun && e.Conclusion == "SKIPPED" {
+			skipped[k.name] = true
+		}
 	}
-	sort.Strings(r.Names)
-	return r
+	return sortedNames(skipped)
+}
+
+func sortedNames(names map[string]bool) []string {
+	sorted := make([]string, 0, len(names))
+	for name := range names {
+		sorted = append(sorted, name)
+	}
+	sort.Strings(sorted)
+	return sorted
+}
+
+// Hint explains a Failed or MissingRequired result whose required checks
+// concluded SKIPPED. A check run on an old merge ref reports SKIPPED, and only
+// updating the branch replaces that ref. It reports whether the merge base of
+// the base commit and the head differs from the base commit. An empty merge
+// base argument means unknown. It returns nothing for a result without skipped
+// required checks, so it never changes a verdict.
+func Hint(r Result, number int, base, mergeBase string) []string {
+	if (r.Outcome != Failed && r.Outcome != MissingRequired) || len(r.Skipped) == 0 {
+		return nil
+	}
+	differs := "unknown"
+	if mergeBase != "" {
+		differs = "no"
+		if mergeBase != base {
+			differs = "yes"
+		}
+	}
+	tail := []string{
+		"merge base differs from base commit: " + differs,
+		fmt.Sprintf("run: gh pr update-branch %d", number),
+	}
+	lines := make([]string, 0, len(r.Skipped)+len(tail))
+	for _, name := range r.Skipped {
+		lines = append(lines, "skipped required check: "+name)
+	}
+	return append(lines, tail...)
 }
 
 func selectLatest(entries []Entry, needed map[string]bool) map[key]Entry {
