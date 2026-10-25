@@ -1,4 +1,9 @@
 #!/usr/bin/env bats
+setup_file() {
+  source "${BATS_TEST_DIRNAME}/../agent-merge-pr/test_helper.bash"
+  agent_setup_file
+}
+
 setup() {
   source "${BATS_TEST_DIRNAME}/../agent-merge-pr/test_helper.bash"
   agent_setup
