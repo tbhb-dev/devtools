@@ -68,7 +68,12 @@ dt_agent_rounds() {
   if [ -f "$state/$1.rounds" ]; then
     stored_subject=$(sed -n 's/^subject //p' "$state/$1.rounds") || return $?
     if [ "$stored_subject" = "$subject" ]; then
-      rounds=$(sed -n 's/^rounds //p' "$state/$1.rounds") || return $?
+      cat "$state/$1.rounds"
+      rounds=$(awk 'BEGIN { n=0 } /^rounds / { n=$2 } /^finding / { n++ } /^redesign / { n=0 } END { print n }' "$state/$1.rounds") || return $?
+      if grep -q '^redesign ' "$state/$1.rounds" && grep -Fqx "finding ${4:-}" "$state/$1.rounds"; then
+        printf 'BLOCKED: redesign draft matches a rejected digest for this subject. Rewrite it.\n' >&2
+        return 3
+      fi
     fi
   fi
   case $rounds in
@@ -76,11 +81,18 @@ dt_agent_rounds() {
   *) rounds=$max ;;
   esac
   if [ "${3:-check}" = finding ]; then
+    if [ "${stored_subject:-}" != "$subject" ]; then
+      printf 'subject %s\nbound %s\n' "$subject" "$max" >"$state/$1.rounds"
+    fi
     rounds=$((rounds + 1))
-    printf 'subject %s\nrounds %s\n' "$subject" "$rounds" >"$state/$1.rounds"
+    printf 'finding %s\n' "$4" >>"$state/$1.rounds"
   fi
   if [ "$rounds" -ge "$max" ]; then
-    printf 'BLOCKED: review reached the bound of %s finding rounds. Leave the draft and index in place and report the findings.\n' "$max" >&2
+    if grep -q '^redesign ' "$state/$1.rounds"; then
+      printf 'BLOCKED: review reached the finding bound after redesign; inspection required.\n' >&2
+    else
+      printf 'BLOCKED: review reached the bound of %s finding rounds. Start a redesign with agentrepo review redesign %s --reason TEXT.\n' "$max" "$1" >&2
+    fi
     return 3
   fi
 }

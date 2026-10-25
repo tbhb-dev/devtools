@@ -29,6 +29,6 @@ func reviewCommand(code *int) *cobra.Command {
 		},
 	}
 	run.Flags().DurationVar(&timeout, "timeout", 0, "Positive deadline, e.g. 900s (required)")
-	group.AddCommand(run)
+	group.AddCommand(run, redesignCommand(code))
 	return group
 }

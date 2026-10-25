@@ -39,3 +39,5 @@ Configure `required_reviewer` and `merge_owner` with GraphQL logins, without the
 Keep `merge_owner` a person: an App owner override can approve its own golden-file waivers.
 
 A GitHub App installation needs Contents read and write permission for its approval to count, as [#300](https://github.com/tbhb-dev/devtools/issues/300) documents.
+
+When the unattended finding bound returns exit 3, run `agentrepo review redesign KIND --reason TEXT` with `KIND` set to `commit`, `pr` or `squash`, then rewrite the draft from scratch. A rejected digest for the same subject refuses review before invoking the reviewer. Each active record permits one redesign. A bound after redesign requires inspection and refuses another start. Legacy records without rejected digests require inspection. The command leaves write authority and every other gate unchanged. A fresh description reset, where supported, remains separate from redesign.

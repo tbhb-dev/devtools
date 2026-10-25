@@ -256,3 +256,8 @@ update_branch() {
   [ "$status" -ne 0 ]
   [[ "$output" != *"update-branch"* ]]
 }
+
+@test "AC1 to AC9 squash redesign preserves the bound and rejected drafts" {
+  source "${BATS_TEST_DIRNAME}/../redesign.bash"
+  redesign_flow squash SQUASH_AGENTMSG "$AGENT/review.sh" 7
+}
