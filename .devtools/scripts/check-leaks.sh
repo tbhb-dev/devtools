@@ -595,6 +595,7 @@ scan_publish() {
       full = path_bytes(substr($0, 2)); skip = (full ~ exempt)
       quiet = 1; hits = 0
       check(tolower("/" full), 0)
+      check(tolower("/" substr($0, 2)), 0)
       quiet = 0
       label = hits ? opaque(full) : substr($0, 2)
       if (substr($0, 1, 1) == "\006") { lineno = "path"; check(tolower("/" full), skip) }

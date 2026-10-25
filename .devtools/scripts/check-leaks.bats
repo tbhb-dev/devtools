@@ -1977,6 +1977,19 @@ HOOK
 	run_check --range "$base..HEAD"
 	[ "$status" -eq 1 ]
 }
+@test "AC6 escaped display labels cannot print a two-backslash private literal" {
+  publish_base
+  export O11Y_PRIVATE_STRINGS='fixture\\secret,kestrel99'
+  printf 'kestrel99\n' >'fixture\secret.txt'
+  publish_commit 'add content' 'fixture\secret.txt'
+  for mode in --publish --pre-push-hook; do
+    printf 'refs/heads/main %s refs/heads/main %s\n' "$(git rev-parse HEAD)" "$DEVTOOLS_LEAK_BASE" >lines
+    DEVTOOLS_LEAK_MODE=publish run_check "$mode" <lines
+    [ "$status" -eq 1 ]
+    [[ $output =~ path#[0-9a-f]{8}:1:\ private\ literal ]]
+    no_value 'fixture\\secret'
+  done
+}
 publish_binary_base() {
   printf '%s\n' forbidden-fixture "${2:-^fixture|forbidden-fixture}" >.leak-patterns
   printf '%b' "$1" >blob.dat
