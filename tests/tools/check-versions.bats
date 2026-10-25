@@ -36,6 +36,11 @@ setup() {
     /^\[/ { copy = ($0 == "[tasks.run]" || $0 == "[tasks.check-versions]") }
     copy { print }
   ' "$SOURCE/mise.toml" >mise.toml
+  # Keep nested mise runs on the pinned Go rather than the runner's Go,
+  # whose first toolchain download would break the silence assertion.
+  awk '$1 == "go" && $2 == "=" { print "[tools]"; print }' \
+    "$SOURCE/.config/mise/conf.d/10-devtools-tools.toml" >>mise.toml
+  cp "$SOURCE/.config/mise/mise.lock" mise.lock
   mkdir -p tools
   cp "$SCRIPT" tools/check-versions.sh
   cp "$SOURCE/tools/go-ldflags.sh" tools/go-ldflags.sh
