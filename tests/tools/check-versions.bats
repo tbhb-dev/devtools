@@ -29,6 +29,19 @@ setup() {
     "$REPO/packages/agents/agy"
   cd "$REPO"
   git init --quiet --initial-branch=main .
+
+  # Use the real working-tree run task and Go sources in every fixture.
+  SOURCE=$(cd "$BATS_TEST_DIRNAME/../.." && pwd)
+  rg -A9 '^\[tasks.run\]' "$SOURCE/mise.toml" >mise.toml
+  rg -A2 '^\[tasks.check-versions\]' "$SOURCE/mise.toml" >>mise.toml
+  mkdir -p tools
+  cp "$SCRIPT" tools/check-versions.sh
+  cp "$SOURCE/tools/go-ldflags.sh" tools/go-ldflags.sh
+  local path
+  for path in cmd internal vendor go.mod go.sum .devtools; do
+    ln -s "$SOURCE/$path" "$path"
+  done
+  export MISE_TRUSTED_CONFIG_PATHS="$REPO"
 }
 
 # The eleven sites at $1, laid out the way the real files carry them:
@@ -196,4 +209,97 @@ commit_at() {
   run "$SCRIPT"
   [ "$status" -eq 1 ]
   [[ $output == *"no local package entry for packages/agents/common"* ]]
+}
+
+@test "mise task runs the real shim on consistent and inconsistent trees" {
+  commit_at 1.2.3
+  run mise --quiet run check-versions
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+
+  printf 'version = "1.2.2"\n' >packages/devtools/pyproject.toml
+  run mise --quiet run check-versions
+  [ "$status" -ne 0 ]
+  [[ $output == *'version-literal-stale'* ]]
+}
+
+@test "readiness reaches the real shim on consistent and inconsistent trees" {
+  commit_at 1.2.3
+  local origin="$BATS_TEST_TMPDIR/origin.git" bin="$BATS_TEST_TMPDIR/bin"
+  git init --quiet --bare --initial-branch=main "$origin"
+  git remote add origin "$origin"
+  git push --quiet origin main
+  mkdir -p "$bin"
+  printf '#!/bin/sh\nprintf "success build\\n"\n' >"$bin/gh"
+  # Only the changelog is synthetic; run and check-versions remain real.
+  cat >>mise.toml <<'TASK'
+
+[tasks.preview-changelog]
+run = 'echo "- a changelog entry"'
+TASK
+  git add mise.toml
+  git commit --quiet -m 'fixture preview'
+  git push --quiet origin main
+  chmod +x "$bin/gh"
+  export PATH="$bin:$PATH"
+
+  run bash "$SOURCE/tools/release-readiness.sh"
+  [ "$status" -eq 0 ]
+  [[ $output == *'OK    version literals name the latest tag'* ]]
+
+  printf 'version = "1.2.2"\n' >packages/devtools/pyproject.toml
+  run bash "$SOURCE/tools/release-readiness.sh"
+  [ "$status" -eq 1 ]
+  [[ $output == *'FAIL  version literals name the latest tag'* ]]
+  [[ $output == *'version-literal-stale'* ]]
+}
+
+@test "postflight reaches the real shim for the latest tag on both trees" {
+  commit_at 1.2.3
+  git tag -d v1.2.3
+  git tag -a v1.2.3 -m v1.2.3
+  local origin="$BATS_TEST_TMPDIR/origin.git" bin="$BATS_TEST_TMPDIR/bin"
+  git init --quiet --bare --initial-branch=main "$origin"
+  git remote add origin "$origin"
+  git push --quiet origin main refs/tags/v1.2.3
+  git fetch --quiet origin
+  mkdir -p "$bin"
+  printf '#!/bin/sh\nprintf "true valid\\n"\n' >"$bin/gh"
+  # Supply only the unrelated signature metadata. Git discovery, refs,
+  # reads used by the checker, the shim and the Go build all remain real.
+  export REAL_GIT
+  REAL_GIT=$(command -v git)
+  cat >"$bin/git" <<'GIT'
+#!/bin/sh
+case "$1 $2" in
+  'cat-file tag')
+    printf '%s\n' 'tagger tbhb.dev Agent <334376894+tbhb-agent@users.noreply.github.com> 0 +0000' '-----BEGIN SSH SIGNATURE-----'
+    ;;
+  'cat-file commit')
+    printf '%s\n' 'author tbhb-dev-releases[bot] <340658377+tbhb-dev-releases[bot]@users.noreply.github.com> 0 +0000' 'gpgsig fixture'
+    ;;
+  *) exec "$REAL_GIT" "$@" ;;
+esac
+GIT
+  chmod +x "$bin/gh" "$bin/git"
+  export PATH="$bin:$PATH"
+
+  run bash "$SOURCE/tools/release-verify.sh"
+  [ "$status" -eq 0 ]
+  [[ $output == *'OK    version literals name v1.2.3'* ]]
+  [[ $output != *'FAIL  version literals name'* ]]
+
+  printf 'version = "1.2.2"\n' >packages/devtools/pyproject.toml
+  run bash "$SOURCE/tools/release-verify.sh"
+  [ "$status" -eq 1 ]
+  [[ $output == *'FAIL  version literals name v1.2.3'* ]]
+  [[ $output == *'version-literal-stale'* ]]
+}
+
+@test "shim fails closed when the working-tree build path is unavailable" {
+  commit_at 1.2.3
+  rm go.mod
+  run "$SCRIPT"
+  [ "$status" -ne 0 ]
+  [[ $output != *'TOTAL:'* ]]
 }
