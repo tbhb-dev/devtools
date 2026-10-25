@@ -350,12 +350,14 @@ HOOK
   refute_grep '^auth status' "$GH_LOG"
 }
 
-@test "publisher reports quota reset separately from identity failure" {
+@test "publisher reports a rate limit separately from identity failure" {
   bash "$SCRIPTS/review.sh"
-  export GH_VIEWER_ERROR='HTTP 403: API rate limit exceeded' GH_ERROR_STATUS=1
+  export GH_VIEWER_ERROR='gh: API rate limit exceeded for user ID 1. (HTTP 403)' GH_ERROR_STATUS=1
   run bash "$SCRIPTS/create-pr.sh" --confirmed
   [ "$status" -eq 76 ]
-  [[ "$output" == *"rate limit: GitHub graphql quota exhausted; reset time: 1792195200"* ]]
+  [[ "$output" == *"rate limit: GitHub primary GraphQL rate limit, inferred from the command and the error line; the reset time isn't known from the failure"* ]]
+  [[ "$output" == *"read the budget with a GraphQL rateLimit"* ]]
+  refute_grep 'rate_limit' "$GH_LOG"
   [[ "$output" != *"signed in as"* ]]
   [ -z "$(remote_topic)" ]
 }

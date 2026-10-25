@@ -504,11 +504,12 @@ stub_github() {
   cat >"$BATS_TEST_TMPDIR/bin/gh" <<'STUB'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >>"$GH_CALLS"
-if [ "$2" = rate_limit ]; then
-  printf '1792195200\n'
+if [ -n "${GH_STDOUT:-}" ]; then printf '%s\n' "$GH_STDOUT"; fi
+if [ "${GH_SUCCESS:-0}" = 1 ]; then
+  printf '%s\n' "${GH_RESULT:-}"
+  if [ -n "${GH_WARN:-}" ]; then printf '%s\n' "$GH_WARN" >&2; fi
   exit 0
 fi
-if [ "${GH_SUCCESS:-0}" = 1 ]; then printf '%s\n' "${GH_RESULT:-}"; exit 0; fi
 printf '%s\n' "${GH_ERROR:-HTTP 401: Bad credentials}" >&2
 exit "${GH_STATUS:-4}"
 STUB
@@ -516,23 +517,99 @@ STUB
   export PATH="$BATS_TEST_TMPDIR/bin:$PATH"
 }
 
-@test "REST quota has its own status and reads the REST reset without retrying" {
-  stub_github
-  export GH_ERROR='HTTP 403: API rate limit exceeded' GH_STATUS=1
-  lib 'dt_gh api user --jq .login'
-  [ "$status" -eq 76 ]
-  [[ "$output" == *"GitHub core quota exhausted; reset time: 1792195200"* ]]
-  [ "$(wc -l <"$GH_CALLS")" -eq 2 ]
-  grep -q '^api rate_limit --jq .resources.core.reset$' "$GH_CALLS"
+# Runs dt_gh with stdout and stderr captured apart, so a test can compare each.
+dt_gh_split() {
+  run bash -c '. "$1"; shift; dt_gh "$@" >"$BATS_TEST_TMPDIR/out" 2>"$BATS_TEST_TMPDIR/err"' _ "$LIB" "$@"
 }
 
-@test "quota response headers avoid the reset lookup" {
+@test "REST quota has its own status, REST guidance and no budget lookup" {
   stub_github
-  export GH_ERROR=$'HTTP 403: API rate limit exceeded\nX-RateLimit-Reset: 1792195200'
-  lib 'dt_gh api user'
+  export GH_ERROR='gh: API rate limit exceeded for user ID 1. (HTTP 403)' GH_STATUS=1
+  dt_gh_split api user --jq .login
   [ "$status" -eq 76 ]
-  [[ "$output" == *"reset time: 1792195200"* ]]
-  [ "$(wc -l <"$GH_CALLS")" -eq 1 ]
+  [ "$(wc -l <"$BATS_TEST_TMPDIR/err")" -eq 2 ]
+  head -n 1 "$BATS_TEST_TMPDIR/err" | grep -q '^rate limit: GitHub primary REST rate limit, inferred from the command and the error line; the reset time isn.t known from the failure\. .*wait for the hourly window.*advisory only\. No automatic retry was made\.$'
+  [ "$(tail -n 1 "$BATS_TEST_TMPDIR/err")" = "$GH_ERROR" ]
+  [ "$(cat "$GH_CALLS")" = 'api user --jq .login' ]
+}
+
+@test "an already-exceeded primary limit counts and no call asks for rate_limit" {
+  stub_github
+  export GH_ERROR='gh: API rate limit already exceeded for user ID 1.' GH_STATUS=1
+  dt_gh_split api repos/o/r/issues/1
+  [ "$status" -eq 76 ]
+  grep -q 'primary REST rate limit' "$BATS_TEST_TMPDIR/err"
+  [ "$(tail -n 1 "$BATS_TEST_TMPDIR/err")" = "$GH_ERROR" ]
+}
+
+@test "a secondary limit gets the one-minute guidance whichever prefix carries it" {
+  stub_github
+  export GH_STATUS=1
+  local line
+  for line in \
+    'GraphQL: You have exceeded a secondary rate limit. Please wait a few minutes before you try again.' \
+    'gh: You have exceeded a secondary rate limit. (HTTP 403)'; do
+    export GH_ERROR=$line
+    dt_gh_split pr edit 7 --title changed
+    [ "$status" -eq 76 ]
+    head -n 1 "$BATS_TEST_TMPDIR/err" | grep -q '^rate limit: GitHub secondary rate limit; the reset time isn.t known from the failure\. Wait at least one minute before the next request, as GitHub.s docs advise; no budget query helps\. No automatic retry was made\.$'
+    [ "$(tail -n 1 "$BATS_TEST_TMPDIR/err")" = "$line" ]
+  done
+  [ "$(wc -l <"$GH_CALLS")" -eq 2 ]
+}
+
+@test "GraphQL primary limits point at a GraphQL rateLimit query, not rate_limit" {
+  stub_github
+  export GH_STATUS=1
+  local case_
+  for case_ in \
+    'gh: API rate limit exceeded for user ID 1. (HTTP 403)|api graphql -f query={viewer{login}}' \
+    'GraphQL: API rate limit exceeded for user ID 1.|api repos/o/r/issues/1' \
+    'gh: API rate limit exceeded for user ID 1. (HTTP 403)|pr view 7'; do
+    export GH_ERROR=${case_%%|*}
+    read -r -a argv <<<"${case_#*|}"
+    dt_gh_split "${argv[@]}"
+    [ "$status" -eq 76 ]
+    head -n 1 "$BATS_TEST_TMPDIR/err" | grep -q '^rate limit: GitHub primary GraphQL rate limit, inferred from the command and the error line; the reset time isn.t known from the failure\. Once the limit has passed, read the budget with a GraphQL rateLimit { remaining resetAt } query, never /rate_limit\. No automatic retry was made\.$'
+    [ "$(tail -n 1 "$BATS_TEST_TMPDIR/err")" = "$GH_ERROR" ]
+  done
+  [ "$(wc -l <"$GH_CALLS")" -eq 3 ]
+  if grep -q rate_limit "$GH_CALLS"; then return 1; fi
+}
+
+@test "failures that only look like a rate limit keep gh's status and stderr" {
+  stub_github
+  local line
+  for line in \
+    'HTTP 403: API rate limit exceeded' \
+    'warning: API rate limit exceeded for user ID 1.' \
+    'gh:API rate limit exceeded for user ID 1.' \
+    'gh: Validation Failed: title "Document rate limits for agents" is invalid (HTTP 422)'; do
+    export GH_ERROR=$line GH_STATUS=3
+    dt_gh_split api user
+    [ "$status" -eq 3 ]
+    [ "$(cat "$BATS_TEST_TMPDIR/err")" = "$line" ]
+  done
+  if grep -q rate_limit "$GH_CALLS"; then return 1; fi
+}
+
+@test "rate limit text on stdout never counts, even after a failure" {
+  stub_github
+  export GH_STDOUT='API rate limit exceeded for user ID 1.' GH_ERROR='gh: not found (HTTP 404)' GH_STATUS=1
+  dt_gh_split api user
+  [ "$status" -eq 1 ]
+  [ "$(cat "$BATS_TEST_TMPDIR/out")" = "$GH_STDOUT" ]
+  [ "$(cat "$BATS_TEST_TMPDIR/err")" = "$GH_ERROR" ]
+}
+
+@test "a successful call passes stdout and stderr through byte for byte" {
+  stub_github
+  export GH_SUCCESS=1 GH_RESULT=ok GH_STDOUT='API rate limit exceeded for user ID 1.'
+  export GH_WARN='gh: API rate limit exceeded for user ID 1. warning only'
+  dt_gh_split api user
+  [ "$status" -eq 0 ]
+  [ "$(cat "$BATS_TEST_TMPDIR/out")" = "$GH_STDOUT"$'\n'ok ]
+  [ "$(cat "$BATS_TEST_TMPDIR/err")" = "$GH_WARN" ]
 }
 
 @test "authentication and permission failures preserve status and error" {
@@ -561,14 +638,13 @@ STUB
 }
 
 
-@test "CLI mutation GraphQL throttling reports the GraphQL reset without retry" {
+@test "CLI mutation GraphQL throttling reports the limit without retry or budget lookup" {
   stub_github
-  export GH_ERROR='GraphQL: API rate limit exceeded' GH_STATUS=1
+  export GH_ERROR='GraphQL: API rate limit exceeded for user ID 1.' GH_STATUS=1
   lib 'dt_gh pr edit 7 --title changed'
   [ "$status" -eq 76 ]
-  [[ "$output" == *"GitHub graphql quota exhausted"* ]]
-  grep -q '^api rate_limit --jq .resources.graphql.reset$' "$GH_CALLS"
-  [ "$(wc -l <"$GH_CALLS")" -eq 2 ]
+  [[ "$output" == *"GitHub primary GraphQL rate limit"* ]]
+  [ "$(cat "$GH_CALLS")" = 'pr edit 7 --title changed' ]
 }
 
 @test "review runner receives the default and machine deadline with environment precedence" {

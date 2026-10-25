@@ -56,7 +56,7 @@ out() { jq -r "$filter" || return 1; }
 case "$1 $2" in
 "auth status") exit 0 ;;
 "label list") printf '%s\n' "$GH_LABELS" ;;
-"api user") echo 'HTTP 403: API rate limit exceeded' >&2; exit 1 ;;
+"api user") echo 'gh: API rate limit exceeded for user ID 1. (HTTP 403)' >&2; exit 1 ;;
 "api graphql")
   case "$*" in
   *viewer*)
@@ -70,7 +70,6 @@ case "$1 $2" in
     *) printf '{"data":{"repository":{"issueOrPullRequest":null}}}\n' | out ;;
     esac ;;
   esac ;;
-"api rate_limit") echo 1792195200 ;;
 "api repos/{owner}/{repo}/milestones") printf '%s\n' "$GH_MILESTONES" ;;
 "api repos/{owner}/{repo}/issues/"*)
   n=${2##*/}

@@ -527,11 +527,12 @@ capture_diff() {
 }
 
 
-@test "merge preflight reports quota reset with a distinct status" {
-  export GH_GRAPHQL_ERROR='HTTP 403: API rate limit exceeded'
+@test "merge preflight reports a rate limit with a distinct status" {
+  export GH_GRAPHQL_ERROR='gh: API rate limit exceeded for user ID 1. (HTTP 403)'
   run bash "$SCRIPTS/preflight.sh" 7
   [ "$status" -eq 76 ]
-  [[ "$output" == *"reset time: 1792195200"* ]]
+  [[ "$output" == *"the reset time isn't known from the failure"* ]]
+  if grep -q rate_limit "$GH_FIXTURES/gh.log"; then return 1; fi
   [[ "$output" != *"NOT the configured"* ]]
 }
 
@@ -556,10 +557,11 @@ capture_diff() {
 
 @test "quota failure during final review validation keeps status 76 and no stamp" {
   draft
-  export DEVTOOLS_REVIEW_CMD='cat >/dev/null; echo "HTTP 403: API rate limit exceeded" >"$GH_FIXTURES/live-error"; echo 1 >"$GH_FIXTURES/live-status"; echo "VERDICT: PASS"'
+  export DEVTOOLS_REVIEW_CMD='cat >/dev/null; echo "gh: API rate limit exceeded for user ID 1. (HTTP 403)" >"$GH_FIXTURES/live-error"; echo 1 >"$GH_FIXTURES/live-status"; echo "VERDICT: PASS"'
   run bash "$SCRIPTS/review.sh" 7
   [ "$status" -eq 76 ]
-  [[ "$output" == *"reset time: 1792195200"* ]]
+  [[ "$output" == *"the reset time isn't known from the failure"* ]]
+  if grep -q rate_limit "$GH_FIXTURES/gh.log"; then return 1; fi
   [ ! -e "$(stamp_file)" ]
 }
 
@@ -576,10 +578,11 @@ capture_diff() {
 
 @test "base ref quota failure during final review validation keeps status 76" {
   draft
-  export DEVTOOLS_REVIEW_CMD='cat >/dev/null; echo "HTTP 403: API rate limit exceeded" >"$GH_FIXTURES/base-error"; echo "VERDICT: PASS"'
+  export DEVTOOLS_REVIEW_CMD='cat >/dev/null; echo "gh: API rate limit exceeded for user ID 1. (HTTP 403)" >"$GH_FIXTURES/base-error"; echo "VERDICT: PASS"'
   run bash "$SCRIPTS/review.sh" 7
   [ "$status" -eq 76 ]
-  [[ "$output" == *"reset time: 1792195200"* ]]
+  [[ "$output" == *"the reset time isn't known from the failure"* ]]
+  if grep -q rate_limit "$GH_FIXTURES/gh.log"; then return 1; fi
   [ ! -e "$(stamp_file)" ]
 }
 
