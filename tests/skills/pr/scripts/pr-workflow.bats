@@ -584,15 +584,19 @@ ls) echo '{}' ;;
 run)
   printf '%s %s %s\n' "\$2" "\${DEVTOOLS_LEAK_MODE-}" "\${DEVTOOLS_LEAK_BASE-}" >>"\$GATE_LOG"
   if [ "\$2" = devtools:lint-leaks ]; then
+    printf 'scan task\\n' >>"\$GATE_LOG"
     shift 2
     [ "\${DEVTOOLS_LEAK_MODE-}" != publish ] || set -- --publish
     bash "$ROOT/.devtools/scripts/check-leaks.sh" "\$@"
+  elif [ "\$2" = lint ]; then
+    "\$0" run devtools:lint-leaks
   fi
   ;;
 esac
 STUB
   cat >.git/hooks/pre-push <<HOOK
 #!/usr/bin/env bash
+printf 'scan hook\\n' >>"\$GATE_LOG"
 DEVTOOLS_LEAK_MODE=\${DEVTOOLS_LEAK_MODE-} bash "$ROOT/.devtools/scripts/check-leaks.sh" --pre-push-hook "\$@"
 HOOK
   chmod +x .git/hooks/pre-push
@@ -628,6 +632,23 @@ leaky_base() {
   merge_base=$(git merge-base HEAD origin/main)
   grep -q "^devtools:lint-leaks publish $merge_base$" "$GATE_LOG"
   grep -q "^lint publish $merge_base$" "$GATE_LOG"
+  [ "$(grep -c '^scan task$' "$GATE_LOG")" -eq 2 ]
+  [ "$(grep -c '^scan hook$' "$GATE_LOG")" -eq 1 ]
+}
+
+@test "publication fixture lint executes its nested leak scan (#651)" {
+  leaky_base
+  real_leak_scanner
+  printf 'kestrel99\nclean\nkestrel99\n' >edited.txt
+  git commit --quiet -am 'feat: add a value'
+  export DEVTOOLS_LEAK_MODE=publish DEVTOOLS_LEAK_BASE
+  DEVTOOLS_LEAK_BASE=$(git merge-base HEAD origin/main)
+
+  run mise run lint
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"edited.txt:3: private literal"* ]]
+  [ "$(grep -c '^scan task$' "$GATE_LOG")" -eq 1 ]
 }
 
 @test "AC2 publication stops on an added list value, before the push (#651)" {

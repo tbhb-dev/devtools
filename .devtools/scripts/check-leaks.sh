@@ -26,7 +26,9 @@
 #                                  it adds and the lines it adds, never the
 #                                  index. With DEVTOOLS_LEAK_MODE=publish,
 #                                  --pre-push and --pre-push-hook scan the
-#                                  pushed commits the same way
+#                                  pushed commits the same way, retaining
+#                                  whole-object scans of outgoing tags and
+#                                  payloads outside commits
 #   check-leaks.sh --pre-push [REMOTE [URL]]
 #                                  scan what a push sends. Reads the
 #                                  "local-ref local-oid remote-ref
@@ -596,9 +598,9 @@ if [[ $mode != files ]]; then
   cd "$top"
 fi
 
-# Staged configuration is pinned to the base tree, never the checkout or
-# index under review. Both sides use the exported private literals loaded
-# above. Other modes retain their checkout configuration.
+# Staged and publication configuration (including scoped pre-push) is pinned
+# to the base tree, never the checkout or index under review. Both sides use
+# the exported private literals loaded above. Other modes use the checkout.
 pattern_exempt='^$'
 patterns=/dev/null
 # A publication scan reads the commits after DEVTOOLS_LEAK_BASE, a commit.

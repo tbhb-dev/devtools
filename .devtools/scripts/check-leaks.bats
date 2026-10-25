@@ -1877,6 +1877,25 @@ HOOK
 	[ "$status" -eq 1 ]
 }
 
+@test "publication cannot weaken its own base pattern configuration" {
+	printf 'forbidden-fixture\n' >.leak-patterns
+	git add -- .leak-patterns
+	git commit -qm 'test: base rule'
+	export DEVTOOLS_LEAK_BASE
+	DEVTOOLS_LEAK_BASE=$(git rev-parse HEAD)
+	printf 'forbidden-fixture\n' >new.txt
+	printf '^new.txt$\n' >.leak-allow
+	: >.leak-patterns
+	git add -- new.txt .leak-allow .leak-patterns
+	publish_commit 'try to remove the base rule'
+	run_check --publish
+	[ "$status" -eq 1 ]
+	[[ $output == *'new.txt:1: pattern: repository rule 1'* ]]
+	DEVTOOLS_LEAK_MODE=publish run_check --pre-push </dev/null
+	[ "$status" -eq 1 ]
+	[[ $output == *'new.txt:1: pattern: repository rule 1'* ]]
+}
+
 @test "AC6 publication keeps matched content inside its private temp directory" {
 	publish_base
 	printf 'kestrel99\n' >>existing.txt
