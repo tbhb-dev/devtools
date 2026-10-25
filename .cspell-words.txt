@@ -279,6 +279,7 @@ pipefail
 pipx
 pkgsite
 postflight
+prctl
 prealloc
 preapproval
 preapprovals

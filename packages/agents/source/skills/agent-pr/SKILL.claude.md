@@ -1,7 +1,7 @@
 ---
 name: agent-pr
 description: >-
-  Open or update a pull request unattended through the shared PR gates and independent review. Use for delegated agent branches that must report a hold instead of asking for confirmation. Requires a machine GitHub identity and session pre-approval or machine delegation.
+  Open, update, or close a pull request unattended through the shared PR gates and independent review. Use for delegated agent branches that must report a hold instead of asking for confirmation. Requires a machine GitHub identity and session pre-approval or machine delegation.
 hooks:
   PreToolUse:
     - matcher: Bash
@@ -17,6 +17,8 @@ Use `gh-post` for issue and PR content, comments, reviews, comment edits, and re
 Never prompt, use `AskUserQuestion`, pass `--confirmed`, or create a pre-approval record.
 
 Missing authority returns 75. Report the hold and preserve the draft. Install the sibling `pr` and `review-pr-description` skills from the same package.
+
+For a superseded or duplicate pull request, run `bash <skill-directory>/scripts/publish.sh close <number> --superseded-by <n>...` or use `--duplicate-of <n>`. Add `--reason <file>` for a reason that passes `mise run lint-draft`. This mode skips the publication steps below and runs `prctl close` through the shared `pr` confirmation chain and machine `gh_login` check. Install `prctl` from `github.com/tbhb-dev/devtools/cmd/prctl` and require `gh-post`. Pre-approval or delegation must grant the action. Missing authority returns 75 without prompting. The command preserves the branch. Rerun after a partial failure. The active login's marker comment prevents another post.
 
 1. Commit the branch through `agent-commit`, then run `bash .claude/skills/agent-pr/scripts/preflight.sh`. Stop for a dirty tree, an interrupted Git operation, detached `HEAD`, a missing machine `gh_login`, or no commits to publish.
 2. Fill `PR_AGENTDESC.md` using the scaffold, repository template, labels, and base from preflight. The draft supplies the title, properties, sections, and draft state. Use `draft: false` to mark an existing PR ready. Keep issue references in the repository's configured Related grammar. Omit the configured owner-review label. Only the owner-approval route applies it after approval at the current head, green checks, and a mergeable state. Updates preserve the label when it already exists on GitHub.

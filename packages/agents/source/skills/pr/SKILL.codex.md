@@ -1,7 +1,7 @@
 ---
 name: pr
 description: >-
-  Open or update a pull request for the current branch. The session drafts PR_AGENTDESC.md, an independent headless reviewer reads it against the branch, and a mechanical validator checks it against the template. The operator confirms before anything publishes. Use whenever the user asks to open or draft a pull request in a tbhb repository, or when a completed task should end in one. Routes later CI work to watch-pr, fix-pr, and merge-pr.
+  Open, update, or close a pull request for the current branch. The session drafts PR_AGENTDESC.md, an independent headless reviewer reads it against the branch, and a mechanical validator checks it against the template. The operator confirms before anything publishes. Use whenever the user asks to open or draft a pull request in a tbhb repository, or when a completed task should end in one. Routes later CI work to watch-pr, fix-pr, and merge-pr.
 ---
 
 # Open a pull request
@@ -9,6 +9,16 @@ description: >-
 Use `gh-post` for issue and PR content, comments, reviews, comment edits, and release notes. Supply body text through `--body-file` or stdin. If `gh-post` is missing, stop and report the missing command. Never fall back to a direct GitHub content write.
 
 Work the steps in order. Scripts enforce every gate here. Step 4's review script stamps what an independent reviewer cleared. Step 7's publish script refuses a draft, branch, or base the stamp doesn't cover, a push that would rewrite origin without the operator's word, and a publish nobody confirmed. Codex doesn't provide a skill-scoped command hook, so those scripts are the whole enforcement. Never run a `gh pr` command that changes a pull request yourself.
+
+## Close a superseded or duplicate pull request
+
+Skip the publication checklist for closing. Run `bash <skill-directory>/scripts/create-pr.sh close <number> --superseded-by <n>...` or replace the last option with `--duplicate-of <n>`.
+
+- Install `prctl` from `github.com/tbhb-dev/devtools/cmd/prctl` and require `gh-post` for the comment.
+- Add `--reason <file>` for a reason that passes `mise run lint-draft`.
+- The shim resolves `pr` through the shared confirmation chain and checks the machine's `gh_login` before running `prctl close`. Pass `--confirmed` only after the operator confirms.
+- Close mode skips the draft, topic, review, and push steps and preserves the branch.
+- Retry after a partial failure. The active login's marker comment prevents another post.
 
 ## Preflight
 

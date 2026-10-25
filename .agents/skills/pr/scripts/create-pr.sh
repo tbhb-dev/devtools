@@ -61,6 +61,9 @@ IFS=$' \t\n'
 
 # shellcheck disable=SC1091 # lib.sh is generated beside this script
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+if [ "${1:-}" = close ]; then
+  dt_pr_close "$@"
+fi
 # shellcheck disable=SC1091 # description.sh is deployed beside this script
 . "$DT_LIB_DIR/description.sh"
 # shellcheck disable=SC1091 # unattended behavior shares these entry points

@@ -267,6 +267,7 @@ parseLine
 parseable
 passthrough
 pluggable
+prctl
 preToolUse|PreToolUse
 printf
 pull_request

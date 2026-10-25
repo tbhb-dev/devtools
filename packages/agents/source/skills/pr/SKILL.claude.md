@@ -2,7 +2,7 @@
 name: pr
 license: Apache-2.0
 description: >-
-  Open a pull request for the current branch. The session drafts the title and the pull request properties and the template's sections into PR_AGENTDESC.md. An independent reviewer then reads that draft against the branch, and a mechanical validator checks it against the template. The operator confirms before anything publishes. Whatever follows routes to the watch-pr and fix-pr and merge-pr skills. Use this whenever the user asks to open or draft a pull request in a tbhb repo, and whenever a task ends in one.
+  Open, update, or close a pull request for the current branch. The session drafts the title and the pull request properties and the template's sections into PR_AGENTDESC.md. An independent reviewer then reads that draft against the branch, and a mechanical validator checks it against the template. The operator confirms before anything publishes. Whatever follows routes to the watch-pr and fix-pr and merge-pr skills. Use this whenever the user asks to open or draft a pull request in a tbhb repo, and whenever a task ends in one.
 hooks:
   PreToolUse:
     - matcher: Bash
@@ -21,9 +21,23 @@ A guard hook refuses every `gh pr` verb that changes a pull request outside the 
 
 This skill ends when the pull request is open. From there `watch-pr`, `fix-pr`, and `merge-pr` take over, and step 8 routes to whichever the operator asked for.
 
+## Close a superseded or duplicate pull request
+
+Skip the publication checklist for closing. Run `bash <skill-directory>/scripts/create-pr.sh close <number> --superseded-by <n>...` or replace the last option with `--duplicate-of <n>`.
+
+- Install `prctl` from `github.com/tbhb-dev/devtools/cmd/prctl` and require `gh-post` for the comment.
+- Add `--reason <file>` for a reason that passes `mise run lint-draft`.
+- The shim resolves `pr` through the shared confirmation chain and checks the machine's `gh_login` before running `prctl close`. Pass `--confirmed` only after the operator confirms.
+- Close mode skips the draft, topic, review, and push steps and preserves the branch.
+- Retry after a partial failure. The active login's marker comment prevents another post.
+
 ## Preflight
 
-!`bash ${CLAUDE_SKILL_DIR}/scripts/preflight.sh`
+For opening or updating a pull request, run:
+
+```text
+bash .claude/skills/pr/scripts/preflight.sh
+```
 
 ## Step 0: the checklist
 
