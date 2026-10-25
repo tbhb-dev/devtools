@@ -115,6 +115,10 @@ unicode_checksum_note() {
   unicode_checksum_note $'\xe2\x80\xa9'
 }
 
+@test "AC2 CR inside an added value preserves the checksum deletion finding" {
+  unicode_checksum_note $'\r'
+}
+
 @test "AC2 each real gate line still flags when removed" {
   local line file
   for file in lint.yaml mise.lock hooks.toml; do
