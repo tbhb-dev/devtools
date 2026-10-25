@@ -260,6 +260,138 @@ def vendored_nolint(
     )
 
 
+PIN_WORKFLOW_PATH = re.compile(r"^\.github/workflows/[^/]+\.ya?ml$")
+PIN_APM = re.compile(
+    r'^(\s*-\s*(?P<q>["\']?)tbhb-dev/devtools'
+    r"(?:/packages/agents/(?:common|claude|codex|agy))?#)"
+    r"v[0-9]+\.[0-9]+\.[0-9]+"
+    r"((?P=q)(?:\s+#.*|\s*))$"
+)
+PIN_MISE = re.compile(
+    r'^("go:github\.com/tbhb-dev/devtools/cmd/'
+    r'(?:guard-markdown|commit-lint|gh-post|agentrepo)"\s*=\s*)'
+    r'"v[0-9]+\.[0-9]+\.[0-9]+"(\s*(?:#.*)?)$'
+)
+PIN_WORKFLOW = re.compile(
+    r"^(\s*(?:-\s+)?uses:\s*tbhb-dev/devtools/[^@\s]+@)"
+    r"[0-9a-f]{7,40}"
+    r"(\s*#\s*)v[0-9]+\.[0-9]+\.[0-9]+(\s.*|)$"
+)
+PIN_TOMBI = re.compile(r"^( *#.*\btbhb-dev/devtools +)v[0-9]+\.[0-9]+\.[0-9]+(.*)$")
+PIN_RENOVATE = re.compile(
+    r'^(\s*"github>tbhb-dev/devtools//\.github/[^/"]+\.json5#)'
+    r"(?:[0-9a-f]{7,40}|v[0-9]+\.[0-9]+\.[0-9]+)"
+    r'(",?\s*//\s*)v[0-9]+\.[0-9]+\.[0-9]+(\s.*|)$'
+)
+PIN_VENDIR_CONTEXT = re.compile(
+    r"^( *)(- +)?url: +https://github\.com/tbhb-dev/devtools(?: +#.*| *)$"
+)
+PIN_VENDIR = re.compile(r"^( *ref:\s*)v[0-9]+\.[0-9]+\.[0-9]+(\s*)$")
+PIN_PRECOMMIT_CONTEXT = re.compile(
+    r"^( *)(- +)?repo: +https://github\.com/tbhb-dev/devtools(?: +#.*| *)$"
+)
+PIN_PRECOMMIT = re.compile(
+    r"^( *rev:\s*)[0-9a-f]{7,40}(\s+#\s*frozen:\s*)v[0-9]+\.[0-9]+\.[0-9]+(\s*)$"
+)
+PIN_PATTERNS: dict[str, tuple[re.Pattern[str], str]] = {
+    "apm.yml": (PIN_APM, r"\g<1><VERSION>\g<3>"),
+    "mise.toml": (PIN_MISE, r'\g<1>"<VERSION>"\g<2>'),
+    "tombi.toml": (PIN_TOMBI, r"\g<1><VERSION>\g<2>"),
+    ".github/renovate.json5": (
+        PIN_RENOVATE,
+        r"\g<1><REF>\g<2><VERSION>\g<3>",
+    ),
+}
+PIN_CONTEXT_PATTERNS: dict[str, tuple[re.Pattern[str], re.Pattern[str], str]] = {
+    "vendir.yml": (PIN_VENDIR_CONTEXT, PIN_VENDIR, r"\g<1><VERSION>\g<2>"),
+    ".pre-commit-config.yaml": (
+        PIN_PRECOMMIT_CONTEXT,
+        PIN_PRECOMMIT,
+        r"\g<1><SHA>\g<2><VERSION>\g<3>",
+    ),
+}
+
+
+def pin_skeleton(path: str, line: str) -> str | None:
+    """Normalize a single-line devtools pin to its version-independent skeleton."""
+    spec = PIN_PATTERNS.get(path)
+    if spec is None and PIN_WORKFLOW_PATH.fullmatch(path):
+        spec = (PIN_WORKFLOW, r"\g<1><SHA>\g<2><VERSION>\g<3>")
+    if spec is None:
+        return None
+    match = spec[0].fullmatch(line)
+    return match.expand(spec[1]) if match else None
+
+
+def pin_block(path: str, context: str, minus: list[str], plus: list[str]) -> bool:
+    """Accept only in-place devtools version pin replacements in pins.toml form."""
+    # These separators can introduce YAML content inside a physical diff line.
+    if any(
+        re.search(r"[\r\v\f\x1c-\x1e\x85\u2028\u2029]", line)
+        for line in [context, *minus, *plus]
+    ):
+        return False
+    if not minus or len(minus) != len(plus):
+        return False
+    if path in PIN_CONTEXT_PATTERNS:
+        ctx_re, line_re, template = PIN_CONTEXT_PATTERNS[path]
+        ctx_match = ctx_re.fullmatch(context)
+        if len(minus) != 1 or ctx_match is None:
+            return False
+        # A sequence marker contributes to the repository key's column.
+        column = len(ctx_match[1]) + len(ctx_match[2] or "")
+        if any(len(line) - len(line.lstrip(" ")) != column for line in [*minus, *plus]):
+            return False
+        old_match = line_re.fullmatch(minus[0])
+        new_match = line_re.fullmatch(plus[0])
+        return bool(
+            old_match
+            and new_match
+            and old_match.expand(template) == new_match.expand(template)
+        )
+    old_skeletons = [pin_skeleton(path, line) for line in minus]
+    new_skeletons = [pin_skeleton(path, line) for line in plus]
+    return all(old_skeletons) and old_skeletons == new_skeletons
+
+
+def diff_blocks(diff: str) -> list[tuple[str, list[str], list[str]]] | None:
+    """Extract (preceding_context, removed_lines, added_lines) for each edit block."""
+    blocks: list[tuple[str, list[str], list[str]]] = []
+    context = ""
+    in_hunk = False
+    minus: list[str] = []
+    plus: list[str] = []
+    for line in diff.removesuffix("\n").split("\n"):
+        if not in_hunk and line.startswith(
+            ("diff --git ", "index ", "--- a/", "+++ b/")
+        ):
+            continue
+        if line.startswith(("@@ ", " ")):
+            in_hunk = True
+            if minus or plus:
+                blocks.append((context, [*minus], [*plus]))
+                minus.clear()
+                plus.clear()
+            context = "" if line.startswith("@@ ") else line[1:]
+        elif line.startswith("-") and not plus:
+            minus.append(line[1:])
+        elif line.startswith("+"):
+            plus.append(line[1:])
+        else:
+            return None
+    if minus or plus:
+        blocks.append((context, minus, plus))
+    return blocks
+
+
+def pin_only_diff(path: str, diff: str) -> bool:
+    """Return whether a file's diff edits only devtools pins in pins.toml form."""
+    blocks = diff_blocks(diff)
+    return bool(blocks) and all(
+        pin_block(path, context, minus, plus) for context, minus, plus in blocks
+    )
+
+
 def inline_comment(text: str) -> str:
     """Do not interpret a marker inside a quoted value as a suppression."""
     quote = ""
@@ -295,6 +427,50 @@ def constitutional_paths(base: str) -> re.Pattern[str]:
     return regex("^$", "constitutional_paths")
 
 
+def scan_loosening(
+    path: str,
+    diff: str,
+    patterns: tuple[re.Pattern[str], re.Pattern[str]],
+    base: str,
+    paths: list[str],
+) -> list[list[str]]:
+    """Return suppression, exclusion, and removed-gate findings from a file diff."""
+    markers, configs = patterns
+    findings: list[list[str]] = []
+    lines = [
+        line
+        for line in diff.split("\n")
+        if not line.startswith(("+++", "---")) and line.startswith(("+", "-"))
+    ]
+    # Re-recording every removed checksum replaces them; it removes no gate.
+    replaced = PurePosixPath(path).name == "mise.lock" and sum(
+        line.startswith("+") and bool(LOCK_CHECKSUM.match(line[1:])) for line in lines
+    ) >= sum(
+        line.startswith("-") and bool(LOCK_CHECKSUM.match(line[1:])) for line in lines
+    )
+    for line in lines:
+        text = line[1:]
+        if COMMENT.match(text):
+            continue
+        comment = inline_comment(text)
+        if line.startswith("+") and (
+            (
+                markers.search(comment)
+                and not vendored_nolint(path, base, paths, comment, markers)
+            )
+            or (configs.search(path) and EXCLUSION.search(text))
+        ):
+            findings.append([path, "adds a suppression or exclusion"])
+        elif (
+            line.startswith("-")
+            and configs.search(path)
+            and REMOVED_GATE.search(text)
+            and not (replaced and LOCK_CHECKSUM.match(text))
+        ):
+            findings.append([path, "removes a hook or gate"])
+    return findings
+
+
 def inspect(base: str, head: str, config: dict[str, str]) -> dict[str, object]:
     """Return reasons needing an owner and the owner paths for reporting."""
     golden, markers, configs, owners = [
@@ -327,61 +503,39 @@ def inspect(base: str, head: str, config: dict[str, str]) -> dict[str, object]:
     if not paths:
         fail("Pinned change has no paths")
     owned = owned_remotely(base)
-    findings = []
+    findings: list[list[str]] = []
+    non_pin_findings = False
     owner_paths = [path for path in paths if owners.search(path)]
     for path in paths:
-        if constitutional.search(path):
-            findings.append([path, "changes a constitutional file"])
-        if remote_path(path, owned):
-            continue
-        if golden.search(path):
-            findings.append([path, "changes a golden file"])
         diff = git(
             "diff",
             "--no-ext-diff",
             "--no-textconv",
             "--no-renames",
             "--text",
-            "--unified=0",
+            "--unified=1",
             mergebase,
             head,
             "--",
             path,
         ).decode("utf-8", "surrogateescape")
-        lines = [
-            line
-            for line in diff.split("\n")
-            if not line.startswith(("+++", "---")) and line.startswith(("+", "-"))
-        ]
-        # Re-recording every removed checksum replaces them; it removes no gate.
-        replaced = PurePosixPath(path).name == "mise.lock" and sum(
-            line.startswith("+") and bool(LOCK_CHECKSUM.match(line[1:]))
-            for line in lines
-        ) >= sum(
-            line.startswith("-") and bool(LOCK_CHECKSUM.match(line[1:]))
-            for line in lines
-        )
-        for line in lines:
-            text = line[1:]
-            if COMMENT.match(text):
-                continue
-            comment = inline_comment(text)
-            if line.startswith("+") and (
-                (
-                    markers.search(comment)
-                    and not vendored_nolint(path, base, paths, comment, markers)
-                )
-                or (configs.search(path) and EXCLUSION.search(text))
-            ):
-                findings.append([path, "adds a suppression or exclusion"])
-            elif (
-                line.startswith("-")
-                and configs.search(path)
-                and REMOVED_GATE.search(text)
-                and not (replaced and LOCK_CHECKSUM.match(text))
-            ):
-                findings.append([path, "removes a hook or gate"])
-    return {"findings": findings, "owner_paths": owner_paths}
+        pin_only = pin_only_diff(path, diff)
+        if constitutional.search(path):
+            findings.append([path, "changes a constitutional file"])
+            non_pin_findings = non_pin_findings or not pin_only
+        if remote_path(path, owned):
+            continue
+        if golden.search(path):
+            findings.append([path, "changes a golden file"])
+            non_pin_findings = non_pin_findings or not pin_only
+        loosening = scan_loosening(path, diff, (markers, configs), base, paths)
+        if loosening:
+            findings.extend(loosening)
+            non_pin_findings = True
+    return {
+        "findings": findings if non_pin_findings else [],
+        "owner_paths": owner_paths,
+    }
 
 
 def states_no(body: str, head: str) -> bool:
