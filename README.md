@@ -151,7 +151,7 @@ extends = "devtools:lint-draft"
 extends = "devtools:fix-prose-replacements"
 ```
 
-Keep any other task includes the project needs. Both prose tasks have default bodies in the skill-contract drop-in, so consumers can remove their copied helper bodies. The payload supplies `lint-draft.sh`, `fix_prose_replacements.py` and `apm_audit.py`. Consumers don't need their own copies.
+Keep any other task includes the project needs. Both prose tasks have default bodies in the skill-contract drop-in, so consumers can remove their copied helper bodies. The payload supplies `lint-draft.sh`, which forwards to `agentrepo lint-draft`, plus `fix_prose_replacements.py` and `apm_audit.py`. Install the matching `agentrepo` release before using the draft task. Consumers don't need their own copies.
 
 Each consumer defines its prose policy.
 

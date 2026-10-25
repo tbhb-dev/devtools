@@ -102,7 +102,7 @@ SH
 }
 
 @test "shipped helpers match the publisher implementations" {
-  for helper in lint-draft.sh fix_prose_replacements.py apm_audit.py; do
+  for helper in fix_prose_replacements.py apm_audit.py; do
     cmp "$REPO/tools/$helper" ".devtools/scripts/$helper"
   done
 }
