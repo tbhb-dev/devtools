@@ -573,8 +573,6 @@ STUB
   [[ "$output" == *"no pull request template at .github/pull_request_template.md"* ]]
 }
 
-# A mise that runs the real scanner for the leak task, the way the task
-# file maps the scope variables, and records the scope each task saw.
 real_leak_scanner() {
   cat >"${BATS_TEST_TMPDIR}/bin/mise" <<STUB
 #!/usr/bin/env bash
@@ -602,9 +600,6 @@ HOOK
   chmod +x .git/hooks/pre-push
   export O11Y_PRIVATE_STRINGS=kestrel99
 }
-
-# The base already holds a list value in a file the branch edits, in a file
-# it leaves alone, and in a path name.
 leaky_base() {
   git checkout --quiet main
   printf 'kestrel99\nclean\n' >edited.txt
@@ -616,17 +611,17 @@ leaky_base() {
   git checkout --quiet topic
   git rebase --quiet main
   git fetch --quiet origin
-}
-
-@test "AC1 publication passes all three scans when the branch adds no list value (#651)" {
-  leaky_base
   real_leak_scanner
-  printf 'kestrel99\nclean\nmore\n' >edited.txt
-  git commit --quiet -am 'feat: edit a file holding a base value'
+}
+publication_edit() {
+  leaky_base
+  printf '%s\n' kestrel99 clean "$1" >edited.txt
+  git commit --quiet -am 'feat: edit a file'
+}
+@test "AC1 publication passes all three scans when the branch adds no list value (#651)" {
+  publication_edit more
   bash "$SCRIPTS/review.sh"
-
   run bash "$SCRIPTS/create-pr.sh" --confirmed
-
   [ "$status" -eq 0 ]
   [ "$(remote_topic)" = "$(git rev-parse HEAD)" ]
   merge_base=$(git merge-base HEAD origin/main)
@@ -635,50 +630,31 @@ leaky_base() {
   [ "$(grep -c '^scan task$' "$GATE_LOG")" -eq 2 ]
   [ "$(grep -c '^scan hook$' "$GATE_LOG")" -eq 1 ]
 }
-
 @test "publication fixture lint executes its nested leak scan (#651)" {
-  leaky_base
-  real_leak_scanner
-  printf 'kestrel99\nclean\nkestrel99\n' >edited.txt
-  git commit --quiet -am 'feat: add a value'
+  publication_edit kestrel99
   export DEVTOOLS_LEAK_MODE=publish DEVTOOLS_LEAK_BASE
   DEVTOOLS_LEAK_BASE=$(git merge-base HEAD origin/main)
-
   run mise run lint
-
   [ "$status" -eq 1 ]
   [[ "$output" == *"edited.txt:3: private literal"* ]]
   [ "$(grep -c '^scan task$' "$GATE_LOG")" -eq 1 ]
 }
-
 @test "AC2 publication stops on an added list value, before the push (#651)" {
-  leaky_base
-  real_leak_scanner
-  printf 'kestrel99\nclean\nkestrel99\n' >edited.txt
-  git commit --quiet -am 'feat: add a value'
+  publication_edit kestrel99
   bash "$SCRIPTS/review.sh"
-
   run bash "$SCRIPTS/create-pr.sh" --confirmed
-
   [ "$status" -ne 0 ]
   [[ "$output" == *"edited.txt:3: private literal"* ]]
   [ -z "$(remote_topic)" ]
 }
-
 @test "the pre-push hook alone stops an added list value (#651)" {
-  leaky_base
-  real_leak_scanner
-  printf 'kestrel99\nclean\nkestrel99\n' >edited.txt
-  git commit --quiet -am 'feat: add a value'
+  publication_edit kestrel99
   export DEVTOOLS_LEAK_MODE=publish DEVTOOLS_LEAK_BASE
   DEVTOOLS_LEAK_BASE=$(git merge-base HEAD origin/main)
-
   run git push origin topic
-
   [ "$status" -ne 0 ]
   [ -z "$(remote_topic)" ]
 }
-
 @test "AC3 a missing, shallow or unrelated base exits 2 before any push (#651)" {
   real_leak_scanner
   main_oid=$(git rev-parse origin/main)
@@ -687,7 +663,6 @@ leaky_base() {
   [ "$status" -eq 2 ]
   [[ "$output" == *"origin/main is missing"* ]]
   [ -z "$(remote_topic)" ]
-
   git update-ref refs/remotes/origin/main "$main_oid"
   git rev-parse HEAD~1 >.git/shallow
   run bash "$SCRIPTS/create-pr.sh" --confirmed
@@ -695,7 +670,6 @@ leaky_base() {
   [[ "$output" == *"the repository is shallow"* ]]
   [ -z "$(remote_topic)" ]
   rm .git/shallow
-
   git update-ref refs/remotes/origin/main "$(git commit-tree -m orphan "$(git rev-parse 'HEAD^{tree}')")"
   run bash "$SCRIPTS/create-pr.sh" --confirmed
   [ "$status" -eq 2 ]
@@ -703,7 +677,6 @@ leaky_base() {
   [ -z "$(remote_topic)" ]
   refute_grep '^devtools:lint-leaks' "$GATE_LOG"
 }
-
 @test "AC7 publication runs lint uncached under the scope (#651)" {
   real_leak_scanner
   bash "$SCRIPTS/review.sh"
@@ -714,7 +687,6 @@ leaky_base() {
   [[ "$output" != *"mise run lint passed at"* ]]
   grep -q '^lint publish ' "$GATE_LOG"
 }
-
 @test "AC3 publication without either base ref exits 2 before any push (#651)" {
   git update-ref -d refs/remotes/origin/main
   git branch -D main
