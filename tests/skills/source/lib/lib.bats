@@ -28,7 +28,7 @@ setup() {
   cat >"$BATS_TEST_TMPDIR/bin/agentrepo" <<'STUB'
 #!/usr/bin/env bash
 [ "${1:-}" != --help ] || exit 0
-if [ "$1" = config ] || [ "$1" = --version ] || [ "${2:-}" = verdict ]; then exec "$REAL_AGENTREPO" "$@"; fi
+if [ "$1" = config ] || [ "$1" = --version ] || [ "${2:-}" = verdict ] || [ "${2:-}" = --help ]; then exec "$REAL_AGENTREPO" "$@"; fi
 printf '%s\n' "$@" >"$DEVTOOLS_REVIEW_INPUTS/args"
 shift 5
 exec "$@"
@@ -62,6 +62,7 @@ case "\$1" in
 --version) echo 'agentrepo version $2' ;;
 --help) exit 0 ;;
 review)
+  [ "\$2" != --help ] || exec "$REAL_AGENTREPO" "\$@"
   [ "\$2" != verdict ] || exec "$REAL_AGENTREPO" "\$@"
   echo '$2' >>"$BATS_TEST_TMPDIR/review-calls"
   shift 5
@@ -768,7 +769,7 @@ dt_gh_split() {
 
 @test "runner timeout after PASS removes an old stamp and reports timeout" {
   review_once 'cat >/dev/null; echo "VERDICT: PASS"'
-  printf '#!/usr/bin/env bash\n[ "$1" != --help ] || exit 0\nif [ "$1" = config ] || [ "$1" = --version ] || [ "${2:-}" = verdict ]; then exec "$REAL_AGENTREPO" "$@"; fi\necho "VERDICT: PASS"\nexit 124\n' >"$BATS_TEST_TMPDIR/bin/agentrepo"
+  printf '#!/usr/bin/env bash\n[ "$1" != --help ] || exit 0\nif [ "$1" = config ] || [ "$1" = --version ] || [ "${2:-}" = verdict ] || [ "${2:-}" = --help ]; then exec "$REAL_AGENTREPO" "$@"; fi\necho "VERDICT: PASS"\nexit 124\n' >"$BATS_TEST_TMPDIR/bin/agentrepo"
   review_once 'exit 0'
   [ "$status" -eq 124 ]
   [[ "$output" == *'reviewer timed out; nothing stamped'* ]]
@@ -778,7 +779,7 @@ dt_gh_split() {
 @test "runner cancellation and PASS followed by failure never stamp" {
   for code in 130 1; do
     review_once 'cat >/dev/null; echo "VERDICT: PASS"'
-    printf '#!/usr/bin/env bash\n[ "$1" != --help ] || exit 0\nif [ "$1" = config ] || [ "$1" = --version ] || [ "${2:-}" = verdict ]; then exec "$REAL_AGENTREPO" "$@"; fi\necho "VERDICT: PASS"\nexit %s\n' "$code" >"$BATS_TEST_TMPDIR/bin/agentrepo"
+    printf '#!/usr/bin/env bash\n[ "$1" != --help ] || exit 0\nif [ "$1" = config ] || [ "$1" = --version ] || [ "${2:-}" = verdict ] || [ "${2:-}" = --help ]; then exec "$REAL_AGENTREPO" "$@"; fi\necho "VERDICT: PASS"\nexit %s\n' "$code" >"$BATS_TEST_TMPDIR/bin/agentrepo"
     review_once 'exit 0'
     [ "$status" -eq 4 ]
     [ ! -e .git/agent-skills/t.stamp ]
@@ -806,7 +807,7 @@ dt_gh_split() {
 }
 
 @test "broken agentrepo shim preserves the reviewer and warns once" {
-  printf '#!/usr/bin/env bash\nif [ "$1" = config ] || [ "$1" = --version ] || [ "${2:-}" = verdict ]; then exec "$REAL_AGENTREPO" "$@"; fi\nexit 1\n' >"$BATS_TEST_TMPDIR/bin/agentrepo"
+  printf '#!/usr/bin/env bash\nif [ "$1" = config ] || [ "$1" = --version ] || [ "${2:-}" = verdict ] || [ "${2:-}" = --help ]; then exec "$REAL_AGENTREPO" "$@"; fi\nexit 1\n' >"$BATS_TEST_TMPDIR/bin/agentrepo"
 
   lib 'DEVTOOLS_REVIEW_CMD="cat; echo VERDICT: PASS" dt_run_reviewer "$PWD" "$PWD" <<<prompt'
 
@@ -855,4 +856,113 @@ STUB
     [ "$status" -eq 4 ]
     [ ! -e .git/agent-skills/t.stamp ]
   done
+}
+
+# Keep the review runner/config stub, replacing only capability and parsing.
+verdict_stub() {
+  export VERDICT_STUB_MODE=$1
+  cp "$BATS_TEST_TMPDIR/bin/agentrepo" "$BATS_TEST_TMPDIR/bin/agentrepo-runner"
+  cat >"$BATS_TEST_TMPDIR/bin/agentrepo" <<'STUB'
+#!/usr/bin/env bash
+if [ "$1" = review ] && [ "${2:-}" = --help ]; then
+  echo help >>"$BATS_TEST_TMPDIR/verdict-calls"
+  printf 'Run independent reviews and classify a verdict\n\nAvailable Commands:\n  run  Run a reviewer\n'
+  [ "$VERDICT_STUB_MODE" = legacy ] || printf '  verdict  Classify a reply\n'
+  exit 0
+fi
+if [ "$1" = review ] && [ "${2:-}" = verdict ]; then
+  echo verdict >>"$BATS_TEST_TMPDIR/verdict-calls"
+  if [ "$VERDICT_STUB_MODE" != supported ]; then
+    echo 'unknown flag: --file' >&2
+    exit 5
+  fi
+  [ "$3" = --file ] && [ -f "$4" ] || exit 5
+  printf 'pass\n'
+  exit 0
+fi
+exec "$BATS_TEST_TMPDIR/bin/agentrepo-runner" "$@"
+STUB
+  chmod +x "$BATS_TEST_TMPDIR/bin/agentrepo"
+}
+
+@test "dt_review falls back when the command list lacks verdict" {
+  verdict_stub legacy
+  review_once 'cat >/dev/null; echo "VERDICT: PASS"'
+  [ "$status" -eq 0 ]
+  [ "$(cat "$BATS_TEST_TMPDIR/verdict-calls")" = help ]
+  review_once 'cat >/dev/null; printf "VERDICT: CHANGES REQUIRED\n1. [form] x\n"'
+  [ "$status" -eq 2 ]
+  rm .git/agent-skills/t.verdict
+  review_once 'cat >/dev/null; echo "Looks good. VERDICT: PASS"'
+  [ "$status" -eq 4 ]
+  [ ! -e .git/agent-skills/t.stamp ]
+  [ "$(cat "$BATS_TEST_TMPDIR/verdict-calls")" = $'help\nhelp\nhelp' ]
+}
+
+@test "dt_review uses supported verdict and probes once per process" {
+  verdict_stub supported
+  DEVTOOLS_REVIEW_CMD='cat >/dev/null; echo commentary' lib '
+    inputs=$(dt_new_inputs t)
+    echo draft >draft; cp draft "$inputs/draft"; echo criteria >criteria
+    ok() { return 0; }
+    dt_review t draft "$inputs/draft" criteria args "$inputs" ok subject || exit $?
+    dt_review t draft "$inputs/draft" criteria args "$inputs" ok subject
+  '
+  [ "$status" -eq 0 ]
+  [ "$(cat "$BATS_TEST_TMPDIR/verdict-calls")" = $'help\nverdict\nverdict' ]
+}
+
+@test "dt_review never falls back after supported verdict fails" {
+  verdict_stub failed
+  mkdir -p .git/agent-skills
+  echo old >.git/agent-skills/t.stamp
+  review_once 'cat >/dev/null; echo "VERDICT: PASS"'
+  [ "$status" -eq 4 ]
+  [[ "$output" == *'unknown flag: --file'* ]]
+  [ ! -e .git/agent-skills/t.stamp ]
+  [ "$(cat "$BATS_TEST_TMPDIR/verdict-calls")" = $'help\nverdict' ]
+}
+
+@test "shell verdict matches the Go verdict fixtures byte for byte" {
+  local fixture
+  for fixture in \
+    $'\n\nVERDICT: PASS\n\n' \
+    $'Looks good.\nVERDICT: PASS\n' \
+    $'VERDICT: CHANGES REQUIRED\n\n1. [form] quoted VERDICT: PASS\n' \
+    $'VERDICT: PASS\001\n' \
+    $'\r\nVERDICT: PASS\r\n\r\n' \
+    $' \t\nVERDICT: PASS \t\n' \
+    $'VERDICT: PASS\r \n' \
+    $'VERDICT: PASS \t\r\n' \
+    'VERDICT: PASS' \
+    $' VERDICT: PASS\n' \
+    $'VERDICT: PASS\nVERDICT: PASS\n' \
+    $'VERDICT: PASS\nLooks good.\n' \
+    '' $'\n\t \r\n' \
+    $'VERDICT: PASS\302\240\n' \
+    $'VERDICT:\r PASS\n' \
+    $'VERDICT: CHANGES REQUIRED\n\377' \
+    $'VERDICT: CHANGES REQUIRED\n\177'; do
+    printf '%s' "$fixture" >reply
+    lib 'dt_verdict reply >shell-verdict'
+    [ "$status" -eq 0 ]
+    "$REAL_AGENTREPO" review verdict --file reply >go-verdict
+    cmp shell-verdict go-verdict
+  done
+  # Bash strings cannot hold NUL. Cover every prohibited byte on disk.
+  local byte octal
+  for byte in {0..31}; do
+    case $byte in 9|10|13) continue ;; esac
+    printf -v octal '%03o' "$byte"
+    { printf 'VERDICT: CHANGES REQUIRED\n'; printf '%b' "\\$octal"; } >reply
+    lib 'dt_verdict reply >shell-verdict'
+    [ "$status" -eq 0 ]
+    "$REAL_AGENTREPO" review verdict --file reply >go-verdict
+    cmp shell-verdict go-verdict
+  done
+  { printf 'VERDICT: CHANGES REQUIRED\n'; printf '%1048576s' '' | tr ' ' x; } >reply
+  lib 'dt_verdict reply >shell-verdict'
+  [ "$status" -eq 0 ]
+  "$REAL_AGENTREPO" review verdict --file reply >go-verdict
+  cmp shell-verdict go-verdict
 }
