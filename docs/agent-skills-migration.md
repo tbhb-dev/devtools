@@ -28,6 +28,8 @@ Pin the harness package containing this change and run `apm install`. Saved pass
 
 Pin the harness package containing the updated rebase skills and run `apm install`. In the devtools checkout, run `mise run regen-generated` after resolving generated files during a rebase, then commit what it rewrites.
 
+`agentrepo markers scan` now scans rebase conflict markers in Go and accepts an empty path as a support probe (`agentrepo markers scan ''`), without reading any files. The shell fallback keeps older binaries working. Consumers use their existing configuration. Remove the fallback in a later release after [issue 333](https://github.com/tbhb-dev/devtools/issues/333) and [issue 544](https://github.com/tbhb-dev/devtools/issues/544) land and the N-2 compatibility window passes.
+
 ## Repository configuration
 
 The file accepts `key = value` lines, blank lines, and full-line comments. Its reader never sources it as shell. Unknown keys, duplicates, and symlinks fail. Commands execute only at their configured gate. Other values remain data. Review stamps bind the configuration bytes. Commit the repository configuration before reviewing a branch.
