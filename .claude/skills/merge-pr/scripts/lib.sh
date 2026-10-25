@@ -845,3 +845,23 @@ dt_gate() {
 . "$DT_LIB_DIR/agent.sh"
 # shellcheck disable=SC1091 # generator deploys these files together
 . "$DT_LIB_DIR/signing.sh"
+
+# dt_pr_close runs the close mode without entering PR publication.
+dt_pr_close() {
+  local confirmed=false arg want login
+  local args=()
+  for arg in "$@"; do
+    if [ "$arg" = --confirmed ]; then
+      confirmed=true
+    else
+      args+=("$arg")
+    fi
+  done
+  dt_confirm pr "$confirmed" || exit $?
+  want=$(dt_conf gh_login) || exit $?
+  [ -n "$want" ] || dt_die "gh_login must be configured on the machine"
+  login=$(dt_gh_login) || exit $?
+  [ "$login" = "$want" ] || dt_die "gh is signed in as ${login:-nobody}, not ${want}."
+  export DEVTOOLS_PR_CLOSE_GRANTED=1
+  exec prctl "${args[@]}"
+}

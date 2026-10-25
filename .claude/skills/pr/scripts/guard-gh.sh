@@ -68,6 +68,9 @@ such change behind one entry point:
 
   bash .claude/skills/pr/scripts/create-pr.sh
 
+For prctl close, use the same script with close <number> and
+--superseded-by <n>... or --duplicate-of <n>.
+
 That script validates the description against the template, checks that
 the review stamp covers the exact bytes on disk and the branch as it
 stands, resolves the labels and every issue reference before anything is
