@@ -1977,3 +1977,40 @@ HOOK
 	run_check --range "$base..HEAD"
 	[ "$status" -eq 1 ]
 }
+publish_binary_base() {
+  printf '%s\n' forbidden-fixture "${2:-^fixture|forbidden-fixture}" >.leak-patterns
+  printf '%b' "$1" >blob.dat
+  publish_commit 'binary base' blob.dat .leak-patterns
+  export DEVTOOLS_LEAK_BASE
+  DEVTOOLS_LEAK_BASE=$(git rev-parse HEAD)
+}
+@test "AC1 modified binaries pass with inherited literal and pattern occurrences" {
+  publish_binary_base 'kestrel99\x00\x0010.1.2.3 forbidden-fixture clean'
+  printf 'kestrel99\000\00010.1.2.3 forbidden-fixture changed' >blob.dat
+  publish_commit 'unrelated byte change' blob.dat
+  run_check --publish
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+@test "AC2 modified binaries reject added occurrences of inherited values" {
+  publish_binary_base 'kestrel99\x0010.1.2.3 forbidden-fixture'
+  printf 'kestrel99 kestrel99\00010.1.2.3 10.1.2.3 forbidden-fixture forbidden-fixture' >blob.dat
+  publish_commit 'add occurrences' blob.dat
+  for why in 'private literal' 'pattern: private IPv4 address' 'pattern: repository rule 1'; do
+    publish_finding "blob.dat:binary: $why"
+  done
+}
+@test "AC2 modified binaries compare pattern values rather than category totals" {
+  publish_binary_base 'clean\x0010.1.2.3'
+  printf 'clean\000192.168.1.1' >blob.dat
+  publish_commit 'change address' blob.dat
+  publish_finding 'blob.dat:binary: pattern: private IPv4 address'
+}
+@test "AC2 modified binaries count anchored and empty pattern matches" {
+  for value in 'tar\000tar' 'clean\000\000'; do
+    publish_binary_base 'tartar\x00clean' '^tar|^$'
+    printf '%b' "$value" >blob.dat
+    publish_commit 'add a pattern occurrence' blob.dat
+    publish_finding 'blob.dat:binary: pattern: repository rule'
+  done
+}

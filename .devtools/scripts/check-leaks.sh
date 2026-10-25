@@ -20,15 +20,10 @@
 #                                  untracked files git does not ignore
 #   check-leaks.sh --staged        compare staged blobs against the commit base
 #   check-leaks.sh --range A..B    scan every object the range adds
-#   check-leaks.sh --publish       scan what the commits after the base add,
-#                                  where DEVTOOLS_LEAK_BASE names the base
-#                                  commit: each commit's message, the names
-#                                  it adds and the lines it adds, never the
-#                                  index. With DEVTOOLS_LEAK_MODE=publish,
-#                                  --pre-push and --pre-push-hook scan the
-#                                  pushed commits the same way, retaining
-#                                  whole-object scans of outgoing tags and
-#                                  payloads outside commits
+#   check-leaks.sh --publish       scan commit additions after DEVTOOLS_LEAK_BASE:
+#                                  messages, new names, added text and increased
+#                                  binary match counts. DEVTOOLS_LEAK_MODE=publish
+#                                  scopes push scans too, plus whole outgoing tags
 #   check-leaks.sh --pre-push [REMOTE [URL]]
 #                                  scan what a push sends. Reads the
 #                                  "local-ref local-oid remote-ref
@@ -551,26 +546,52 @@ scan_publish() {
       printf "%s:%s: %s\n", label, lineno, why
       findings++
     }
-    function foreign_ts(s,    m) {
-      while (match(s, re_ts)) {
-        m = substr(s, RSTART, RLENGTH)
-        if (m != "example.ts.net" && m !~ /\.example\.ts\.net$/) return 1
-        s = substr(s, RSTART + RLENGTH)
+    # Count binary matches by rule and bytes. Other records report once per rule.
+    function count_matches(s, re, why, literal, boundary, tailnet,    offset, at, size, value, key) {
+      offset = 0
+      while (offset <= length(s)) {
+        if (literal) {
+          at = index(substr(s, offset + 1), re)
+          if (!at) break
+          at += offset; size = length(re)
+        } else if (offset && index(re, "^")) {
+          # Keep anchors tied to the original record when searching past a match.
+          for (at = offset; at <= length(s); at++)
+            if (match(s, "^.{" at "}(" re ")")) break
+          if (at > length(s)) break
+          size = RLENGTH - at; at++
+        } else {
+          if (!match(substr(s, offset + 1), re)) break
+          at = offset + RSTART; size = RLENGTH
+        }
+        value = substr(s, at, size)
+        if (boundary) sub(/^[^0-9.]/, "", value)
+        if (!tailnet || (value != "example.ts.net" && value !~ /\.example\.ts\.net$/)) {
+          if (!phase || quiet) { report(why); return }
+          key = why SUBSEP value
+          if (phase == "old") budget[key]++
+          else if (budget[key] > 0) budget[key]--
+          else report(why)
+        }
+        offset = at - 1 + (literal || !size ? 1 : size)
       }
-      return 0
     }
     function check(low, skip_patterns,    i) {
-      for (i = 1; i <= nn; i++) if (index(low, needle[i])) report("private literal " name[i])
+      for (i = 1; i <= nn; i++) count_matches(low, needle[i], "private literal " name[i], 1)
       if (skip_patterns) return
-      if (index(low, op_ref)) report("pattern: password-manager reference")
-      if (foreign_ts(low)) report("pattern: tailnet host name")
-      if (low ~ re_tailnet) report("pattern: tailnet address")
-      if (low ~ re_ip) report("pattern: private IPv4 address")
-      if (low ~ /-----begin ([a-z0-9]+ )*private key-----/) report("pattern: private-key header")
-      for (i = 1; i <= nc; i++) if (low ~ custom[i]) report("pattern: repository rule " i)
+      count_matches(low, op_ref, "pattern: password-manager reference", 1)
+      count_matches(low, re_ts, "pattern: tailnet host name", 0, 0, 1)
+      count_matches(low, re_tailnet, "pattern: tailnet address", 0, 1)
+      count_matches(low, re_ip, "pattern: private IPv4 address", 0, 1)
+      count_matches(low, "-----begin ([a-z0-9]+ )*private key-----", "pattern: private-key header")
+      for (i = 1; i <= nc; i++) count_matches(low, custom[i], "pattern: repository rule " i)
     }
     unreadable { next }
+    /^\003/ { phase = "old"; next }
+    /^\004/ { phase = "new"; next }
     /^[\005\006]/ {
+      phase = ""
+      for (key in budget) delete budget[key]
       full = path_bytes(substr($0, 2)); skip = (full ~ exempt)
       quiet = 1; hits = 0
       check(tolower("/" full), 0)
@@ -581,7 +602,7 @@ scan_publish() {
     }
     {
       t = index($0, "\t")
-      lineno = substr($0, 1, t - 1)
+      lineno = phase ? "binary" : substr($0, 1, t - 1)
       check(tolower(substr($0, t + 1)), skip)
     }
     END {
@@ -632,6 +653,9 @@ emit_publish() {
       fi
       git cat-file blob "$old_oid" >"$tmp/old"
       if has_nul "$tmp/blob" || has_nul "$tmp/old"; then
+        printf '\003\n'
+        emit_body "$tmp/old"
+        printf '\004\n'
         emit_body "$tmp/blob"
       else
         publish_diff patch "$old_oid" "$new_oid" |
