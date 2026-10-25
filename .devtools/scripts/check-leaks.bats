@@ -1711,6 +1711,10 @@ private_base() {
 	[ "$status" -eq 1 ]
 	[[ "$output" =~ path#[0-9a-f]{8}:path:\ private\ literal\ O11Y_PRIVATE_STRINGS\ entry\ 6 ]]
 }
+publish_change() {
+  printf '%b' "$2" >"$1"
+  publish_commit 'edit a file' "$1" "${@:3}"
+}
 publish_base() {
 	printf 'kestrel99\nclean\n' >existing.txt
 	printf 'quokka-pond\n' >untouched.txt
@@ -1722,10 +1726,8 @@ publish_base() {
 	export DEVTOOLS_LEAK_BASE
 }
 publish_commit() {
-	local message=$1
-	shift
-	if (($#)); then git add -- "$@"; fi
-	git commit -qm "test: $message"
+  if (($# > 1)); then git add -- "${@:2}"; fi
+  git commit -qm "test: $1"
 }
 publish_finding() {
 	run_check --publish
@@ -1799,16 +1801,13 @@ publication_path_finding() {
 }
 @test "AC2 a later commit that removes the value doesn't clear it" {
 	publish_base
-	printf 'kestrel99\nclean\nkestrel99\n' >existing.txt
-	publish_commit 'add a value' existing.txt
-	printf 'kestrel99\nclean\n' >existing.txt
-	publish_commit 'remove it again' existing.txt
+  publish_change existing.txt 'kestrel99\nclean\nkestrel99\n'
+  publish_change existing.txt 'kestrel99\nclean\n'
 	publish_finding 'existing.txt:3: private literal'
 }
 @test "AC2 a removed base occurrence doesn't offset an added one" {
 	publish_base
-	printf 'clean\nkestrel99\n' >existing.txt
-	publish_commit 'move the value' existing.txt
+  publish_change existing.txt 'clean\nkestrel99\n'
 	publish_finding 'existing.txt:2: private literal'
 }
 @test "AC2 a deleted and re-added file is scanned whole" {
@@ -1821,8 +1820,7 @@ publication_path_finding() {
 }
 @test "AC2 an added binary file is named by the binary marker" {
 	publish_base
-	printf 'xx\0kestrel99\0yy' >blob.dat
-	publish_commit 'add binary' blob.dat
+  publish_change blob.dat 'xx\0kestrel99\0yy'
 	publish_finding 'blob.dat:binary: private literal'
 }
 @test "scoped and whole-object pushes reject followed tag annotations" {
@@ -1884,53 +1882,44 @@ HOOK
 @test "AC2 a -diff attribute can't hide an added line" {
 	publish_base
 	printf '* -diff\n' >.gitattributes
-	printf 'kestrel99\nclean\nkestrel99\n' >existing.txt
-	publish_commit 'add a value under a -diff attribute' .gitattributes existing.txt
+  publish_change existing.txt 'kestrel99\nclean\nkestrel99\n' .gitattributes
 	publish_finding 'existing.txt:3'
 }
 @test "AC2 a low core.bigFileThreshold can't hide an added line" {
 	publish_base
 	git config core.bigFileThreshold 1
-	printf 'kestrel99\nclean\nkestrel99\n' >existing.txt
-	publish_commit 'add a value to a file over the threshold' existing.txt
+  publish_change existing.txt 'kestrel99\nclean\nkestrel99\n'
 	publish_finding 'existing.txt:3'
 }
 @test "AC2 GIT_DIFF_OPTS context can't shift the reported line" {
 	publish_base
-	printf 'one\ntwo\nkestrel99\nfour\nfive\nsix\n' >plain.txt
-	publish_commit 'add a value at line 3' plain.txt
-	GIT_DIFF_OPTS=-u3 publish_finding ''
-	[[ $output == *'plain.txt:3'* ]]
+  publish_change plain.txt 'one\ntwo\nkestrel99\nfour\nfive\nsix\n'
+  GIT_DIFF_OPTS=-u3 publish_finding 'plain.txt:3'
 }
 @test "AC2 inter-hunk context can't shift the reported line" {
 	publish_base
-	printf 'changed\ntwo\nthree\nfour\nkestrel99\nsix\n' >plain.txt
-	publish_commit 'add a value at line 5' plain.txt
+  publish_change plain.txt 'changed\ntwo\nthree\nfour\nkestrel99\nsix\n'
 	git config diff.interHunkContext 10
 	publish_finding 'plain.txt:5: private literal O11Y_PRIVATE_STRINGS entry 6'
 }
 @test "AC2 an unreadable diff order file can't leak a value or hide its line" {
 	publish_base
-	printf 'one\ntwo\nkestrel99\nfour\nfive\nsix\n' >plain.txt
-	publish_commit 'add a value at line 3' plain.txt
+  publish_change plain.txt 'one\ntwo\nkestrel99\nfour\nfive\nsix\n'
 	git config diff.orderFile "$work/mango-secret/missing"
 	mkdir scratch
-	TMPDIR="$work/scratch" publish_finding ''
-	[[ $output == *'plain.txt:3: private literal O11Y_PRIVATE_STRINGS entry 6'* ]]
+  TMPDIR="$work/scratch" publish_finding 'plain.txt:3: private literal O11Y_PRIVATE_STRINGS entry 6'
 	[ -z "$(find scratch -type f -print)" ]
 }
 @test "AC2 text classification and line numbers survive combined diff overrides" {
 	publish_base
 	printf '* -diff\n' >.gitattributes
-	printf 'changed\ntwo\nthree\nfour\nkestrel99\nsix\n' >plain.txt
-	publish_commit 'add a value under hostile diff settings' .gitattributes plain.txt
+  publish_change plain.txt 'changed\ntwo\nthree\nfour\nkestrel99\nsix\n' .gitattributes
 	git config core.bigFileThreshold 1
 	git config diff.interHunkContext 10
 	git config diff.orderFile "$work/mango-secret/missing"
 	printf 'clean\n' >plain.txt
 	git add -- plain.txt
-	GIT_DIFF_OPTS=-u3 GIT_EXTERNAL_DIFF=false GIT_ATTR_SOURCE="$DEVTOOLS_LEAK_BASE" publish_finding ''
-	[[ $output == *'plain.txt:5: private literal O11Y_PRIVATE_STRINGS entry 6'* ]]
+  GIT_DIFF_OPTS=-u3 GIT_EXTERNAL_DIFF=false GIT_ATTR_SOURCE="$DEVTOOLS_LEAK_BASE" publish_finding 'plain.txt:5: private literal O11Y_PRIVATE_STRINGS entry 6'
 }
 @test "AC4 the scan reads commits, never a staged removal" {
 	publish_base
@@ -1965,8 +1954,7 @@ HOOK
 }
 @test "AC6 the task scopes only on request and the range scan still scans everything added" {
 	publish_base
-	printf 'clean\nmore\n' >existing.txt
-	publish_commit 'edit' existing.txt
+  publish_change existing.txt 'clean\nmore\n'
 	printf '[task_config]\nincludes = ["%s/.devtools/tasks/leaks.toml"]\n' "$repo_root" >mise.toml
 	export DEVTOOLS_DIR="$repo_root/.devtools"
 	mise trust -q "$work/mise.toml"
@@ -1980,8 +1968,7 @@ HOOK
 @test "AC6 escaped display labels cannot print a two-backslash private literal" {
   publish_base
   export O11Y_PRIVATE_STRINGS='fixture\\secret,kestrel99'
-  printf 'kestrel99\n' >'fixture\secret.txt'
-  publish_commit 'add content' 'fixture\secret.txt'
+  publish_change 'fixture\secret.txt' 'kestrel99\n'
   for mode in --publish --pre-push-hook; do
     printf 'refs/heads/main %s refs/heads/main %s\n' "$(git rev-parse HEAD)" "$DEVTOOLS_LEAK_BASE" >lines
     DEVTOOLS_LEAK_MODE=publish run_check "$mode" <lines
@@ -1999,31 +1986,27 @@ publish_binary_base() {
 }
 @test "AC1 modified binaries pass with inherited literal and pattern occurrences" {
   publish_binary_base 'kestrel99\x00\x0010.1.2.3 forbidden-fixture clean'
-  printf 'kestrel99\000\00010.1.2.3 forbidden-fixture changed' >blob.dat
-  publish_commit 'unrelated byte change' blob.dat
+  publish_change blob.dat 'kestrel99\x00\x0010.1.2.3 forbidden-fixture changed'
   run_check --publish
   [ "$status" -eq 0 ]
   [ -z "$output" ]
 }
 @test "AC2 modified binaries reject added occurrences of inherited values" {
   publish_binary_base 'kestrel99\x0010.1.2.3 forbidden-fixture'
-  printf 'kestrel99 kestrel99\00010.1.2.3 10.1.2.3 forbidden-fixture forbidden-fixture' >blob.dat
-  publish_commit 'add occurrences' blob.dat
+  publish_change blob.dat 'kestrel99 kestrel99\x0010.1.2.3 10.1.2.3 forbidden-fixture forbidden-fixture'
   for why in 'private literal' 'pattern: private IPv4 address' 'pattern: repository rule 1'; do
     publish_finding "blob.dat:binary: $why"
   done
 }
 @test "AC2 modified binaries compare pattern values rather than category totals" {
   publish_binary_base 'clean\x0010.1.2.3'
-  printf 'clean\000192.168.1.1' >blob.dat
-  publish_commit 'change address' blob.dat
+  publish_change blob.dat 'clean\x00192.168.1.1'
   publish_finding 'blob.dat:binary: pattern: private IPv4 address'
 }
 @test "AC2 modified binaries count anchored and empty pattern matches" {
   for value in 'tar\000tar' 'clean\000\000'; do
     publish_binary_base 'tartar\x00clean' '^tar|^$'
-    printf '%b' "$value" >blob.dat
-    publish_commit 'add a pattern occurrence' blob.dat
+    publish_change blob.dat "$value"
     publish_finding 'blob.dat:binary: pattern: repository rule'
   done
 }
