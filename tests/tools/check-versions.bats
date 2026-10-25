@@ -32,8 +32,10 @@ setup() {
 
   # Use the real working-tree run task and Go sources in every fixture.
   SOURCE=$(cd "$BATS_TEST_DIRNAME/../.." && pwd)
-  rg -A9 '^\[tasks.run\]' "$SOURCE/mise.toml" >mise.toml
-  rg -A2 '^\[tasks.check-versions\]' "$SOURCE/mise.toml" >>mise.toml
+  awk '
+    /^\[/ { copy = ($0 == "[tasks.run]" || $0 == "[tasks.check-versions]") }
+    copy { print }
+  ' "$SOURCE/mise.toml" >mise.toml
   mkdir -p tools
   cp "$SCRIPT" tools/check-versions.sh
   cp "$SOURCE/tools/go-ldflags.sh" tools/go-ldflags.sh
