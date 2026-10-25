@@ -452,7 +452,10 @@ emit_publish() {
       if has_nul "$tmp/blob" || has_nul "$tmp/old"; then
         emit_body "$tmp/blob"
       else
-        git diff --no-ext-diff --no-textconv --no-color -U0 "$old_oid" "$new_oid" |
+        # --text defeats a -diff attribute and core.bigFileThreshold; the
+        # blobs passed has_nul above. GIT_DIFF_OPTS could restore context
+        # lines, which the awk below doesn't count.
+        env -u GIT_DIFF_OPTS git diff --text --no-ext-diff --no-textconv --no-color -U0 "$old_oid" "$new_oid" |
           awk '/^@@/ { split($3, a, ","); n = substr(a[1], 2) + 0; body = 1; next } body && /^\+/ { print n "\t" substr($0, 2); n++ }'
       fi
     done <"$tmp/raw"

@@ -1866,6 +1866,38 @@ HOOK
 	[[ $output == *"the repository is shallow, so the scan can't be complete"* ]]
 }
 
+@test "AC2 a -diff attribute can't hide an added line" {
+	publish_base
+	printf '* -diff\n' >.gitattributes
+	printf 'kestrel99\nclean\nkestrel99\n' >existing.txt
+	git add -- .gitattributes existing.txt
+	publish_commit 'add a value under a -diff attribute'
+	run_check --publish
+	[ "$status" -eq 1 ]
+	[[ $output == *'existing.txt:3'* ]]
+}
+
+@test "AC2 a low core.bigFileThreshold can't hide an added line" {
+	publish_base
+	git config core.bigFileThreshold 1
+	printf 'kestrel99\nclean\nkestrel99\n' >existing.txt
+	git add -- existing.txt
+	publish_commit 'add a value to a file over the threshold'
+	run_check --publish
+	[ "$status" -eq 1 ]
+	[[ $output == *'existing.txt:3'* ]]
+}
+
+@test "AC2 GIT_DIFF_OPTS context can't shift the reported line" {
+	publish_base
+	printf 'one\ntwo\nkestrel99\nfour\nfive\nsix\n' >plain.txt
+	git add -- plain.txt
+	publish_commit 'add a value at line 3'
+	GIT_DIFF_OPTS=-u3 run_check --publish
+	[ "$status" -eq 1 ]
+	[[ $output == *'plain.txt:3'* ]]
+}
+
 @test "AC4 the scan reads commits, never a staged removal" {
 	publish_base
 	printf 'kestrel99\n' >>existing.txt
