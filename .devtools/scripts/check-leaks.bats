@@ -1753,6 +1753,37 @@ publish_commit() {
 	[[ $output =~ path#[0-9a-f]{8}:path:\ private\ literal ]]
 }
 
+@test "AC2 an added empty filename matches a backslash literal before escaping" {
+	publish_base
+	export O11Y_PRIVATE_STRINGS='fixture\secret'
+	: >'fixture\secret.txt'
+	git add -- 'fixture\secret.txt'
+	publish_commit 'add an empty file'
+	for mode in --publish --pre-push-hook; do
+		printf 'refs/heads/main %s refs/heads/main %s\n' "$(git rev-parse HEAD)" "$DEVTOOLS_LEAK_BASE" >lines
+		DEVTOOLS_LEAK_MODE=publish run_check "$mode" <lines
+		[ "$status" -eq 1 ]
+		[[ $output =~ path#[0-9a-f]{8}:path:\ private\ literal\ O11Y_PRIVATE_STRINGS\ entry\ 1 ]]
+		no_value 'fixture\secret'
+		no_value 'fixture\\secret'
+	done
+}
+
+@test "AC2 a rename target matches a backslash literal before escaping" {
+	publish_base
+	export O11Y_PRIVATE_STRINGS='fixture\secret'
+	git mv plain.txt 'fixture\secret.txt'
+	publish_commit 'rename a file'
+	for mode in --publish --pre-push-hook; do
+		printf 'refs/heads/main %s refs/heads/main %s\n' "$(git rev-parse HEAD)" "$DEVTOOLS_LEAK_BASE" >lines
+		DEVTOOLS_LEAK_MODE=publish run_check "$mode" <lines
+		[ "$status" -eq 1 ]
+		[[ $output =~ path#[0-9a-f]{8}:path:\ private\ literal\ O11Y_PRIVATE_STRINGS\ entry\ 1 ]]
+		no_value 'fixture\secret'
+		no_value 'fixture\\secret'
+	done
+}
+
 @test "AC2 a commit message names the commit" {
 	publish_base
 	git commit -q --allow-empty -m 'test: mention kestrel99'

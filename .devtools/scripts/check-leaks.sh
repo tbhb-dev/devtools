@@ -234,23 +234,37 @@ scan() {
         if (low ~ custom[i]) report("pattern: repository rule " i)
       }
     }
-    # Name a location: as given, unless the name itself matches a rule.
-    function locate(full,    n) {
+    # Undo record-stream escaping before matching original path bytes.
+    function path_bytes(s,    out, i, c) {
+      out = ""
+      for (i = 1; i <= length(s); i++) {
+        c = substr(s, i, 1)
+        if (c == "\\") {
+          c = substr(s, ++i, 1)
+          if (c == "n") c = "\n"
+          else if (c == "r") c = "\r"
+        }
+        out = out c
+      }
+      return out
+    }
+    # Match the original location; use escaped text only for display.
+    function locate(full, display) {
       quiet = 1; hits = 0
       # Exemptions silence findings, never the sanitizing of a location.
       check(tolower("/" full), 0)
       quiet = 0
-      return hits ? opaque(full) : full
+      return hits ? opaque(full) : display
     }
     # With the private values unread, say nothing: any finding or location
     # would come from an incomplete set, and the END rule reports the failure.
     unreadable { next }
     /^\003/ { phase = "base"; next }
     /^\004/ { phase = "index"; next }
-    /^\001/ { full = substr($0, 2); label = locate(full); skip = (full ~ exempt); next }
+    /^\001/ { full = path_bytes(substr($0, 2)); label = locate(full, substr($0, 2)); skip = (full ~ exempt); next }
     /^\002/ {
-      full = substr($0, 2)
-      label = locate(full)
+      full = path_bytes(substr($0, 2))
+      label = locate(full, substr($0, 2))
       lineno = "path"
       # The leading slash lets the path patterns see a top-level directory.
       check(tolower("/" full), (full ~ exempt))
@@ -259,7 +273,9 @@ scan() {
     {
       t = index($0, "\t")
       lineno = substr($0, 1, t - 1)
-      check(tolower(substr($0, t + 1)), skip)
+      text = substr($0, t + 1)
+      if (lineno == "path") text = path_bytes(text)
+      check(tolower(text), skip)
     }
     END {
       if (unreadable) { print "check-leaks: could not read the private values; the result is incomplete" > "/dev/stderr"; exit 2 }
