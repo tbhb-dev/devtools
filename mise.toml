@@ -133,6 +133,9 @@ apm = "0.33.0"
 # does not.
 ast-grep = "0.50.0"
 jq = "1.8.2"
+# bats --jobs shells out to a parallel runner, and rush ships a release
+# binary for every platform CI runs.
+rush = "0.11.0"
 shfmt = "3.14.1"
 
 # --- Setup ---
@@ -585,13 +588,64 @@ run = "uv run python tools/agy_otel_latency.py"
 description = "Run the shared leak scanner and hook regression suite"
 run = "bats .devtools/scripts/check-leaks.bats"
 
+# Bats files run in parallel across files, one job per file, never within
+# a file: a file's tests share its setup, and each file builds its
+# scratch repositories under its own temporary directory. The job count
+# is the CPU count capped at 8 to bound concurrent fixture setup.
+# HOOKS_JOBS overrides the count, and HOOKS_JOBS=1 gives the serial run
+# with an ordered trace.
+# Bats needs an external runner for --jobs, so rush is pinned in [tools]
+# rather than assumed on PATH.
+#
+# SERIAL_FILES is the one place a file that cannot run beside the others
+# is named. Each entry runs alone after the parallel group, with its
+# reason on the line above. It starts empty and grows only for a
+# demonstrated conflict, never to hide a flaky test.
 [tasks.test-hooks]
-description = "Run the bats suites for the shell scripts under scripts/ and tools/"
+description = "Run the bats suites for the shell scripts under scripts/ and tools/ in parallel"
 usage = 'arg "<path>" default="tests"'
 # Exercise the binary from this tree, not the released toolchain pin.
 run = [
   "go build -o bin/agentrepo ./cmd/agentrepo",
-  'env PATH="$PWD/bin:$PATH" bats --recursive $usage_path',
+  '''
+#!/usr/bin/env bash
+set -euo pipefail
+export PATH="$PWD/bin:$PATH"
+SERIAL_FILES=()
+# macOS exposes the CPU count through sysctl when getconf lacks it.
+cpus=$(getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.ncpu)
+jobs=${HOOKS_JOBS:-$((cpus < 8 ? cpus : 8))}
+parallel_files=()
+serial_files=()
+n_parallel=0
+n_serial=0
+while IFS= read -r file; do
+  is_serial=0
+  for entry in ${SERIAL_FILES[@]+"${SERIAL_FILES[@]}"}; do
+    if [ "$file" = "$entry" ]; then is_serial=1; fi
+  done
+  if [ "$is_serial" = 1 ]; then
+    serial_files+=("$file")
+    n_serial=$((n_serial + 1))
+  else
+    parallel_files+=("$file")
+    n_parallel=$((n_parallel + 1))
+  fi
+done < <(find "$usage_path" -name '*.bats' | sort)
+echo "test-hooks: $jobs jobs ($cpus CPUs), $n_parallel parallel files, $n_serial serial files"
+status=0
+if [ "$n_parallel" -gt 0 ]; then
+  if [ "$jobs" -gt 1 ]; then
+    bats --jobs "$jobs" --parallel-binary-name rush --no-parallelize-within-files "${parallel_files[@]}" || status=$?
+  else
+    bats "${parallel_files[@]}" || status=$?
+  fi
+fi
+if [ "$n_serial" -gt 0 ]; then
+  bats "${serial_files[@]}" || status=$?
+fi
+exit "$status"
+''',
 ]
 
 # Serial by default so a failing run prints a clean, ordered trace; pass

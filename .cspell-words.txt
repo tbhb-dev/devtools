@@ -14,6 +14,8 @@ Honnef
 JUnit
 Magika
 NOSYSTEM
+NPROCESSORS
+ONLN
 PYTHONUTF
 RLENGTH
 RSTART
@@ -80,6 +82,7 @@ covdata
 covdir
 covermode
 coverprofile
+cpus
 creds
 cuda
 cve
@@ -130,6 +133,7 @@ funcmap
 funcs
 funlen
 fuzztime
+getconf
 getline
 getset
 ghapp
@@ -237,6 +241,7 @@ mtimes
 musttag
 mvdan
 nakedret
+ncpu
 nestif
 nextest
 nilerr
