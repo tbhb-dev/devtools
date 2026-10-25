@@ -116,6 +116,24 @@ YAML
   grep -Fq 'gh-post" = "v0.11.0"' mise.toml
 }
 
+@test "update writes the same v-prefixed pins for either version spelling" {
+  run env usage_version=v0.11.0 bash "${BATS_TEST_TMPDIR}/update.sh"
+  [ "$status" -eq 0 ]
+  mkdir with-v
+  cp mise.toml apm.yml vendir.yml with-v/
+  cp .github/renovate.json5 with-v/
+  cp -R "${BATS_TEST_DIRNAME}/fixtures/pins/." .
+  cp "${BATS_TEST_DIRNAME}/../../.devtools/vendir.yml" vendir.yml
+  run env usage_version=0.11.0 bash "${BATS_TEST_TMPDIR}/update.sh"
+  [ "$status" -eq 0 ]
+  cmp mise.toml with-v/mise.toml
+  cmp apm.yml with-v/apm.yml
+  cmp vendir.yml with-v/vendir.yml
+  cmp .github/renovate.json5 with-v/renovate.json5
+  grep -Fq 'guard-markdown" = "v0.11.0"' mise.toml
+  [[ "$output" == *'every devtools pin is on v0.11.0'* ]]
+}
+
 @test "check rejects guard version drift" {
   sed 's/v0.10.0/v0.9.0/' mise.toml > changed
   mv changed mise.toml
