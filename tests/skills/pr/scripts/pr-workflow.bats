@@ -518,3 +518,57 @@ STUB
   [ "$status" -eq 0 ]
   grep -q '^pr edit 1 .*--title .*--body-file ' "$GH_POST_LOG"
 }
+
+@test "section findings name the template and keep their line and rule (#550)" {
+  printf '## Summary\n\n## Why\n\n## Verification\n\n## Risks\n' >.github/pull_request_template.md
+  write_draft
+  printf '\n## Risks\n\n## Extra\n\nnotes\n' >>PR_AGENTDESC.md
+
+  run bash "$SCRIPTS/validate-description.sh"
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"PR_AGENTDESC.md:"*" [error] section-empty  \"## Risks\" has no content under it; template: .github/pull_request_template.md"* ]]
+
+  printf '## Summary\n\n## Why\n\n## Verification\n\n## Rollout\n' >.github/pull_request_template.md
+  write_draft '' 'fix: add the widget file'
+  run bash "$SCRIPTS/validate-description.sh"
+  [[ "$output" == *" [error] section-missing  the draft has no \"## Rollout\" section; the template puts it after \"## Verification\"; template: .github/pull_request_template.md"* ]]
+  [[ "$output" == *"title-type-unused"* ]]
+  refute_grep 'title-type-unused.*template:' <<<"$output"
+
+  printf '## Why\n\n## Summary\n\n## Verification\n' >.github/pull_request_template.md
+  write_draft
+  run bash "$SCRIPTS/validate-description.sh"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *" [error] section-order  the template's sections run in this order: Why, Summary, Verification; template: .github/pull_request_template.md"* ]]
+}
+
+@test "section findings name the template that supplied the requirements (#550)" {
+  printf '## Alpha\n\ncontent\n' >.github/env.md
+  printf '## Beta\n\ncontent\n' >.github/repo.md
+
+  PR_TEMPLATE=.github/env.md run bash "$SCRIPTS/validate-description.sh"
+  [[ "$output" == *"the draft has no \"## Alpha\" section; the template opens with it; template: .github/env.md"* ]]
+
+  mkdir -p .agents
+  echo 'pr_template = .github/repo.md' >.agents/agent-skills.conf
+  PR_TEMPLATE=.github/env.md run bash "$SCRIPTS/validate-description.sh"
+  [[ "$output" == *"the draft has no \"## Beta\" section; the template opens with it; template: .github/repo.md"* ]]
+  [[ "$output" != *"Alpha"* ]]
+}
+
+@test "the template-level errors and a clean run are unchanged (#550)" {
+  run bash "$SCRIPTS/validate-description.sh"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+
+  printf 'no headings\n' >.github/pull_request_template.md
+  run bash "$SCRIPTS/validate-description.sh"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"template-has-no-sections  .github/pull_request_template.md declares no level 2 headings"* ]]
+
+  rm .github/pull_request_template.md
+  run bash "$SCRIPTS/validate-description.sh"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"no pull request template at .github/pull_request_template.md"* ]]
+}
