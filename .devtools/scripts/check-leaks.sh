@@ -75,6 +75,24 @@ exec 3>&2
 # Bash 3.2 applies errexit to `command` even when the caller tests its status.
 git() { env git "$@" 2>/dev/null; }
 
+# scan_diff FORMAT ARGS...: raw metadata or a zero-context text patch.
+# Keep every scan diff on the same settings and quiet git wrapper. --text
+# overrides repository -diff attributes and core.bigFileThreshold; callers
+# still scan NUL-containing blobs whole. -M preserves rename base budgets
+# and exposes rename targets for path scanning. -O/dev/null also overrides
+# an empty diff.orderFile, which git otherwise tries to open as a path.
+scan_diff() (
+  local format=$1
+  shift
+  unset GIT_DIFF_OPTS GIT_EXTERNAL_DIFF GIT_ATTR_SOURCE
+  if [[ $format == raw ]]; then
+    set -- --no-patch --raw --no-abbrev -z "$@"
+  fi
+  git -c diff.orderFile= -c diff.interHunkContext=0 -c core.attributesFile=/dev/null \
+    -c diff.ignoreSubmodules=none diff --text --no-ext-diff --no-textconv \
+    -U0 -O/dev/null --no-color --no-relative --ignore-submodules=none -M --diff-filter=ACMRTU "$@"
+)
+
 top=$(git rev-parse --show-toplevel || true)
 finished=
 die() {
@@ -312,7 +330,7 @@ emit_staged() {
   local meta st old_path new_path old_label new_label
   local -a m
   # The raw listing pins index blob IDs and rename pairs for the scan.
-  git -c diff.ignoreSubmodules=none diff --ignore-submodules=none --cached --no-ext-diff --raw --no-abbrev -z -M --diff-filter=ACMRTU "$base_tree" >"$tmp/raw"
+  scan_diff raw --cached "$base_tree" >"$tmp/raw"
   while IFS= read -r -d '' meta; do
     read -r -a m <<<"${meta#:}"
     st=${m[4]}
@@ -433,7 +451,7 @@ emit_publish() {
     emit_body "$tmp/obj"
     # rev-list hides parents at a shallow boundary; the commit header does not.
     parent=$(awk '!header_done && /^$/ { header_done = 1 } !header_done && /^parent / && !p { p = $2 } END { print p }' "$tmp/obj")
-    git -c diff.ignoreSubmodules=none diff-tree --ignore-submodules=none -r -z -M --raw --no-abbrev --no-ext-diff --diff-filter=ACMRT "${parent:-$empty_tree}" "$c" >"$tmp/raw"
+    scan_diff raw "${parent:-$empty_tree}" "$c" >"$tmp/raw"
     while IFS= read -r -d '' meta; do
       read -r -a m <<<"${meta#:}"
       old_mode=${m[0]} new_mode=${m[1]} old_oid=${m[2]} new_oid=${m[3]} st=${m[4]}
@@ -452,10 +470,7 @@ emit_publish() {
       if has_nul "$tmp/blob" || has_nul "$tmp/old"; then
         emit_body "$tmp/blob"
       else
-        # --text defeats a -diff attribute and core.bigFileThreshold; the
-        # blobs passed has_nul above. GIT_DIFF_OPTS could restore context
-        # lines, which the awk below doesn't count.
-        env -u GIT_DIFF_OPTS git diff --text --no-ext-diff --no-textconv --no-color -U0 "$old_oid" "$new_oid" |
+        scan_diff patch "$old_oid" "$new_oid" |
           awk '/^@@/ { split($3, a, ","); n = substr(a[1], 2) + 0; body = 1; next } body && /^\+/ { print n "\t" substr($0, 2); n++ }'
       fi
     done <"$tmp/raw"

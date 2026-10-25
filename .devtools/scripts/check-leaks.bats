@@ -1898,6 +1898,47 @@ HOOK
 	[[ $output == *'plain.txt:3'* ]]
 }
 
+@test "AC2 inter-hunk context can't shift the reported line" {
+	publish_base
+	printf 'changed\ntwo\nthree\nfour\nkestrel99\nsix\n' >plain.txt
+	git add -- plain.txt
+	publish_commit 'add a value at line 5'
+	git config diff.interHunkContext 10
+	run_check --publish
+	[ "$status" -eq 1 ]
+	[[ $output == *'plain.txt:5: private literal O11Y_PRIVATE_STRINGS entry 6'* ]]
+}
+
+@test "AC2 an unreadable diff order file can't leak a value or hide its line" {
+	publish_base
+	printf 'one\ntwo\nkestrel99\nfour\nfive\nsix\n' >plain.txt
+	git add -- plain.txt
+	publish_commit 'add a value at line 3'
+	git config diff.orderFile "$work/mango-secret/missing"
+	mkdir scratch
+	TMPDIR="$work/scratch" run_check --publish
+	[ "$status" -eq 1 ]
+	[[ $output == *'plain.txt:3: private literal O11Y_PRIVATE_STRINGS entry 6'* ]]
+	[ -z "$(find scratch -type f -print)" ]
+}
+
+@test "AC2 text classification and line numbers survive combined diff overrides" {
+	publish_base
+	printf '* -diff\n' >.gitattributes
+	printf 'changed\ntwo\nthree\nfour\nkestrel99\nsix\n' >plain.txt
+	git add -- .gitattributes plain.txt
+	publish_commit 'add a value under hostile diff settings'
+	git config core.bigFileThreshold 1
+	git config diff.interHunkContext 10
+	git config diff.orderFile "$work/mango-secret/missing"
+	# A staged removal must not change the committed result.
+	printf 'clean\n' >plain.txt
+	git add -- plain.txt
+	GIT_DIFF_OPTS=-u3 GIT_EXTERNAL_DIFF=false GIT_ATTR_SOURCE="$DEVTOOLS_LEAK_BASE" run_check --publish
+	[ "$status" -eq 1 ]
+	[[ $output == *'plain.txt:5: private literal O11Y_PRIVATE_STRINGS entry 6'* ]]
+}
+
 @test "AC4 the scan reads commits, never a staged removal" {
 	publish_base
 	printf 'kestrel99\n' >>existing.txt
