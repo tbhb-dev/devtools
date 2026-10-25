@@ -4,7 +4,7 @@
 # Only repository behavior belongs here. Authorities still use dt_conf.
 dt_repo_conf() {
   if [ "$_DEVTOOLS_AGENTREPO_CONFIG" = true ]; then
-    agentrepo config repository -- "$@"
+    "$_DEVTOOLS_AGENTREPO_BIN" config repository -- "$@"
     return $?
   fi
   # #321 removes this fallback when config is in the minimum agentrepo version

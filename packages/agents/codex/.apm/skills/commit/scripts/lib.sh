@@ -136,10 +136,47 @@ dt_session_id() {
 
 # --- configuration -----------------------------------------------------
 
-# Probe in the sourcing shell so command substitutions share the cached answer.
-if [ -z "${_DEVTOOLS_AGENTREPO_CONFIG+set}" ]; then
+# Resolve in the sourcing shell so command substitutions share the binary.
+readonly DT_AGENTREPO_MIN_VERSION=v0.16.0
+_dt_agentrepo_resolve() {
+  local root binary version
+  binary=''
+  # Environment-only configuration still works when Git lookup fails.
+  if root=$(dt_root); then
+    binary=$(cd "$root" && mise which agentrepo 2>/dev/null) || binary=''
+  fi
+  if [ -z "$binary" ] || [ ! -x "$binary" ]; then
+    binary=$(command -v agentrepo) || return 0
+  fi
+  version=$("$binary" --version) || dt_die "Could not read agentrepo version: $binary"
+  version=${version##* }
+  # Source builds report DEV, or a v0.0.0 pseudo-version when Go stamps
+  # the module; release binaries must meet the version floor.
+  if [ "$version" != DEV ] && ! awk -v found="$version" -v required="$DT_AGENTREPO_MIN_VERSION" '
+    BEGIN {
+      sub(/^v/, "", found)
+      sub(/^v/, "", required)
+      if (found ~ /^0[.]0[.]0-[0-9]{14}-[0-9a-f]{12}/) exit 0
+      if (found !~ /^[0-9]+[.][0-9]+[.][0-9]+([-+].*)?$/) exit 1
+      prerelease = found ~ /-/
+      sub(/[-+].*/, "", found)
+      split(found, f, ".")
+      split(required, r, ".")
+      for (i = 1; i <= 3; i++) {
+        if (f[i]+0 > r[i]+0) exit 0
+        if (f[i]+0 < r[i]+0) exit 1
+      }
+      exit prerelease ? 1 : 0
+    }
+  '; then
+    dt_die "agentrepo found $version; required $DT_AGENTREPO_MIN_VERSION or newer"
+  fi
+  printf '%s\n' "$binary"
+}
+if [ -z "${_DEVTOOLS_AGENTREPO_BIN+set}" ]; then
+  _DEVTOOLS_AGENTREPO_BIN=$(_dt_agentrepo_resolve) || exit $?
   _DEVTOOLS_AGENTREPO_CONFIG=false
-  if agentrepo config --help >/dev/null 2>&1; then
+  if [ -n "$_DEVTOOLS_AGENTREPO_BIN" ] && "$_DEVTOOLS_AGENTREPO_BIN" config --help >/dev/null 2>&1; then
     _DEVTOOLS_AGENTREPO_CONFIG=true
   fi
 fi
@@ -171,7 +208,7 @@ _dt_conf_file() {
 # dt_conf <key> [default]: the configured value, or the default.
 dt_conf() {
   if [ "$_DEVTOOLS_AGENTREPO_CONFIG" = true ]; then
-    agentrepo config machine -- "$@"
+    "$_DEVTOOLS_AGENTREPO_BIN" config machine -- "$@"
     return $?
   fi
   local key=$1 default=${2:-} env_name value dir repo
@@ -403,8 +440,8 @@ dt_run_reviewer() {
   local root=$1 inputs=$2 custom model effort timeout
   local runner=(env)
   timeout=$(dt_conf review_timeout 900)
-  if command -v agentrepo >/dev/null 2>&1 && agentrepo --help >/dev/null 2>&1; then
-    runner=(agentrepo review run --timeout "${timeout}s" --)
+  if [ -n "$_DEVTOOLS_AGENTREPO_BIN" ] && "$_DEVTOOLS_AGENTREPO_BIN" --help >/dev/null 2>&1; then
+    runner=("$_DEVTOOLS_AGENTREPO_BIN" review run --timeout "${timeout}s" --)
   else
     printf 'review: unbounded because agentrepo is missing or unusable\n' >&2
   fi
