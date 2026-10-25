@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file. See [conven
 - - -
 <!-- release -->
 
+## [v0.21.1](https://github.com/tbhb-dev/devtools/compare/bfd9f841216dd0d077f1f87a54fc4b3a5e559aef..v0.21.1) - 2026-10-25
+
+### Bug Fixes
+
+- (**merge**) exempt devtools pin replacements from policy findings (#700) - ([bfd9f84](https://github.com/tbhb-dev/devtools/commit/bfd9f841216dd0d077f1f87a54fc4b3a5e559aef)) - tbhb.dev Agent
+
+- - -
+
+<!-- release -->
+
 ## [v0.21.0](https://github.com/tbhb-dev/devtools/compare/6d6d567d14561f726f400ad147261254c913f215..v0.21.0) - 2026-10-25
 
 ### Bug Fixes
