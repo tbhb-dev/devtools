@@ -1,0 +1,57 @@
+# shard seconds path
+# Measured per file with bats --timing on Linux/WSL2, 2026-10-21.
+# Assign longest files first to the lightest shard (ties: path, then shard).
+# Shard 1 starts with the 13.626s leak-suite cost, run separately by CI.
+# Re-measure changed files before rebalancing. Each file must appear once.
+1	0.082	tests/workflows/sarif.bats
+1	0.114	tests/skills/release/scripts/watch-release.bats
+1	0.124	tests/scripts/clear-commit-agentmsg.bats
+1	0.217	tests/skills/writers/permissions.bats
+1	0.509	tests/skills/watch-pr/scripts/watch-checks.bats
+1	0.565	tests/tools/release-verify.bats
+1	0.733	tests/skills/source/lib/masked-status.bats
+1	1.178	tests/workflows/check-preset-refs.bats
+1	1.421	tests/devtools/lint-commit-msg.bats
+1	2.241	tests/tasks/rust.bats
+1	3.802	tests/scripts/codex-preapproval.bats
+1	8.697	tests/skills/agent-pr/authority.bats
+1	10.142	tests/skills/agent-commit/workflow.bats
+2	0.108	tests/tasks/bootstrap.bats
+2	0.180	tests/workflows/security.bats
+2	0.289	tests/tools/release-dispatch.bats
+2	0.367	tests/scripts/skill-tokens-backends.bats
+2	0.623	tests/skills/resolve-rebase-conflicts/scripts/resolve-workflow.bats
+2	0.840	tests/skills/rebase/scripts/rebase-workflow.bats
+2	1.201	tests/tasks/pins.bats
+2	1.532	tests/tasks/gitleaks.bats
+2	1.647	tests/skills/fix-prose/scripts/fix-prose.bats
+2	4.310	tests/tasks/adoption.bats
+2	8.219	tests/skills/agent-pr/publish.bats
+2	24.071	tests/skills/pr/scripts/pr-workflow.bats
+3	0.099	tests/workflows/rust-msrv.bats
+3	0.195	tests/tools/test-bats-shard.bats
+3	0.296	tests/workflows/release.bats
+3	0.304	tests/tasks/workflows.bats
+3	0.557	tests/tools/release-readiness.bats
+3	0.961	tests/tasks/gomodscan.bats
+3	0.985	tests/tools/generate-skills.bats
+3	1.523	tests/config/starter-vocabulary.bats
+3	2.053	tests/skills/source/lib/gates.bats
+3	4.726	tests/skills/source/lib/lib.bats
+3	5.219	tests/skills/agent-merge-pr/policy.bats
+3	10.005	tests/skills/commit/scripts/commit-workflow.bats
+3	16.463	tests/skills/merge-pr/scripts/merge-workflow.bats
+4	0.063	tests/git-environment.bats
+4	0.101	tests/workflows/skill-scanner.bats
+4	0.191	tests/tasks/vendor.bats
+4	0.272	tests/tasks/python-templates.bats
+4	0.339	tests/scripts/codex-fix-prose-state.bats
+4	0.678	tests/tools/check-versions.bats
+4	0.800	tests/tools/masked-status.bats
+4	1.346	tests/tasks/gomodscan-output.bats
+4	1.555	tests/tasks/languages.bats
+4	2.635	tests/skills/agent-pr/checks.bats
+4	2.981	tests/skills/analyze-session/scripts/analyze-session.bats
+4	9.385	tests/skills/agent-merge-pr/lifecycle.bats
+4	11.349	tests/tasks/exclusions.bats
+4	11.753	tests/skills/agent-merge-pr/workflow.bats
