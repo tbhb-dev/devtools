@@ -119,7 +119,11 @@ func TestConfigParity(t *testing.T) {
 		t.Fatal(err)
 	}
 	stub := filepath.Join(oldBin, "agentrepo")
-	writeFile(t, stub, "#!/bin/sh\nprintf 'unknown command config\\n' >&2\nexit 5\n")
+	writeFile(t, stub, `#!/bin/sh
+if [ "$1" = --version ]; then echo 'agentrepo version v0.16.0'; exit 0; fi
+printf 'unknown command config\n' >&2
+exit 5
+`)
 	//nolint:gosec // This fixture models an installed agentrepo without config.
 	if err := os.Chmod(stub, 0o700); err != nil {
 		t.Fatal(err)
@@ -265,6 +269,7 @@ func parityProbe(t *testing.T, binary, support string) {
 	stub := filepath.Join(bin, "agentrepo")
 	writeFile(t, stub, `#!/bin/sh
 printf '%s\n' "$*" >>"$CONFIG_LOG"
+if [ "$1" = --version ]; then exec "$CONFIG_BINARY" "$@"; fi
 [ "$CONFIG_SUPPORT" = true ] || exit 5
 exec "$CONFIG_BINARY" "$@"
 `)
@@ -293,7 +298,7 @@ dt_repo_conf hook_marker fallback
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "config --help\n"
+	want := "--version\nconfig --help\n"
 	if support == "true" {
 		want += strings.Repeat(
 			"config machine -- review_cmd fallback\nconfig repository -- hook_marker fallback\n", 2,

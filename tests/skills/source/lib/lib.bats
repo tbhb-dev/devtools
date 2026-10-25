@@ -20,24 +20,145 @@ setup() {
   git -C "$REPO" config user.name Tester
   git -C "$REPO" config user.email tester@example.com
   cd "$REPO"
+  REPO=$(git rev-parse --show-toplevel)
+  export REPO
   export REAL_AGENTREPO
   REAL_AGENTREPO=$(command -v agentrepo)
   mkdir -p "$BATS_TEST_TMPDIR/bin"
   cat >"$BATS_TEST_TMPDIR/bin/agentrepo" <<'STUB'
 #!/usr/bin/env bash
 [ "${1:-}" != --help ] || exit 0
-if [ "$1" = config ]; then exec "$REAL_AGENTREPO" "$@"; fi
+if [ "$1" = config ] || [ "$1" = --version ]; then exec "$REAL_AGENTREPO" "$@"; fi
 printf '%s\n' "$@" >"$DEVTOOLS_REVIEW_INPUTS/args"
 shift 5
 exec "$@"
 STUB
   chmod +x "$BATS_TEST_TMPDIR/bin/agentrepo"
+  printf '#!/bin/sh\nexit 1\n' >"$BATS_TEST_TMPDIR/bin/mise"
+  chmod +x "$BATS_TEST_TMPDIR/bin/mise"
   export PATH="$BATS_TEST_TMPDIR/bin:$PATH"
 }
 
 # lib runs a snippet with the library sourced, in the scratch repository.
 lib() {
   run bash -c '. "$1"; shift; eval "$*"' _ "$LIB" "$@"
+}
+
+lib_without_agentrepo() {
+  run bash -c '
+    command() {
+      [ "$*" != "-v agentrepo" ] || return 1
+      builtin command "$@"
+    }
+    . "$1"; shift; eval "$*"
+  ' _ "$LIB" "$@"
+}
+
+# Version fixtures log config calls so rejection also proves no stale parsing.
+agentrepo_stub() {
+  cat >"$1" <<STUB
+#!/bin/sh
+case "\$1" in
+--version) echo 'agentrepo version $2' ;;
+--help) exit 0 ;;
+review)
+  echo '$2' >>"$BATS_TEST_TMPDIR/review-calls"
+  shift 5
+  exec "\$@"
+  ;;
+config)
+  echo '$2' >>"$BATS_TEST_TMPDIR/config-calls"
+  [ "\$2" != --help ] || exit 0
+  exec "$REAL_AGENTREPO" "\$@"
+  ;;
+esac
+STUB
+  chmod +x "$1"
+}
+
+repo_policy() {
+  mkdir -p .agents
+  printf 'constitutional_paths = ^policy/\n' >.agents/agent-skills.conf
+}
+
+@test "agentrepo rejects a stale PATH binary before reading configuration" {
+  repo_policy
+  agentrepo_stub "$BATS_TEST_TMPDIR/bin/agentrepo" v0.14.2
+
+  lib 'dt_repo_conf constitutional_paths'
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *v0.14.2*v0.16.0* ]]
+  [ ! -e "$BATS_TEST_TMPDIR/config-calls" ]
+}
+
+@test "agentrepo prefers the pinned binary from the repository root" {
+  repo_policy
+  agentrepo_stub "$BATS_TEST_TMPDIR/bin/agentrepo" v0.14.2
+  mkdir -p "$BATS_TEST_TMPDIR/pinned tools" nested
+  agentrepo_stub "$BATS_TEST_TMPDIR/pinned tools/agentrepo" v0.16.0
+  cat >"$BATS_TEST_TMPDIR/bin/mise" <<'STUB'
+#!/bin/sh
+[ "$*" = 'which agentrepo' ] || exit 1
+[ "$PWD" = "$REPO" ] || exit 1
+printf '%s\n' "$PWD" >>"$BATS_TEST_TMPDIR/mise-calls"
+printf '%s\n' "$BATS_TEST_TMPDIR/pinned tools/agentrepo"
+STUB
+  cd nested
+
+  lib 'dt_repo_conf constitutional_paths; dt_conf review_timeout 900'
+
+  [ "$status" -eq 0 ]
+  [ "$output" = $'^policy/\n900' ]
+  [ "$(cat "$BATS_TEST_TMPDIR/config-calls")" = $'v0.16.0\nv0.16.0\nv0.16.0' ]
+  [ "$(cat "$BATS_TEST_TMPDIR/mise-calls")" = "$REPO" ]
+}
+
+@test "agentrepo rejects an old pinned binary despite a current PATH binary" {
+  repo_policy
+  agentrepo_stub "$BATS_TEST_TMPDIR/bin/agentrepo" v0.19.0
+  agentrepo_stub "$BATS_TEST_TMPDIR/pinned-agentrepo" v0.15.0
+  printf '#!/bin/sh\necho "$BATS_TEST_TMPDIR/pinned-agentrepo"\n' >"$BATS_TEST_TMPDIR/bin/mise"
+
+  lib 'dt_repo_conf constitutional_paths'
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *v0.15.0*v0.16.0* ]]
+  [ ! -e "$BATS_TEST_TMPDIR/config-calls" ]
+}
+
+@test "agentrepo runs the reviewer through the pinned binary" {
+  agentrepo_stub "$BATS_TEST_TMPDIR/bin/agentrepo" v0.14.2
+  mkdir -p "$BATS_TEST_TMPDIR/pinned tools"
+  agentrepo_stub "$BATS_TEST_TMPDIR/pinned tools/agentrepo" v0.16.0
+  cat >"$BATS_TEST_TMPDIR/bin/mise" <<'STUB'
+#!/bin/sh
+[ "$*" = 'which agentrepo' ] || exit 1
+printf '%s\n' "$BATS_TEST_TMPDIR/pinned tools/agentrepo"
+STUB
+
+  review_once 'cat >/dev/null; echo "VERDICT: PASS"'
+
+  [ "$status" -eq 0 ]
+  [ "$(cat "$BATS_TEST_TMPDIR/review-calls")" = v0.16.0 ]
+}
+
+@test "agentrepo accepts the minimum and newer PATH releases" {
+  repo_policy
+  for version in v0.16.0 v0.19.0 v0.100.0 v1.0.0 v0.19.1-0.20261024000000-abcdef+dirty v0.0.0-20261025070155-dfef71e539d0; do
+    agentrepo_stub "$BATS_TEST_TMPDIR/bin/agentrepo" "$version"
+    lib 'dt_repo_conf constitutional_paths'
+    [ "$status" -eq 0 ]
+    [ "$output" = '^policy/' ]
+  done
+}
+
+@test "agentrepo absence preserves repository and machine shell configuration" {
+  repo_policy
+  lib_without_agentrepo 'dt_repo_conf constitutional_paths; dt_conf review_timeout 900'
+
+  [ "$status" -eq 0 ]
+  [ "$output" = $'^policy/\n900' ]
 }
 
 @test "dt_harness reads the session variables before the library path" {
@@ -664,7 +785,7 @@ dt_gh_split() {
 
 @test "runner timeout after PASS removes an old stamp and reports timeout" {
   review_once 'cat >/dev/null; echo "VERDICT: PASS"'
-  printf '#!/usr/bin/env bash\n[ "$1" != --help ] || exit 0\nif [ "$1" = config ]; then exec "$REAL_AGENTREPO" "$@"; fi\necho "VERDICT: PASS"\nexit 124\n' >"$BATS_TEST_TMPDIR/bin/agentrepo"
+  printf '#!/usr/bin/env bash\n[ "$1" != --help ] || exit 0\nif [ "$1" = config ] || [ "$1" = --version ]; then exec "$REAL_AGENTREPO" "$@"; fi\necho "VERDICT: PASS"\nexit 124\n' >"$BATS_TEST_TMPDIR/bin/agentrepo"
   review_once 'exit 0'
   [ "$status" -eq 124 ]
   [[ "$output" == *'reviewer timed out; nothing stamped'* ]]
@@ -674,7 +795,7 @@ dt_gh_split() {
 @test "runner cancellation and PASS followed by failure never stamp" {
   for code in 130 1; do
     review_once 'cat >/dev/null; echo "VERDICT: PASS"'
-    printf '#!/usr/bin/env bash\n[ "$1" != --help ] || exit 0\nif [ "$1" = config ]; then exec "$REAL_AGENTREPO" "$@"; fi\necho "VERDICT: PASS"\nexit %s\n' "$code" >"$BATS_TEST_TMPDIR/bin/agentrepo"
+    printf '#!/usr/bin/env bash\n[ "$1" != --help ] || exit 0\nif [ "$1" = config ] || [ "$1" = --version ]; then exec "$REAL_AGENTREPO" "$@"; fi\necho "VERDICT: PASS"\nexit %s\n' "$code" >"$BATS_TEST_TMPDIR/bin/agentrepo"
     review_once 'exit 0'
     [ "$status" -eq 4 ]
     [ ! -e .git/agent-skills/t.stamp ]
@@ -682,12 +803,8 @@ dt_gh_split() {
 }
 
 @test "missing agentrepo preserves the reviewer and warns once" {
-  lib '
+  lib_without_agentrepo '
     set -u
-    command() {
-      if [ "$*" = "-v agentrepo" ]; then return 1; fi
-      builtin command "$@"
-    }
     DEVTOOLS_REVIEW_CMD="cat; echo VERDICT: PASS" dt_run_reviewer "$PWD" "$PWD" <<<prompt
   '
   [ "$status" -eq 0 ]
@@ -697,11 +814,7 @@ dt_gh_split() {
 }
 
 @test "missing agentrepo preserves reviewer failure without stamping" {
-  lib '
-    command() {
-      if [ "$*" = "-v agentrepo" ]; then return 1; fi
-      builtin command "$@"
-    }
+  lib_without_agentrepo '
     DEVTOOLS_REVIEW_CMD="echo VERDICT: PASS; exit 7" dt_run_reviewer "$PWD" "$PWD" </dev/null
   '
   [ "$status" -eq 7 ]
@@ -710,7 +823,7 @@ dt_gh_split() {
 }
 
 @test "broken agentrepo shim preserves the reviewer and warns once" {
-  printf '#!/usr/bin/env bash\nif [ "$1" = config ]; then exec "$REAL_AGENTREPO" "$@"; fi\nexit 1\n' >"$BATS_TEST_TMPDIR/bin/agentrepo"
+  printf '#!/usr/bin/env bash\nif [ "$1" = config ] || [ "$1" = --version ]; then exec "$REAL_AGENTREPO" "$@"; fi\nexit 1\n' >"$BATS_TEST_TMPDIR/bin/agentrepo"
 
   lib 'DEVTOOLS_REVIEW_CMD="cat; echo VERDICT: PASS" dt_run_reviewer "$PWD" "$PWD" <<<prompt'
 

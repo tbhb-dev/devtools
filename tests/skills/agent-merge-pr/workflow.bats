@@ -13,13 +13,27 @@ setup() {
   export REAL_AGENTREPO
   REAL_AGENTREPO=$(command -v agentrepo)
   mkdir -p "$BATS_TEST_TMPDIR/broken-bin"
-  printf '#!/usr/bin/env bash\nif [ "$1" = config ]; then exec "$REAL_AGENTREPO" "$@"; fi\nexit 1\n' >"$BATS_TEST_TMPDIR/broken-bin/agentrepo"
+  printf '#!/usr/bin/env bash\nif [ "$1" = config ] || [ "$1" = --version ]; then exec "$REAL_AGENTREPO" "$@"; fi\nexit 1\n' >"$BATS_TEST_TMPDIR/broken-bin/agentrepo"
   chmod +x "$BATS_TEST_TMPDIR/broken-bin/agentrepo"
 
   PATH="$BATS_TEST_TMPDIR/broken-bin:$PATH" run bash "$AGENT/preflight.sh" 7
 
   [ "$status" -ne 0 ]
   [[ "$output" == *"a working agentrepo is required for check judgement"* ]]
+}
+
+@test "unattended merge evaluates checks through the pinned agentrepo" {
+  mkdir -p "$BATS_TEST_TMPDIR/stale-bin" "$BATS_TEST_TMPDIR/pinned-bin"
+  printf '#!/bin/sh\nif [ "$1" = --version ]; then echo "agentrepo version v0.14.2"; exit 0; fi\necho "$*" >>"$BATS_TEST_TMPDIR/stale-calls"\nexit 1\n' >"$BATS_TEST_TMPDIR/stale-bin/agentrepo"
+  printf '#!/bin/sh\necho "$*" >>"$BATS_TEST_TMPDIR/pinned-calls"\nexec "%s" "$@"\n' "$BATS_SUITE_TMPDIR/agentrepo" >"$BATS_TEST_TMPDIR/pinned-bin/agentrepo"
+  printf '#!/bin/sh\nif [ "$*" = "which agentrepo" ]; then echo "%s/agentrepo"; exit 0; fi\nexec "%s" "$@"\n' "$BATS_TEST_TMPDIR/pinned-bin" "$(command -v mise)" >"$BATS_TEST_TMPDIR/stale-bin/mise"
+  chmod +x "$BATS_TEST_TMPDIR"/stale-bin/* "$BATS_TEST_TMPDIR"/pinned-bin/*
+
+  PATH="$BATS_TEST_TMPDIR/stale-bin:$PATH" run bash "$AGENT/review.sh" 7
+
+  [ "$status" -eq 0 ]
+  grep -q '^checks evaluate ' "$BATS_TEST_TMPDIR/pinned-calls"
+  [ ! -e "$BATS_TEST_TMPDIR/stale-calls" ]
 }
 
 @test "unattended merger rejects confirmed even with session grant" {

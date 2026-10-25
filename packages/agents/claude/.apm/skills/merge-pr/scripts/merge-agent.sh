@@ -25,8 +25,8 @@ ma_context() {
   login=$(dt_conf gh_login) || return $?
   [ -n "$login" ] || dt_die "gh_login must be configured on the machine"
   command -v uv >/dev/null || dt_die "uv is required for the YAML policy reader"
-  command -v agentrepo >/dev/null || dt_die "agentrepo is required for check judgement"
-  agentrepo --help >/dev/null 2>&1 || dt_die "a working agentrepo is required for check judgement"
+  [ -n "$_DEVTOOLS_AGENTREPO_BIN" ] || dt_die "agentrepo is required for check judgement"
+  "$_DEVTOOLS_AGENTREPO_BIN" --help >/dev/null 2>&1 || dt_die "a working agentrepo is required for check judgement"
 }
 
 ma_lint() {
@@ -173,7 +173,7 @@ ma_gates() {
   merge_base=$(gitr merge-base "$base_oid" "$head" 2>/dev/null) || merge_base=''
   set -- checks evaluate --file "$view" --expected-head "$head" --pr "$pr" --base "$base_oid" --merge-base "$merge_base"
   while IFS= read -r value; do set -- "$@" --required "$value"; done <<<"$required"
-  agentrepo "$@" || return $?
+  "$_DEVTOOLS_AGENTREPO_BIN" "$@" || return $?
   ready=$(dt_repo_conf merge_ready_cmd) || return $?
   if [ "$final" != true ] && [ -n "$ready" ]; then
     ready=$(dt_path "$ready") || return $?
