@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file. See [conven
 - - -
 <!-- release -->
 
+## [v0.21.0](https://github.com/tbhb-dev/devtools/compare/6d6d567d14561f726f400ad147261254c913f215..v0.21.0) - 2026-10-25
+
+### Bug Fixes
+
+- (**agents**) honor the pinned agentrepo version (#704) - ([56543d2](https://github.com/tbhb-dev/devtools/commit/56543d2914814d0f7e47feb11b4679155a185ab1)) - tbhb.dev Agent
+- (**merge**) stop flagging lockfile checksums and vendored nolint (#701) - ([6d6d567](https://github.com/tbhb-dev/devtools/commit/6d6d567d14561f726f400ad147261254c913f215)) - tbhb.dev Agent
+
+- - -
+
+<!-- release -->
+
 ## [v0.20.0](https://github.com/tbhb-dev/devtools/compare/5ac174d42e2dba009f59db6b66dd0a2a89f290f3..v0.20.0) - 2026-10-25
 
 ### Features
