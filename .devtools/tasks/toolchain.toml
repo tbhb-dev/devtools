@@ -52,6 +52,14 @@ case $trust in
   exit 1
   ;;
 esac
-vale sync
-uv sync
+if [ -f .vale.ini ]; then
+  vale sync
+else
+  echo "worktree setup: skipping vale sync (no .vale.ini)"
+fi
+if [ -f pyproject.toml ]; then
+  uv sync
+else
+  echo "worktree setup: skipping uv sync (no pyproject.toml)"
+fi
 '''
