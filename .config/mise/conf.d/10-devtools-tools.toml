@@ -33,7 +33,7 @@ actionlint = "1.7.12"
 bats = "1.14.0"
 biome = "2.5.6"
 cocogitto = "7.0.0"
-cspell = "10.3.6"
+cspell = "10.4.0"
 # editorconfig-checker v4 publishes release archives again, each holding
 # a binary under the name lint-editorconfig invokes, so the github:
 # backend installs them and mise.lock pins a digest per platform. The
