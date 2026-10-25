@@ -350,7 +350,7 @@ def inspect(base: str, head: str, config: dict[str, str]) -> dict[str, object]:
         ).decode("utf-8", "surrogateescape")
         lines = [
             line
-            for line in diff.splitlines()
+            for line in diff.split("\n")
             if not line.startswith(("+++", "---")) and line.startswith(("+", "-"))
         ]
         # Re-recording every removed checksum replaces them; it removes no gate.

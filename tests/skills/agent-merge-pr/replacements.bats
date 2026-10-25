@@ -94,6 +94,27 @@ lock_new=$'[tools]\nchecksum = "sha256:ccc"\nchecksum = "sha256:ddd"'
   [ "$(reasons)" = "hooks.toml: removes a hook or gate" ]
 }
 
+unicode_checksum_note() {
+  snapshot 'mise.lock=checksum = "sha256:aaa"'
+  rebase_onto_head
+  snapshot "mise.lock=note = 'padding${1}+checksum = \"sha256:bbb\"'"
+  run inspect_lock
+  [ "$status" -eq 0 ]
+  [ "$(reasons)" = "mise.lock: removes a hook or gate" ]
+}
+
+@test "AC2 U+0085 inside an added value preserves the checksum deletion finding" {
+  unicode_checksum_note $'\xc2\x85'
+}
+
+@test "AC2 U+2028 inside an added value preserves the checksum deletion finding" {
+  unicode_checksum_note $'\xe2\x80\xa8'
+}
+
+@test "AC2 U+2029 inside an added value preserves the checksum deletion finding" {
+  unicode_checksum_note $'\xe2\x80\xa9'
+}
+
 @test "AC2 each real gate line still flags when removed" {
   local line file
   for file in lint.yaml mise.lock hooks.toml; do
