@@ -181,6 +181,8 @@ Keep tag references and commit references aligned. The pin tasks read these form
 | `.github/renovate.json5` | devtools preset ref uses `#vX.Y.Z`, or a commit SHA with a `// vX.Y.Z` comment |
 | `tombi.toml` | Optional adaptation header naming `tbhb-dev/devtools vX.Y.Z` |
 
+The shared Renovate preset groups detected devtools pins into the same update branch and makes first-party releases eligible immediately, bypassing its release-age and Sunday schedule limits. Other dependencies keep those limits. Adopt a release containing this exception in the pinned preset reference to enable it. A consumer still using an older preset keeps its timing policy.
+
 ### Verify adoption
 
 To verify adoption, create a draft at a Vale-scoped path, run `mise run lint-draft <file>`, run `mise run fix-prose-replacements <file>` and review the edits. Then run the draft gate again. Check deployment with `mise run devtools:lint-apm`, pins with `mise run devtools:check-pins` and the installed tools with `mise run devtools:check-toolchain`. Stage the payload before running `mise run devtools:check-vendored`, which syncs again and compares against the index, including new files hidden by personal ignore rules.
