@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file. See [conven
 - - -
 <!-- release -->
 
+## [v0.22.0](https://github.com/tbhb-dev/devtools/compare/9db7890499b734d4115d9df4247dda196250af9e..v0.22.0) - 2026-10-26
+
+### Features
+
+- (**gh-post**) refuse incomplete review and refinement bodies (#729) - ([8c4ffc3](https://github.com/tbhb-dev/devtools/commit/8c4ffc3dd7f5a7d8cb1e5ff50b05aff4356c98e4)) - tbhb.dev Agent
+- (**rebase**) scan conflict markers with Go (#734) - ([cdf2273](https://github.com/tbhb-dev/devtools/commit/cdf2273503d17eac5576a5b9b7fd0c4394a47ca6)) - tbhb.dev Agent
+- (**review**) port strict verdict parsing to Go (#728) - ([bf38e23](https://github.com/tbhb-dev/devtools/commit/bf38e23274f100cf8f2c39dddb47963f9d80622c)) - tbhb.dev Agent
+
+### Bug Fixes
+
+- (**pr**) compare additions when publishing (#702) - ([c6e9a4c](https://github.com/tbhb-dev/devtools/commit/c6e9a4c3f60cd5a96f96531c7e4f9067fb629d8e)) - tbhb.dev Agent
+- (**review**) fall back to the shell verdict parser for older agentrepo (#742) - ([c0b7945](https://github.com/tbhb-dev/devtools/commit/c0b7945a81aa42c18200e86a5ed9c605468fbc95)) - tbhb.dev Agent
+
+- - -
+
+<!-- release -->
+
 ## [v0.21.1](https://github.com/tbhb-dev/devtools/compare/bfd9f841216dd0d077f1f87a54fc4b3a5e559aef..v0.21.1) - 2026-10-25
 
 ### Bug Fixes
