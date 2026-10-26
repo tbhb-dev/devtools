@@ -9,7 +9,7 @@
 # tbhb-dev/devtools/packages/agents/claude#vX.Y.Z. The cog pre-bump hook
 # keeps `version` in lockstep with the vX.Y.Z git tags (see cog.toml).
 name: devtools
-version: 0.22.0
+version: 0.22.1
 description: Shared agent packages for tbhb repositories
 author: tbhb
 license: Apache-2.0

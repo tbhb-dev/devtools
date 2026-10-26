@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file. See [conven
 - - -
 <!-- release -->
 
+## [v0.22.1](https://github.com/tbhb-dev/devtools/compare/8dfa57102d8b3c4c8ee583e5c2014465fc433b78..v0.22.1) - 2026-10-26
+
+### Bug Fixes
+
+- (**leaks**) accept documentation domains in the publish scan (#750) - ([8dfa571](https://github.com/tbhb-dev/devtools/commit/8dfa57102d8b3c4c8ee583e5c2014465fc433b78)) - tbhb.dev Agent
+
+- - -
+
+<!-- release -->
+
 ## [v0.22.0](https://github.com/tbhb-dev/devtools/compare/9db7890499b734d4115d9df4247dda196250af9e..v0.22.0) - 2026-10-26
 
 ### Features
