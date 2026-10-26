@@ -11,6 +11,7 @@ ENV
 Equalf
 Errln
 Errorf
+Fbody
 Hdoc
 Honnef
 JUnit
@@ -30,6 +31,8 @@ USERPROFILE
 Uncomparables
 Worktree
 Worktrees
+XPATCH
+XPOST
 addopts
 agentcontext
 agenthooks
@@ -52,6 +55,7 @@ bidichk
 bodyclose
 boumenot
 bsdtar
+btext
 buildid
 buildkit
 buildmeta
@@ -76,6 +80,7 @@ compgen
 complexipy
 compopt
 containedctx
+contentposts
 contextcheck
 contexttemplate
 cooldown
