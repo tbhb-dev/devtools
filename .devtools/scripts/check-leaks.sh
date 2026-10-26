@@ -573,7 +573,7 @@ scan_publish() {
           else if (budget[key] > 0) budget[key]--
           else report(why)
         }
-        offset = at - 1 + (literal || !size ? 1 : size)
+        offset = at # Resume one byte after the match start, including empty matches.
       }
     }
     function check(low, skip_patterns,    i) {

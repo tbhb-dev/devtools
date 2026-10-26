@@ -2010,3 +2010,20 @@ publish_binary_base() {
     publish_finding 'blob.dat:binary: pattern: repository rule'
   done
 }
+publish_overlap() {
+  local kind=$1 path=blob.dat changes
+  if [[ $kind == literal ]]; then export O11Y_PRIVATE_STRINGS='tart tart'; fi
+  publish_binary_base 'clean\nclean\nclean\nclean\ntart tart\x00' 'tart tart'
+  if [[ $kind == rename ]]; then path=renamed.dat; git mv blob.dat "$path"; fi
+  publish_change "$path" 'clean\nclean\nclean\nclean\ntart tart tart\x00'
+  if [[ $kind == rename ]]; then
+    changes=$(git diff-tree --no-commit-id --name-status -r -M HEAD)
+    [[ $changes == R* ]]
+  fi
+  if [[ $kind == literal ]]; then publish_finding "$path:binary: private literal"
+  else publish_finding "$path:binary: pattern: repository rule"; fi
+  no_value 'tart tart'
+}
+@test "AC2 modified binaries reject overlapping pattern occurrences" { publish_overlap pattern; }
+@test "AC2 renamed modified binaries reject overlapping pattern occurrences" { publish_overlap rename; }
+@test "AC2 modified binaries reject overlapping literal occurrences" { publish_overlap literal; }
