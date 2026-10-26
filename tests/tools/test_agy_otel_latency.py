@@ -60,7 +60,10 @@ def test_task_rejects_slow_hook(tmp_path: Path) -> None:
     sys.stderr.write(result.stderr)
     assert result.returncode != 0, result.stdout + result.stderr
     assert "First cold call (non-gating):" in result.stdout
-    assert "20 warm-up calls, 500 hook subprocesses over six fixtures:" in result.stdout
+    assert (
+        "20 warm-up calls, 500 hook subprocesses over hook/transcript fixtures:"
+        in result.stdout
+    )
     assert "p50 =" in result.stdout
     assert "p99 =" in result.stdout
     assert "max =" in result.stdout
