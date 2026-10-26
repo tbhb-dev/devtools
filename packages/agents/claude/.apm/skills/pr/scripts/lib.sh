@@ -193,6 +193,18 @@ if [ -z "${_DEVTOOLS_AGENTREPO_VERDICT+set}" ]; then
   unset _dt_review_help
 fi
 
+# Probe only help, never the posting command. A supported command owns its
+# result even when it fails after writing partial output.
+if [ -z "${_DEVTOOLS_AGENTREPO_POST+set}" ]; then
+  _DEVTOOLS_AGENTREPO_POST=false
+  if [ -n "$_DEVTOOLS_AGENTREPO_BIN" ] &&
+    _dt_post_help=$("$_DEVTOOLS_AGENTREPO_BIN" --help 2>/dev/null) &&
+    printf '%s\n' "$_dt_post_help" | grep -Eq '^[[:space:]]+post[[:space:]]'; then
+    _DEVTOOLS_AGENTREPO_POST=true
+  fi
+  unset _dt_post_help
+fi
+
 # Remove the shell fallback under #321 once the minimum agentrepo version
 # on every host and in every consumer supports config.
 # _dt_conf_file <file> <key>: print the key's value, or fail when the
@@ -825,12 +837,20 @@ dt_confirm() {
 
 # Content writes require the scanner.
 dt_require_gh_post() {
+  if [ "$_DEVTOOLS_AGENTREPO_POST" = true ]; then
+    "$_DEVTOOLS_AGENTREPO_BIN" post require
+    return $?
+  fi
   command -v gh-post >/dev/null 2>&1 && return 0
   printf 'gh-post is missing; install the gh-post tool before publishing content.\n' >&2
   return 2
 }
 
 dt_gh_post() {
+  if [ "$_DEVTOOLS_AGENTREPO_POST" = true ]; then
+    "$_DEVTOOLS_AGENTREPO_BIN" post run "$@"
+    return $?
+  fi
   dt_require_gh_post || return $?
   gh-post "$@"
 }

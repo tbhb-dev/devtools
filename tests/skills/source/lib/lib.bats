@@ -6,6 +6,7 @@
 # The reviewer and the delegation checker are stubs.
 
 setup() {
+  bats_require_minimum_version 1.5.0
   source "${BATS_TEST_DIRNAME}/../../../test_helper.bash"
   isolate_git
   ROOT="${BATS_TEST_DIRNAME}/../../../.."
@@ -923,10 +924,13 @@ dt_gh_split() {
 }
 
 @test "content posting names a missing gh-post and never falls back to gh" {
-  lib 'gh() { echo raw-fallback; }; PATH=/nonexistent; dt_gh_post pr comment 1 --body-file body'
-  [ "$status" -eq 2 ]
-  [[ "$output" == *"gh-post is missing"* ]]
-  [[ "$output" != *raw-fallback* ]]
+  for mode in legacy success; do
+    post_stub "$mode"
+    lib 'gh() { echo raw-fallback; }; PATH=/nonexistent; dt_gh_post pr comment 1 --body-file body'
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"gh-post is missing"* ]]
+    [[ "$output" != *raw-fallback* ]]
+  done
 }
 
 @test "content posting preserves the wrapper arguments and failure status" {
@@ -936,9 +940,12 @@ printf '%s\n' "$*"
 exit 2
 STUB
   chmod +x "$BATS_TEST_TMPDIR/bin/gh-post"
-  lib 'dt_gh_post pr review 1 --approve --body-file review.md'
-  [ "$status" -eq 2 ]
-  [ "$output" = 'pr review 1 --approve --body-file review.md' ]
+  for mode in legacy success; do
+    post_stub "$mode"
+    lib 'dt_gh_post pr review 1 --approve --body-file review.md'
+    [ "$status" -eq 2 ]
+    [ "$output" = 'pr review 1 --approve --body-file review.md' ]
+  done
 }
 
 @test "dt_review parser failure removes an old passing stamp" {
@@ -1057,17 +1064,134 @@ STUB
   # Bash strings cannot hold NUL. Cover every prohibited byte on disk.
   local byte octal
   for byte in {0..31}; do
-    case $byte in 9|10|13) continue ;; esac
+    case $byte in 9 | 10 | 13) continue ;; esac
     printf -v octal '%03o' "$byte"
-    { printf 'VERDICT: CHANGES REQUIRED\n'; printf '%b' "\\$octal"; } >reply
+    {
+      printf 'VERDICT: CHANGES REQUIRED\n'
+      printf '%b' "\\$octal"
+    } >reply
     lib 'dt_verdict reply >shell-verdict'
     [ "$status" -eq 0 ]
     "$REAL_AGENTREPO" review verdict --file reply >go-verdict
     cmp shell-verdict go-verdict
   done
-  { printf 'VERDICT: CHANGES REQUIRED\n'; printf '%1048576s' '' | tr ' ' x; } >reply
+  {
+    printf 'VERDICT: CHANGES REQUIRED\n'
+    printf '%1048576s' '' | tr ' ' x
+  } >reply
   lib 'dt_verdict reply >shell-verdict'
   [ "$status" -eq 0 ]
   "$REAL_AGENTREPO" review verdict --file reply >go-verdict
   cmp shell-verdict go-verdict
+}
+
+# Root help advertises the capability without invoking a content write.
+post_stub() {
+  export POST_MODE=$1
+  cat >"$BATS_TEST_TMPDIR/bin/agentrepo" <<'STUB'
+#!/bin/sh
+if [ "$1" = --help ]; then
+  echo probe >>"$BATS_TEST_TMPDIR/post-probes"
+  [ "$POST_MODE" = legacy ] || printf '  post  Require and invoke gh-post\n'
+  exit 0
+fi
+if [ "$1" = post ]; then
+  echo attempt >>"$BATS_TEST_TMPDIR/post-attempts"
+  case $POST_MODE in
+    success) exec "$REAL_AGENTREPO" "$@" ;;
+    partial) printf 'partial\n' ;;
+  esac
+  printf 'post failed\n' >&2
+  exit 19
+fi
+exec "$REAL_AGENTREPO" "$@"
+STUB
+  chmod +x "$BATS_TEST_TMPDIR/bin/agentrepo"
+}
+
+@test "content posting supported failures never fall back or repeat" {
+  for mode in failed partial; do
+    post_stub "$mode"
+    for call in 'dt_require_gh_post' 'dt_gh_post pr comment 1'; do
+      rm -f "$BATS_TEST_TMPDIR/post-attempts" "$BATS_TEST_TMPDIR/post-probes"
+      run --separate-stderr bash -c '. "$1"; gh-post() { echo fallback; }; eval "$2"' _ "$LIB" "$call"
+      [ "$status" -eq 19 ]
+      [ "$stderr" = 'post failed' ]
+      if [ "$mode" = partial ]; then [ "$output" = partial ]; else [ -z "$output" ]; fi
+      [ "$(cat "$BATS_TEST_TMPDIR/post-attempts")" = attempt ]
+      [ "$(cat "$BATS_TEST_TMPDIR/post-probes")" = probe ]
+    done
+  done
+}
+
+@test "content posting missing binary has exact separate streams in both implementations" {
+  for mode in legacy success; do
+    post_stub "$mode"
+    run --separate-stderr bash -c '. "$1"; gh() { echo raw-fallback; }; PATH=/nonexistent; dt_gh_post pr comment 1 --body-file body' _ "$LIB"
+    [ "$status" -eq 2 ]
+    [ -z "$output" ]
+    [ "$stderr" = 'gh-post is missing; install the gh-post tool before publishing content.' ]
+    [ ! -e "$BATS_TEST_TMPDIR/post-attempts" ] || [ "$(cat "$BATS_TEST_TMPDIR/post-attempts")" = attempt ]
+  done
+}
+
+@test "content posting forwards identical arguments streams and statuses in both implementations" {
+  cat >"$BATS_TEST_TMPDIR/bin/gh-post" <<'STUB'
+#!/bin/sh
+echo write >>"$BATS_TEST_TMPDIR/post-writes"
+printf '<%s>\n' "$@"
+/bin/cat
+printf 'diagnostic\n' >&2
+exit "$POST_STATUS"
+STUB
+  chmod +x "$BATS_TEST_TMPDIR/bin/gh-post"
+  for mode in legacy success; do
+    post_stub "$mode"
+    for code in 0 17; do
+      export POST_STATUS=$code
+      rm -f "$BATS_TEST_TMPDIR/post-writes" "$BATS_TEST_TMPDIR/post-attempts" "$BATS_TEST_TMPDIR/post-probes"
+      run --separate-stderr bash -c '
+        . "$1"
+        dt_require_gh_post || exit $?
+        [ ! -e "$BATS_TEST_TMPDIR/post-writes" ] || exit 99
+        dt_gh_post pr "" "two words" $'"'"'tab\there'"'"' $'"'"'line\nbreak'"'"' '\''"$();*?\'\'' --help -- --body-file body <<<"stdin text"
+      ' _ "$LIB"
+      [ "$status" -eq "$code" ]
+      [ "$output" = $'<pr>\n<>\n<two words>\n<tab\there>\n<line\nbreak>\n<"$();*?\\>\n<--help>\n<-->\n<--body-file>\n<body>\nstdin text' ]
+      [ "$stderr" = diagnostic ]
+      [ "$(cat "$BATS_TEST_TMPDIR/post-writes")" = write ]
+      [ "$(cat "$BATS_TEST_TMPDIR/post-probes")" = probe ]
+      if [ "$mode" = legacy ]; then
+        [ ! -e "$BATS_TEST_TMPDIR/post-attempts" ]
+      else
+        [ "$(cat "$BATS_TEST_TMPDIR/post-attempts")" = $'attempt\nattempt' ]
+      fi
+    done
+  done
+}
+
+@test "content posting signal termination returns shell status without repeating in both implementations" {
+  cat >"$BATS_TEST_TMPDIR/bin/gh-post" <<'STUB'
+#!/bin/sh
+echo write >>"$BATS_TEST_TMPDIR/post-writes"
+printf 'partial\n'
+printf 'diagnostic\n' >&2
+kill -TERM "$$"
+STUB
+  chmod +x "$BATS_TEST_TMPDIR/bin/gh-post"
+  for mode in legacy success; do
+    post_stub "$mode"
+    rm -f "$BATS_TEST_TMPDIR/post-writes" "$BATS_TEST_TMPDIR/post-attempts" "$BATS_TEST_TMPDIR/post-probes"
+    run --separate-stderr bash -c '. "$1"; dt_gh_post pr comment 1 --body-file body' _ "$LIB"
+    [ "$status" -eq 143 ]
+    [ "$output" = partial ]
+    [[ "$stderr" == *diagnostic* ]]
+    [ "$(cat "$BATS_TEST_TMPDIR/post-writes")" = write ]
+    [ "$(cat "$BATS_TEST_TMPDIR/post-probes")" = probe ]
+    if [ "$mode" = legacy ]; then
+      [ ! -e "$BATS_TEST_TMPDIR/post-attempts" ]
+    else
+      [ "$(cat "$BATS_TEST_TMPDIR/post-attempts")" = attempt ]
+    fi
+  done
 }

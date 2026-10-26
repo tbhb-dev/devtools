@@ -91,6 +91,7 @@ func NewCommand() (*cobra.Command, *int) {
 		fuzzCommand(code),
 		mergeCommand(code),
 		skillTokensCommand(code),
+		postCommand(code),
 	)
 	return root, code
 }
