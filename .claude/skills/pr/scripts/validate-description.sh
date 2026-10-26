@@ -363,13 +363,15 @@ fi
 # and a reordered one are different mistakes, so the report says which.
 # Each section finding names the working-tree template file this script
 # read, since pr_template and PR_TEMPLATE can both move it.
+# Consume the whole list: grep -q can close the pipe before printf
+# finishes, which makes pipefail reject a matching heading.
 provenance="; template: ${TEMPLATE}"
 present_ordered=""
 anchor_head=""
 anchor_line=$title_line
 while IFS= read -r want; do
   [ -n "$want" ] || continue
-  if printf '%s' "$draft_sections" | grep -qxF "$want"; then
+  if printf '%s' "$draft_sections" | grep -xF "$want" >/dev/null; then
     present_ordered="${present_ordered}${want}
 "
     anchor_head=$want
@@ -388,7 +390,7 @@ EOF
 draft_ordered=""
 while IFS= read -r have; do
   [ -n "$have" ] || continue
-  if printf '%s' "$required" | grep -qxF "$have"; then
+  if printf '%s' "$required" | grep -xF "$have" >/dev/null; then
     draft_ordered="${draft_ordered}${have}
 "
   fi
@@ -398,7 +400,7 @@ EOF
 
 if [ "$draft_ordered" != "$present_ordered" ]; then
   wanted=$(printf '%s' "$present_ordered" | tr '\n' '|' | sed 's/|$//; s/## //g; s/|/, /g')
-  first_wrong=$(printf '%s' "$draft_ordered" | head -1)
+  first_wrong=$(printf '%s' "$draft_ordered" | sed -n '1p')
   # shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
   report "$(line_of "$first_wrong")" section-order \
     "the template's sections run in this order: ${wanted}${provenance}"
@@ -408,7 +410,7 @@ while IFS= read -r entry; do
   [ -n "$entry" ] || continue
   entry_line=${entry%%:*}
   entry_head=${entry#*:}
-  if printf '%s' "$required" | grep -qxF "$entry_head"; then
+  if printf '%s' "$required" | grep -xF "$entry_head" >/dev/null; then
     report "$entry_line" section-empty "\"${entry_head}\" has no content under it${provenance}"
   fi
 done <<EOF
@@ -424,7 +426,7 @@ while IFS= read -r head; do
   verification | testing | 'test plan' | 'how to test') ;;
   *) continue ;;
   esac
-  if ! printf '%s' "$draft_sections" | grep -qxF "$head"; then
+  if ! printf '%s' "$draft_sections" | grep -xF "$head" >/dev/null; then
     continue
   fi
   section=$(awk -v want="$head" '
