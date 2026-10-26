@@ -600,7 +600,10 @@ run = "bats .devtools/scripts/check-leaks.bats"
 [tasks.test-hooks]
 description = "Run the bats suites for the shell scripts under scripts/ and tools/ in parallel"
 # Exercise the binary from this tree, not the released toolchain pin.
-run = "go run ./cmd/test-hooks"
+run = [
+  "go build -o bin/agentrepo ./cmd/agentrepo",
+  "go run ./cmd/testenv go run ./cmd/test-hooks",
+]
 
 # Serial by default so a failing run prints a clean, ordered trace; pass
 # `mise run test-py -n auto` to fan the suite across xdist workers.
