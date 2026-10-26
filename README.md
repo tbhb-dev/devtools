@@ -185,6 +185,8 @@ Keep tag references and commit references aligned. The pin tasks read these form
 
 To verify adoption, create a draft at a Vale-scoped path, run `mise run lint-draft <file>`, run `mise run fix-prose-replacements <file>` and review the edits. Then run the draft gate again. Check deployment with `mise run devtools:lint-apm`, pins with `mise run devtools:check-pins` and the installed tools with `mise run devtools:check-toolchain`. Stage the payload before running `mise run devtools:check-vendored`, which syncs again and compares against the index, including new files hidden by personal ignore rules.
 
+The check task probes the mise-selected `agentrepo check-pins` command and uses the frozen shell checker when that capability is unavailable during the N-2 transition. A failed Go check keeps its status and diagnostics.
+
 ### Update to the next release
 
 For the next release, run `mise run devtools:update-pins v0.19.0`, replacing the version with the release you are moving to. The task accepts the tag with or without its leading `v`, so `0.19.0` and `v0.19.0` do the same thing. It writes the `v`-prefixed form, which is the spelling `devtools:check-pins` requires. In a new linked worktree, run `mise trust` and `vale sync` first so the ignored Vale styles are present before lint or commit gates run.
