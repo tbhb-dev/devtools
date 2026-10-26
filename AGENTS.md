@@ -146,7 +146,7 @@ When the reviewed tree changes the policy path relative to the branch's merge ba
 
 ### Audit records
 
-Every scripted review reports the policy path, SHA-256 digest of the applied bytes, status, and trusted ref and commit, while the review stamp records the digest, status, ref, and commit. An absent or suppressed policy reports a digest of `none`. Moving the trusted ref during review prevents stamping. Moving it after review requires a new review before committing or publishing.
+Every scripted review reports the policy path, SHA-256 digest of the applied bytes, status, and trusted ref and commit, while the review stamp records the digest, status, ref, and commit. An absent or suppressed policy reports a digest of `none`. An unrelated commit moving the trusted ref preserves the review and its stamp when the policy digest, status, and authority ref remain unchanged. A policy content, status, or authority change requires a new review before committing or publishing. The audit retains the commit read when the review started.
 
 The same reader and prompt precedence serve commit, PR, and merge reviews on both harnesses.
 
