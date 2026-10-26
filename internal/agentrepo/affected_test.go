@@ -92,7 +92,7 @@ func affectedCalls(t *testing.T) string {
 
 func TestAffectedSelection(t *testing.T) {
 	for _, tt := range []struct{ path, want string }{
-		{"internal/example/example.go", "exec -- go test ./internal/example\nrun test-hooks tests\n"},
+		{"internal/example/example.go", "run test-go\nrun test-hooks tests\n"},
 		{"go.mod", "run test-go\nrun test-hooks tests\n"},
 		{"packages/example/example.py", "run test-py\n"},
 		{"tools/example.py", "run test-py\n"},
@@ -124,10 +124,10 @@ func TestAffectedSelection(t *testing.T) {
 func TestAffectedCrossSuiteDependencies(t *testing.T) {
 	for _, tt := range []struct{ path, want string }{
 		{"cmd/commit-lint/main.go", "exec -- go test ./cmd/commit-lint\nrun test-hooks tests\n"},
-		{"internal/commitlint/message.go", "exec -- go test ./internal/commitlint\nrun test-hooks tests\n"},
+		{"internal/commitlint/message.go", "run test-go\nrun test-hooks tests\n"},
 		{"cmd/guard-markdown/run.go", "exec -- go test ./cmd/guard-markdown\nrun test-hooks tests\n"},
-		{"internal/markdown/paragraph.go", "exec -- go test ./internal/markdown\nrun test-hooks tests\n"},
-		{"internal/agentrepo/command.go", "exec -- go test ./internal/agentrepo\nrun test-hooks tests\n"},
+		{"internal/markdown/paragraph.go", "run test-go\nrun test-hooks tests\n"},
+		{"internal/agentrepo/command.go", "run test-go\nrun test-hooks tests\n"},
 		{"tests/skills/pr/test_helper.bash", "run test-hooks tests\n"},
 		{"pyproject.toml", "run test-hooks tests\nrun test-py\n"},
 		{"uv.lock", "run test-hooks tests\nrun test-py\n"},
@@ -178,10 +178,10 @@ func TestAffectedSkillWithoutTestDirectory(t *testing.T) {
 
 func TestAffectedOwnedInputs(t *testing.T) {
 	for _, tt := range []struct{ path, want string }{
-		{"internal/commitlint/testdata/legacy.json", "exec -- go test ./internal/commitlint\nrun test-hooks tests\n"},
-		{"internal/signing/units/signing-agent.service.tmpl", "exec -- go test ./internal/signing\nrun test-hooks tests\n"},
-		{"internal/signing/units/dev.tbhb.devtools.signing.plist.tmpl", "exec -- go test ./internal/signing\nrun test-hooks tests\n"},
-		{"internal/config/testdata/legacy-config.sh", "exec -- go test ./internal/config\nrun test-hooks tests\n"},
+		{"internal/commitlint/testdata/legacy.json", "run test-go\nrun test-hooks tests\n"},
+		{"internal/signing/units/signing-agent.service.tmpl", "run test-go\nrun test-hooks tests\n"},
+		{"internal/signing/units/dev.tbhb.devtools.signing.plist.tmpl", "run test-go\nrun test-hooks tests\n"},
+		{"internal/config/testdata/legacy-config.sh", "run test-go\nrun test-hooks tests\n"},
 		{"tests/workflows/fixtures/govulncheck.sarif", "run test-hooks tests/workflows\n"},
 		{"tests/workflows/fixtures/rust-msrv/member/Cargo.toml", "run test-hooks tests/workflows\n"},
 		{"tests/tasks/fixtures/pins/mise.toml", "run test-hooks tests/tasks\n"},
@@ -235,6 +235,46 @@ func checkAffectedInput(t *testing.T, path, want string, staged bool) {
 		gitAffected(t, "commit", "-qm", "test: selected change")
 	}
 	checkAffectedSelection(t, args, want)
+}
+
+func TestAffectedVendoredPackages(t *testing.T) {
+	for _, path := range []string{
+		"vendor/example.com/dep/other.go", "vendor/example.com/dep/LICENSE", "vendor/modules.txt",
+	} {
+		t.Run(path, func(t *testing.T) {
+			affectedRepo(t)
+			t.Setenv("AFFECTED_LOG", ".git/affected-calls")
+			// The vendored directory holds Go sources, so only the module suite covers it.
+			stageAffected(t, "vendor/example.com/dep/dep.go")
+			base := commitAffected(t, "README.md")
+			stageAffected(t, path)
+			checkAffectedSelection(t, []string{"test-affected", "--base", base, "--staged"},
+				"run test-go\nrun test-hooks tests\n")
+			gitAffected(t, "commit", "-qm", "test: vendored change")
+			checkAffectedSelection(t, []string{"test-affected", "--base", base},
+				"run test-go\nrun test-hooks tests\n")
+		})
+	}
+}
+
+func TestAffectedSharedInternalPackages(t *testing.T) {
+	// Importing packages such as signing, reviewer, agentrepo and guard-markdown
+	// carry their own Go unit tests, so a shared internal package selects them all.
+	for _, pkg := range []string{
+		"buildmeta", "checks", "config", "credentials", "ghapp", "hookio", "markdown", "review",
+	} {
+		t.Run(pkg, func(t *testing.T) {
+			affectedRepo(t)
+			t.Setenv("AFFECTED_LOG", ".git/affected-calls")
+			base := commitAffected(t, "README.md")
+			stageAffected(t, "internal/"+pkg+"/"+pkg+".go")
+			checkAffectedSelection(t, []string{"test-affected", "--base", base, "--staged"},
+				"run test-go\nrun test-hooks tests\n")
+			gitAffected(t, "commit", "-qm", "test: shared package change")
+			checkAffectedSelection(t, []string{"test-affected", "--base", base},
+				"run test-go\nrun test-hooks tests\n")
+		})
+	}
 }
 
 func TestAffectedConfiguration(t *testing.T) {

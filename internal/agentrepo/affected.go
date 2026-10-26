@@ -130,18 +130,11 @@ func selectAffected(tasks map[string]bool, file string) {
 		selectTestInputs(tasks, file)
 		return
 	}
-	if pkg := affectedGoPackage(file); pkg != "" {
-		tasks["go test ./"+pkg] = true
-		// Bats builds and exercises Go commands and their dependencies too.
-		tasks["test-hooks tests"] = true
+	if selectGoInputs(tasks, file) {
 		return
 	}
 	selectHelperTests(tasks, file)
 	switch {
-	case file == "go.mod", file == "go.sum", strings.HasPrefix(file, "vendor/"):
-		tasks["test-go"] = true
-		// Bats builds and exercises Go commands and their dependencies too.
-		tasks["test-hooks tests"] = true
 	case strings.HasPrefix(file, "packages/agents/"),
 		strings.HasPrefix(file, ".agents/skills/"), strings.HasPrefix(file, ".claude/skills/"):
 		selectSkillTests(tasks, file)
@@ -161,6 +154,32 @@ func selectAffected(tasks map[string]bool, file string) {
 		// An unowned input may affect any suite, including repository contracts.
 		tasks["test"] = true
 	}
+}
+
+// selectGoInputs selects the Go suites for a module or package input and
+// reports whether it owned the file.
+func selectGoInputs(tasks map[string]bool, file string) bool {
+	// Module inputs and vendored packages come first: a vendored directory holds
+	// .go files, but its tests are stripped, so only the module suite covers it.
+	if file == "go.mod" || file == "go.sum" || strings.HasPrefix(file, "vendor/") {
+		tasks["test-go"] = true
+		// Bats builds and exercises Go commands and their dependencies too.
+		tasks["test-hooks tests"] = true
+		return true
+	}
+	pkg := affectedGoPackage(file)
+	if pkg == "" {
+		return false
+	}
+	if strings.HasPrefix(pkg, "internal/") {
+		// Other packages import internal ones, so their unit tests are affected too.
+		tasks["test-go"] = true
+	} else {
+		tasks["go test ./"+pkg] = true
+	}
+	// Bats builds and exercises Go commands and their dependencies too.
+	tasks["test-hooks tests"] = true
+	return true
 }
 
 func affectedFullSuiteInput(file string) bool {

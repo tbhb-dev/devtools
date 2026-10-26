@@ -34,7 +34,7 @@ An empty selection must succeed and print `No affected tests were selected.`
 
 Return nonzero for invalid revisions or diff errors. A test command that fails or can't start must also return nonzero. That failure blocks the commit or publication.
 
-Each consumer defines how changed paths map to suites. Preserve the full `test` task and CI coverage. Go package inputs in devtools include fixtures and embedded files. Test-family inputs select their existing suite, while paths without a known owner select the full `mise run test`. Only docs-only paths may select nothing.
+Each consumer defines how changed paths map to suites. Preserve the full `test` task and CI coverage. Go package inputs in devtools include fixtures and embedded files, and a shared `internal/` package selects the whole Go suite. Test-family inputs select their existing suite, while paths without a known owner select the full `mise run test`. Only docs-only paths may select nothing.
 
 ## Cached gate passes
 
