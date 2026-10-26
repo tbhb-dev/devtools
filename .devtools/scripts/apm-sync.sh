@@ -1,5 +1,14 @@
 #!/usr/bin/env bash
 set -eu
+# Resolve the consumer-selected version before PATH. Probe before any mutation.
+binary=$(mise which agentrepo 2>/dev/null) || binary=''
+if [[ -z $binary || ! -x $binary ]]; then
+  binary=$(command -v agentrepo) || binary=''
+fi
+if [[ -n $binary ]] && "$binary" apm-sync --help >/dev/null 2>&1; then
+  exec "$binary" apm-sync "$@"
+fi
+# Frozen N-2 fallback for releases without the reconciliation capability.
 if [[ -f .claude/settings.json ]]; then
   jq 'del(.hooks)' .claude/settings.json >.claude/settings.json.tmp
   mv .claude/settings.json.tmp .claude/settings.json

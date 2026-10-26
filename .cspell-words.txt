@@ -33,6 +33,7 @@ agenthooks
 agentrepo
 agentstore
 allstar
+apmsync
 argjson
 argparse
 asasalint
@@ -204,6 +205,7 @@ inlines
 intoto
 intrange
 iotamixing
+isinstance
 keygen
 keylength
 koalaman

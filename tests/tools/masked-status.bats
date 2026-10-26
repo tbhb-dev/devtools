@@ -16,7 +16,8 @@ task_body() {
 import sys, tomllib
 with open(sys.argv[1], 'rb') as source:
     data = tomllib.load(source)
-print(data.get('tasks', data)[sys.argv[2]]['run'])
+body = data.get('tasks', data)[sys.argv[2]]['run']
+print('set -e\n' + '\n'.join(body) if isinstance(body, list) else body)
 PY
 }
 
@@ -26,6 +27,10 @@ stub() {
 }
 
 @test "hook inspection errors preserve files and prevent install in script and task" {
+	stub agentrepo 'exit 1'
+	stub mise 'exit 1'
+	mkdir -p .devtools/scripts
+	cp "$ROOT/.devtools/scripts/apm-sync.sh" .devtools/scripts/
 	stub jq 'if [[ $1 == length ]]; then echo 0; exit 23; fi; echo "{}"'
 	stub apm 'touch installed'
 	task_body mise.toml apm-sync >task.sh
