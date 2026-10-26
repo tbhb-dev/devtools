@@ -224,6 +224,7 @@ matrixed
 mattn
 mccabe
 mergebase
+mergepolicy
 mget
 misconfigured
 mitm
