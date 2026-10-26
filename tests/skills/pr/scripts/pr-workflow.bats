@@ -577,6 +577,7 @@ real_leak_scanner() {
 #!/usr/bin/env bash
 case "\$1" in
 --version) echo mise-test ;;
+tasks) echo test-affected ;;
 ls) echo '{}' ;;
 run)
   printf '%s %s %s\n' "\$2" "\${DEVTOOLS_LEAK_MODE-}" "\${DEVTOOLS_LEAK_BASE-}" >>"\$GATE_LOG"
