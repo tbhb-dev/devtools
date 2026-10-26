@@ -6,12 +6,13 @@ setup() {
 }
 
 @test "devtools configured owner-review label stops unattended merging" {
-  local label config
+  local label
   run bash -c 'source "$1/lib.sh"; cd "$2"; dt_repo_conf owner_review_label owner-review' _ "$SCRIPTS" "$ROOT"
   [ "$status" -eq 0 ]
   label=$output
-  config=$(cat .agents/agent-skills.conf)
-  change .agents/agent-skills.conf "$config"$'\n'"owner_review_label = $label"
+  git checkout --quiet main
+  printf '\nowner_review_label = %s\n' "$label" >>.agents/agent-skills.conf
+  pin_base_config
   approve_owner
   bash "$AGENT/review.sh" 7
   grant merge

@@ -20,8 +20,8 @@ ma_require_gates() {
 ma_repo_conf() {
   local file tree status root
   [ -n "${MA_PINNED_BASE:-}" ] || dt_die "Merge configuration requires a pinned base"
-  if agentrepo config merge-machine --help >/dev/null 2>&1; then
-    agentrepo config repository --base "$MA_PINNED_BASE" -- "$@"
+  if [ -n "$_DEVTOOLS_AGENTREPO_BIN" ] && "$_DEVTOOLS_AGENTREPO_BIN" config merge-machine --help >/dev/null 2>&1; then
+    "$_DEVTOOLS_AGENTREPO_BIN" config repository --base "$MA_PINNED_BASE" -- "$@"
     return $?
   fi
   root=$(dt_root) || return $?

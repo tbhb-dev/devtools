@@ -33,6 +33,8 @@ setup() {
 
   [ "$status" -eq 0 ]
   grep -q '^checks evaluate ' "$BATS_TEST_TMPDIR/pinned-calls"
+  grep -q '^config merge-machine -- ' "$BATS_TEST_TMPDIR/pinned-calls"
+  grep -q '^config repository --base ' "$BATS_TEST_TMPDIR/pinned-calls"
   [ ! -e "$BATS_TEST_TMPDIR/stale-calls" ]
 }
 

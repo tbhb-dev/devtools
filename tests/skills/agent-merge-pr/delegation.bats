@@ -5,13 +5,13 @@ setup() {
 }
 
 recording_checker() {
-  export DEVTOOLS_DELEGATION_CHECK="$BATS_TEST_TMPDIR/checker"
-  cat >"$DEVTOOLS_DELEGATION_CHECK" <<'CHECK'
+  machine delegation_check "$BATS_TEST_TMPDIR/checker"
+  cat >"$BATS_TEST_TMPDIR/checker" <<'CHECK'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >"$GH_FIXTURES/delegation"
 exit 0
 CHECK
-  chmod +x "$DEVTOOLS_DELEGATION_CHECK"
+  chmod +x "$BATS_TEST_TMPDIR/checker"
 }
 
 @test "merge delegation receives the PR and pinned head without owner paths" {
@@ -40,12 +40,12 @@ CHECK
 }
 
 @test "merge delegation remains compatible with a checker reading only its first arguments" {
-  export DEVTOOLS_DELEGATION_CHECK="$BATS_TEST_TMPDIR/checker"
-  cat >"$DEVTOOLS_DELEGATION_CHECK" <<'CHECK'
+  machine delegation_check "$BATS_TEST_TMPDIR/checker"
+  cat >"$BATS_TEST_TMPDIR/checker" <<'CHECK'
 #!/usr/bin/env bash
 [ "$1" = check ] && [ "$2" = repo ] && [ "$3" = merge ]
 CHECK
-  chmod +x "$DEVTOOLS_DELEGATION_CHECK"
+  chmod +x "$BATS_TEST_TMPDIR/checker"
   run bash "$AGENT/review.sh" 7
   [ "$status" -eq 0 ]
 

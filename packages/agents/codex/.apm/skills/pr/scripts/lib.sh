@@ -246,8 +246,8 @@ dt_merge_conf() {
     env_name=DEVTOOLS_$(printf '%s' "$key" | tr '[:lower:]' '[:upper:]')
     [ -z "${!env_name+set}" ] || dt_die "merge authority refuses environment variable $env_name; use machine configuration"
   done
-  if agentrepo config merge-machine --help >/dev/null 2>&1; then
-    agentrepo config merge-machine -- "$@"
+  if [ -n "$_DEVTOOLS_AGENTREPO_BIN" ] && "$_DEVTOOLS_AGENTREPO_BIN" config merge-machine --help >/dev/null 2>&1; then
+    "$_DEVTOOLS_AGENTREPO_BIN" config merge-machine -- "$@"
     return $?
   fi
   dir=${XDG_CONFIG_HOME:-$HOME/.config}/devtools
