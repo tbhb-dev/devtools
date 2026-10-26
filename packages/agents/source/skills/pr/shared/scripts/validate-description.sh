@@ -477,9 +477,36 @@ fi
 # the diff. This is the one truthfulness rule a machine can settle: an
 # invented path is invented whatever the surrounding prose claims.
 if [ -n "$base_ref" ]; then
-  changed=$(gitr diff --no-ext-diff --name-only "$base_ref...HEAD" 2>/dev/null || true)
+  changed=$(gitr diff --no-ext-diff --no-renames --name-only "$base_ref...HEAD" 2>/dev/null || true)
 else
   changed=""
+fi
+
+# Consumer-facing changes require an explicit compatibility declaration.
+# docs/compatibility.md points here as the canonical path list.
+compatibility_required=false
+while IFS= read -r path; do
+  case $path in
+  .devtools/* | .config/mise/conf.d/* | packages/agents/* | \
+    vendir.toml | pins.toml | apm.toml | \
+    */vendir.toml | */pins.toml | */apm.toml)
+    compatibility_required=true
+    ;;
+  esac
+done <<EOF
+$changed
+EOF
+
+if [ "$compatibility_required" = true ]; then
+  risk=$(awk '
+    /^#{1,2} / { inside = ($0 == "## Risk"); next }
+    inside { print }
+  ' "$DRAFT")
+  if ! printf '%s\n' "$risk" | grep -Eq \
+    '^Compatibility: (none|deprecates [^[:space:]]+ since [^[:space:]]+)$'; then
+    report "$title_line" compatibility-missing \
+      '## Risk needs a line: Compatibility: none or Compatibility: deprecates <key> since <version>'
+  fi
 fi
 
 # Match code spans one line at a time. Splitting the whole text on
