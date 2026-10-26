@@ -20,6 +20,10 @@
 #                                  untracked files git does not ignore
 #   check-leaks.sh --staged        compare staged blobs against the commit base
 #   check-leaks.sh --range A..B    scan every object the range adds
+#   check-leaks.sh --publish       scan commit additions after DEVTOOLS_LEAK_BASE:
+#                                  messages, new names, added text and increased
+#                                  binary match counts. DEVTOOLS_LEAK_MODE=publish
+#                                  scopes push scans too, plus whole outgoing tags
 #   check-leaks.sh --pre-push [REMOTE [URL]]
 #                                  scan what a push sends. Reads the
 #                                  "local-ref local-oid remote-ref
@@ -40,7 +44,7 @@
 #                                  a scan of HEAD
 #   check-leaks.sh FILE...         scan exactly those files
 #
-# Range and push scans read whole objects through git cat-file, never a
+# Range and unscoped push scans read whole objects through git cat-file, never a
 # diff, so nothing git shows differently from what it sends can hide a
 # value. A missing or unreadable object, a failed git command, a shallow
 # repository, or a count of objects read that differs from the count
@@ -487,6 +491,237 @@ emit_pre_push() {
   emit_objects
 }
 
+# Publication has its own stream and decoder. Whole-object producers and
+# their scanner keep main's encoding, path selection and matching rules.
+# \005 opens a publication file; \006 checks original path bytes. Display
+# labels alone use esc(). Tag payloads go through emit_objects and scan.
+scan_publish() {
+  PATTERN_EXEMPT=$pattern_exempt NEEDLES=$needles PATTERNS=$patterns awk '
+    function path_bytes(s,    out, i, c) {
+      out = ""
+      for (i = 1; i <= length(s); i++) {
+        c = substr(s, i, 1)
+        if (c == "\\") {
+          c = substr(s, ++i, 1)
+          if (c == "n") c = "\n"
+          else if (c == "r") c = "\r"
+        }
+        out = out c
+      }
+      return out
+    }
+    BEGIN {
+      while ((r = (getline l < ENVIRON["NEEDLES"])) > 0) {
+        t = index(l, "\t")
+        name[++nn] = substr(l, 1, t - 1)
+        needle[nn] = tolower(substr(l, t + 1))
+      }
+      if (r < 0) unreadable = 1
+      close(ENVIRON["NEEDLES"])
+      while ((r = (getline l < ENVIRON["PATTERNS"])) > 0)
+        if (l !~ /^#/ && l != "") custom[++nc] = tolower(l)
+      if (r < 0) unreadable = 1
+      close(ENVIRON["PATTERNS"])
+      exempt = "^\\.devtools/scripts/check-leaks\\.bats$|" ENVIRON["PATTERN_EXEMPT"]
+      for (i = 1; i < 256; i++) ord[sprintf("%c", i)] = i
+      op_ref = "op:" "//"
+      oct = "(25[0-5]|2[0-4][0-9]|[01]?[0-9]?[0-9])"
+      dot = "\\."
+      pre = "(^|[^0-9.])"
+      ip10 = "10" dot oct dot oct dot oct
+      ip172 = "172" dot "(1[6-9]|2[0-9]|3[01])" dot oct dot oct
+      ip192 = "192" dot "168" dot oct dot oct
+      ip_tailnet = "100" dot "(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])" dot oct dot oct
+      re_ip = pre "(" ip10 "|" ip172 "|" ip192 ")"
+      re_tailnet = pre ip_tailnet
+      re_ts = "([a-z0-9-]+\\.)+ts\\.net"
+    }
+    function opaque(s,    i, h) {
+      h = 5381
+      for (i = 1; i <= length(s); i++) h = (h * 33 + ord[substr(s, i, 1)]) % 4294967296
+      return sprintf("path#%08x", h)
+    }
+    function report(why) {
+      if (quiet) { hits++; return }
+      printf "%s:%s: %s\n", label, lineno, why
+      findings++
+    }
+    # Count binary matches by rule and bytes. Other records report once per rule.
+    function count_matches(s, re, why, literal, boundary, tailnet,    offset, at, size, value, key) {
+      offset = 0
+      while (offset <= length(s)) {
+        if (literal) {
+          at = index(substr(s, offset + 1), re)
+          if (!at) break
+          at += offset; size = length(re)
+        } else if (offset && index(re, "^")) {
+          # Keep anchors tied to the original record when searching past a match.
+          for (at = offset; at <= length(s); at++)
+            if (match(s, "^.{" at "}(" re ")")) break
+          if (at > length(s)) break
+          size = RLENGTH - at; at++
+        } else {
+          if (!match(substr(s, offset + 1), re)) break
+          at = offset + RSTART; size = RLENGTH
+        }
+        value = substr(s, at, size)
+        if (boundary) sub(/^[^0-9.]/, "", value)
+        if (!tailnet || (value != "example.ts.net" && value !~ /\.example\.ts\.net$/)) {
+          if (!phase || quiet) { report(why); return }
+          key = why SUBSEP value
+          if (phase == "old") budget[key]++
+          else if (budget[key] > 0) budget[key]--
+          else report(why)
+        }
+        offset = at # Resume one byte after the match start, including empty matches.
+      }
+    }
+    function check(low, skip_patterns,    i) {
+      for (i = 1; i <= nn; i++) count_matches(low, needle[i], "private literal " name[i], 1)
+      if (skip_patterns) return
+      count_matches(low, op_ref, "pattern: password-manager reference", 1)
+      count_matches(low, re_ts, "pattern: tailnet host name", 0, 0, 1)
+      count_matches(low, re_tailnet, "pattern: tailnet address", 0, 1)
+      count_matches(low, re_ip, "pattern: private IPv4 address", 0, 1)
+      count_matches(low, "-----begin ([a-z0-9]+ )*private key-----", "pattern: private-key header")
+      for (i = 1; i <= nc; i++) count_matches(low, custom[i], "pattern: repository rule " i)
+    }
+    unreadable { next }
+    /^\003/ { phase = "old"; next }
+    /^\004/ { phase = "new"; next }
+    /^[\005\006]/ {
+      phase = ""
+      for (key in budget) delete budget[key]
+      full = path_bytes(substr($0, 2)); skip = (full ~ exempt)
+      quiet = 1; hits = 0
+      check(tolower("/" full), 0)
+      check(tolower("/" substr($0, 2)), 0)
+      quiet = 0
+      label = hits ? opaque(full) : substr($0, 2)
+      if (substr($0, 1, 1) == "\006") { lineno = "path"; check(tolower("/" full), skip) }
+      next
+    }
+    {
+      t = index($0, "\t")
+      lineno = phase ? "binary" : substr($0, 1, t - 1)
+      check(tolower(substr($0, t + 1)), skip)
+    }
+    END {
+      if (unreadable) { print "check-leaks: could not read the private values; the result is incomplete" > "/dev/stderr"; exit 2 }
+      if (findings) printf "check-leaks: %d finding(s); values are not printed\n", findings > "/dev/stderr"
+      exit findings ? 1 : 0
+    }
+  ' 2>"$tmp/scan-error"
+}
+
+# Diff settings apply only to committed publication blobs.
+publish_diff() (
+  local format=$1
+  shift
+  unset GIT_DIFF_OPTS GIT_EXTERNAL_DIFF GIT_ATTR_SOURCE
+  if [[ $format == raw ]]; then set -- --no-patch --raw --no-abbrev -z "$@"; fi
+  git -c diff.orderFile= -c diff.interHunkContext=0 -c core.attributesFile=/dev/null \
+    -c diff.ignoreSubmodules=none diff --text --no-ext-diff --no-textconv \
+    -U0 -O/dev/null --no-color --no-relative --ignore-submodules=none -M --diff-filter=ACMRTU "$@"
+)
+
+emit_publish() {
+  local c parent meta st new_path label old_mode new_mode old_oid new_oid empty_tree
+  local -a m
+  require_complete
+  empty_tree=$(git hash-object -t tree --stdin </dev/null)
+  git rev-list --reverse "$1" "^$base_commit" >"$tmp/commits"
+  while read -r c; do
+    git cat-file commit "$c" >"$tmp/obj"
+    printf '\005commit %s\n' "${c:0:7}"
+    emit_body "$tmp/obj"
+    # rev-list hides parents at a shallow boundary; the commit header does not.
+    parent=$(awk '!header_done && /^$/ { header_done = 1 } !header_done && /^parent / && !p { p = $2 } END { print p }' "$tmp/obj")
+    publish_diff raw "${parent:-$empty_tree}" "$c" >"$tmp/raw"
+    while IFS= read -r -d '' meta; do
+      read -r -a m <<<"${meta#:}"
+      old_mode=${m[0]} new_mode=${m[1]} old_oid=${m[2]} new_oid=${m[3]} st=${m[4]}
+      IFS= read -r -d '' new_path
+      if [[ $st == R* || $st == C* ]]; then IFS= read -r -d '' new_path; fi
+      label=$(esc "$new_path")
+      if [[ $st == A* || $st == R* || $st == C* ]]; then printf '\006%s\n' "$label"; fi
+      [[ $new_mode != 160000 ]] || continue
+      printf '\005%s\n' "$label"
+      git cat-file blob "$new_oid" >"$tmp/blob"
+      if [[ $old_mode == 160000 || $old_oid =~ ^0+$ ]]; then
+        emit_body "$tmp/blob"
+        continue
+      fi
+      git cat-file blob "$old_oid" >"$tmp/old"
+      if has_nul "$tmp/blob" || has_nul "$tmp/old"; then
+        printf '\003\n'
+        emit_body "$tmp/old"
+        printf '\004\n'
+        emit_body "$tmp/blob"
+      else
+        publish_diff patch "$old_oid" "$new_oid" |
+          awk '/^@@/ { split($3, a, ","); n = substr(a[1], 2) + 0; body = 1; next } body && /^\+/ { print n "\t" substr($0, 2); n++ }'
+      fi
+    done <"$tmp/raw"
+  done <"$tmp/commits"
+}
+
+emit_publish_pre_push() {
+  local url=${1-} hook=${2-} lref loid rref roid extra count=0 ask='' oid
+  local re='^([0-9a-f]{40}|[0-9a-f]{64})$'
+  require_complete
+  : >"$tmp/objects"
+  : >"$tmp/objs"
+  : >"$tmp/lines"
+  : >"$tmp/known"
+  if [[ ! -t 0 ]]; then
+    while read -r lref loid rref roid extra || [[ -n ${lref-} ]]; do
+      if [[ -z ${lref-} && -z ${loid-} ]]; then continue; fi
+      if [[ -n ${extra-} || ! $loid =~ $re || ! $roid =~ $re ]]; then
+        die "a ref line from git is malformed"
+      fi
+      count=$((count + 1))
+      # shellcheck disable=SC2312 # esc only rewrites the text
+      printf '\002%s\n' "$(esc "$lref")" "$(esc "$rref")" >>"$tmp/objects"
+      if [[ ! $loid =~ ^0+$ ]]; then
+        printf '%s %s\n' "$loid" "$roid" >>"$tmp/lines"
+        if [[ $roid =~ ^0+$ ]] || ! git cat-file -e "$roid"; then ask=1; fi
+      fi
+      lref=
+    done
+  fi
+  if ((count == 0)); then
+    if [[ -n $hook ]]; then return 0; fi
+    emit_publish HEAD
+    return 0
+  fi
+  if [[ -n $ask && -n $url ]]; then
+    GIT_TERMINAL_PROMPT=0 git ls-remote "$url" >"$tmp/ls"
+    while read -r oid _; do
+      if [[ $oid =~ $re ]] && git cat-file -e "$oid"; then
+        printf '^%s\n' "$oid" >>"$tmp/known"
+      fi
+    done <"$tmp/ls"
+  fi
+  while read -r loid roid; do
+    {
+      printf '%s\n' "$loid"
+      cat "$tmp/known"
+      if [[ ! $roid =~ ^0+$ ]] && git cat-file -e "$roid"; then printf '^%s\n' "$roid"; fi
+    } >"$tmp/revs"
+    git rev-list --objects --stdin <"$tmp/revs" >"$tmp/outgoing"
+    if oid=$(git rev-parse --verify --quiet "${loid}^{commit}"); then
+      emit_publish "$oid"
+      awk '{ print $1 }' "$tmp/outgoing" |
+        git cat-file --batch-check='%(objectname) %(objecttype)' |
+        awk '$2 != "commit" && $2 != "tree" && $2 != "blob" { print $1 }' >>"$tmp/objs"
+    else
+      cat "$tmp/outgoing" >>"$tmp/objs"
+    fi
+  done <"$tmp/lines"
+  emit_objects >>"$tmp/objects"
+}
+
 mode=tree
 range=
 push_url=
@@ -495,6 +730,7 @@ files=()
 while (($#)); do
   case $1 in
   --staged) mode=staged ;;
+  --publish) mode=publish ;;
   --range)
     shift
     (($#)) || die "--range needs A..B"
@@ -528,13 +764,21 @@ if [[ $mode != files ]]; then
   cd "$top"
 fi
 
-# Staged configuration is pinned to the base tree, never the checkout or
-# index under review. Both sides use the exported private literals loaded
-# above. Other modes retain their checkout configuration.
+# Staged and publication configuration (including scoped pre-push) is pinned
+# to the base tree, never the checkout or index under review. Both sides use
+# the exported private literals loaded above. Other modes use the checkout.
 pattern_exempt='^$'
 patterns=/dev/null
-if [[ $mode == staged ]]; then
-  if [[ -n ${DEVTOOLS_LEAK_BASE-} ]]; then
+# A publication scan reads the commits after DEVTOOLS_LEAK_BASE, a commit.
+# It never falls back to another base, so a missing one ends the scan.
+publish_scope=
+if [[ $mode == publish || ($mode == pre-push && ${DEVTOOLS_LEAK_MODE-} == publish) ]]; then publish_scope=1; fi
+if [[ $mode == staged || -n $publish_scope ]]; then
+  if [[ -n $publish_scope ]]; then
+    [[ -n ${DEVTOOLS_LEAK_BASE-} ]] || die "the publication scan needs a base commit"
+    base_commit=$(git rev-parse --verify "${DEVTOOLS_LEAK_BASE}^{commit}") || die "could not read the base"
+    base_tree=$(git rev-parse --verify "${base_commit}^{tree}")
+  elif [[ -n ${DEVTOOLS_LEAK_BASE-} ]]; then
     base_tree=$(git rev-parse --verify "${DEVTOOLS_LEAK_BASE}^{tree}")
   elif git rev-parse --verify HEAD >"$tmp/head"; then
     base_tree=$(git rev-parse --verify 'HEAD^{tree}')
@@ -595,8 +839,15 @@ fi
 case $mode in
 tree) emit_tree >"$tmp/stream" ;;
 staged) emit_staged >"$tmp/stream" ;;
+publish) emit_publish HEAD >"$tmp/stream" ;;
 range) emit_range "$range" >"$tmp/stream" ;;
-pre-push) emit_pre_push "$push_url" "$hook" >"$tmp/stream" ;;
+pre-push)
+  if [[ -n $publish_scope ]]; then
+    emit_publish_pre_push "$push_url" "$hook" >"$tmp/stream"
+  else
+    emit_pre_push "$push_url" "$hook" >"$tmp/stream"
+  fi
+  ;;
 files)
   for f in "${files[@]}"; do
     [[ -f $f ]] || die "an argument is not a readable file"
@@ -606,7 +857,16 @@ files)
 esac
 
 rc=0
-scan <"$tmp/stream" || rc=$?
+if [[ -n $publish_scope ]]; then
+  scan_publish <"$tmp/stream" || rc=$?
+  if [[ -f $tmp/objects ]]; then
+    object_rc=0
+    scan <"$tmp/objects" || object_rc=$?
+    if ((object_rc > rc)); then rc=$object_rc; fi
+  fi
+else
+  scan <"$tmp/stream" || rc=$?
+fi
 if ((rc > 1)); then
   echo "check-leaks: could not complete the scan; the result is incomplete" >&2
   rc=2

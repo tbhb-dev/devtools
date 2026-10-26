@@ -472,7 +472,7 @@ STUB
   run bash "$SCRIPTS/create-pr.sh" --confirmed
   [ "$status" -eq 0 ]
   [[ "$output" == *"mise run test passed at"*"(reused)"* ]]
-  [ "$(cat "$GATE_LOG")" = $'lint-pr-description\ndevtools:lint-leaks\ndevtools:gitleaks\nlint\nreview\ntest\ndevtools:lint-leaks\ndevtools:gitleaks\nreview' ]
+  [ "$(cat "$GATE_LOG")" = $'lint-pr-description\ndevtools:lint-leaks\ndevtools:gitleaks\nlint\nreview\ntest\ndevtools:lint-leaks\ndevtools:gitleaks\nlint\nreview' ]
 }
 
 @test "check-description rejects an unknown label before other gates (#198)" {
@@ -571,4 +571,129 @@ STUB
   run bash "$SCRIPTS/validate-description.sh"
   [ "$status" -eq 1 ]
   [[ "$output" == *"no pull request template at .github/pull_request_template.md"* ]]
+}
+
+real_leak_scanner() {
+  cat >"${BATS_TEST_TMPDIR}/bin/mise" <<STUB
+#!/usr/bin/env bash
+case "\$1" in
+--version) echo mise-test ;;
+ls) echo '{}' ;;
+run)
+  printf '%s %s %s\n' "\$2" "\${DEVTOOLS_LEAK_MODE-}" "\${DEVTOOLS_LEAK_BASE-}" >>"\$GATE_LOG"
+  if [ "\$2" = devtools:lint-leaks ]; then
+    printf 'scan task\\n' >>"\$GATE_LOG"
+    shift 2
+    [ "\${DEVTOOLS_LEAK_MODE-}" != publish ] || set -- --publish
+    bash "$ROOT/.devtools/scripts/check-leaks.sh" "\$@"
+  elif [ "\$2" = lint ]; then
+    "\$0" run devtools:lint-leaks
+  fi
+  ;;
+esac
+STUB
+  cat >.git/hooks/pre-push <<HOOK
+#!/usr/bin/env bash
+printf 'scan hook\\n' >>"\$GATE_LOG"
+DEVTOOLS_LEAK_MODE=\${DEVTOOLS_LEAK_MODE-} bash "$ROOT/.devtools/scripts/check-leaks.sh" --pre-push-hook "\$@"
+HOOK
+  chmod +x .git/hooks/pre-push
+  export O11Y_PRIVATE_STRINGS=kestrel99
+}
+leaky_base() {
+  git checkout --quiet main
+  printf 'kestrel99\nclean\n' >edited.txt
+  printf 'kestrel99\n' >untouched.txt
+  : >kestrel99-name.txt
+  git add -- edited.txt untouched.txt kestrel99-name.txt
+  git commit --quiet -m 'chore: base holds list values'
+  git push --quiet origin main
+  git checkout --quiet topic
+  git rebase --quiet main
+  git fetch --quiet origin
+  real_leak_scanner
+}
+publication_edit() {
+  leaky_base
+  printf '%s\n' kestrel99 clean "$1" >edited.txt
+  git commit --quiet -am 'feat: edit a file'
+}
+@test "AC1 publication passes all three scans when the branch adds no list value (#651)" {
+  publication_edit more
+  bash "$SCRIPTS/review.sh"
+  run bash "$SCRIPTS/create-pr.sh" --confirmed
+  [ "$status" -eq 0 ]
+  [ "$(remote_topic)" = "$(git rev-parse HEAD)" ]
+  merge_base=$(git merge-base HEAD origin/main)
+  grep -q "^devtools:lint-leaks publish $merge_base$" "$GATE_LOG"
+  grep -q "^lint publish $merge_base$" "$GATE_LOG"
+  [ "$(grep -c '^scan task$' "$GATE_LOG")" -eq 2 ]
+  [ "$(grep -c '^scan hook$' "$GATE_LOG")" -eq 1 ]
+}
+@test "publication fixture lint executes its nested leak scan (#651)" {
+  publication_edit kestrel99
+  export DEVTOOLS_LEAK_MODE=publish DEVTOOLS_LEAK_BASE
+  DEVTOOLS_LEAK_BASE=$(git merge-base HEAD origin/main)
+  run mise run lint
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"edited.txt:3: private literal"* ]]
+  [ "$(grep -c '^scan task$' "$GATE_LOG")" -eq 1 ]
+}
+@test "AC2 publication stops on an added list value, before the push (#651)" {
+  publication_edit kestrel99
+  bash "$SCRIPTS/review.sh"
+  run bash "$SCRIPTS/create-pr.sh" --confirmed
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"edited.txt:3: private literal"* ]]
+  [ -z "$(remote_topic)" ]
+}
+@test "the pre-push hook alone stops an added list value (#651)" {
+  publication_edit kestrel99
+  export DEVTOOLS_LEAK_MODE=publish DEVTOOLS_LEAK_BASE
+  DEVTOOLS_LEAK_BASE=$(git merge-base HEAD origin/main)
+  run git push origin topic
+  [ "$status" -ne 0 ]
+  [ -z "$(remote_topic)" ]
+}
+@test "AC3 a missing, shallow or unrelated base exits 2 before any push (#651)" {
+  real_leak_scanner
+  main_oid=$(git rev-parse origin/main)
+  git update-ref -d refs/remotes/origin/main
+  run bash "$SCRIPTS/create-pr.sh" --confirmed
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"origin/main is missing"* ]]
+  [ -z "$(remote_topic)" ]
+  git update-ref refs/remotes/origin/main "$main_oid"
+  git rev-parse HEAD~1 >.git/shallow
+  run bash "$SCRIPTS/create-pr.sh" --confirmed
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"the repository is shallow"* ]]
+  [ -z "$(remote_topic)" ]
+  rm .git/shallow
+  git update-ref refs/remotes/origin/main "$(git commit-tree -m orphan "$(git rev-parse 'HEAD^{tree}')")"
+  run bash "$SCRIPTS/create-pr.sh" --confirmed
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"share no history"* ]]
+  [ -z "$(remote_topic)" ]
+  refute_grep '^devtools:lint-leaks' "$GATE_LOG"
+}
+@test "AC7 publication runs lint uncached under the scope (#651)" {
+  real_leak_scanner
+  bash "$SCRIPTS/review.sh"
+  bash "$SCRIPTS/create-pr.sh" --dry-run
+  : >"$GATE_LOG"
+  run bash "$SCRIPTS/create-pr.sh" --dry-run
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"mise run lint passed at"* ]]
+  grep -q '^lint publish ' "$GATE_LOG"
+}
+@test "AC3 publication without either base ref exits 2 before any push (#651)" {
+  git update-ref -d refs/remotes/origin/main
+  git branch -D main
+  run bash "$SCRIPTS/create-pr.sh"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"origin/main is missing; the leak scan is incomplete. Nothing was pushed."* ]]
+  [ -z "$(remote_topic)" ]
+  refute_grep '^devtools:lint-leaks' "$GATE_LOG"
+  refute_grep '^pr create ' "$GH_LOG"
 }

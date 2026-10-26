@@ -24,6 +24,10 @@ Their interfaces remain available for the later `agentrepo` port.
 
 Pin the harness package containing this change and run `apm install`. Saved passes remain reusable while their cache key is unchanged. This also applies to message and description lint passes. The key still requires a clean committed tree and matching commands, tool versions, and gate inputs. Message and description lint also bind their drafts. Use `--rerun-gates` to force fresh runs.
 
+## Publication leak scans
+
+Pin the harness package containing this change, run `apm install`, and sync the `.devtools` payload so `check-leaks.sh` and `leaks.toml` match. `pr` and `agent-pr` then scan only what the branch adds after its merge base with `refs/remotes/origin/<base>`, so list values already in the base no longer stop a publication. A missing, shallow or unrelated base exits 2 before any push, and `mise run lint` under publication is no longer a cached gate pass. The consumer's pre-push wrapper is the same as before. CI's `--range` scan and a bare `devtools:lint-leaks` still scan everything.
+
 ## Generated skill conflicts
 
 Pin the harness package containing the updated rebase skills and run `apm install`. In the devtools checkout, run `mise run regen-generated` after resolving generated files during a rebase, then commit what it rewrites.

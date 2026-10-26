@@ -539,6 +539,31 @@ run_check() {
 	[ "$status" -eq 0 ]
 }
 
+whole_object_check() {
+	run bash "${CHECK_LEAKS_BASELINE:-$checker}" "$@"
+	no_secrets
+	[ "$status" -eq 1 ]
+	[[ $output == *'pattern: private IPv4 address'* ]]
+}
+@test "AC6 whole-object tab-name allowances match main" {
+	printf '%s%s%s\n' safe t file >.leak-allow
+	printf 'connect 10.1.2.3\n' >$'safe\tfile.txt'
+	git add -- $'safe\tfile.txt'
+	git commit -qm 'test: tab name'
+	GITHUB_ACTIONS=true whole_object_check --range "$base..HEAD"
+	whole_object_check --pre-push </dev/null
+}
+@test "AC6 whole-object tag-then-commit shared subtree matches main" {
+	printf '^allowed(/|$)\n' >.leak-allow
+	mkdir allowed
+	printf 'connect 10.1.2.3\n' >allowed/file.txt
+	git add -- allowed/file.txt
+	git commit -qm 'test: shared subtree'
+	git tag -a payload HEAD:allowed -m 'test: tree payload'
+	printf 'refs/tags/payload %s refs/tags/payload %s\nrefs/heads/main %s refs/heads/main %s\n' "$(git rev-parse payload)" "$base" "$(git rev-parse HEAD)" "$base" >lines
+	whole_object_check --pre-push-hook <lines
+}
+
 # --- disclosure ---------------------------------------------------------
 
 @test "a path that matches a rule is replaced by an opaque identifier" {
@@ -1686,3 +1711,319 @@ private_base() {
 	[ "$status" -eq 1 ]
 	[[ "$output" =~ path#[0-9a-f]{8}:path:\ private\ literal\ O11Y_PRIVATE_STRINGS\ entry\ 6 ]]
 }
+publish_change() {
+  printf '%b' "$2" >"$1"
+  publish_commit 'edit a file' "$1" "${@:3}"
+}
+publish_base() {
+	printf 'kestrel99\nclean\n' >existing.txt
+	printf 'quokka-pond\n' >untouched.txt
+	printf 'one\ntwo\nthree\nfour\nfive\nsix\n' >plain.txt
+	: >zebra-host-01.txt
+	git add -- existing.txt untouched.txt plain.txt zebra-host-01.txt
+	git commit -qm 'test: private base'
+	DEVTOOLS_LEAK_BASE=$(git rev-parse HEAD)
+	export DEVTOOLS_LEAK_BASE
+}
+publish_commit() {
+  if (($# > 1)); then git add -- "${@:2}"; fi
+  git commit -qm "test: $1"
+}
+publish_finding() {
+	run_check --publish
+	[ "$status" -eq 1 ]
+	[[ $output == *"$1"* ]]
+}
+@test "AC1 publication passes when the branch adds no value, whatever the base holds" {
+	publish_base
+	printf 'kestrel99\nclean\nchanged\n' >existing.txt
+	git mv zebra-host-01.txt renamed.txt
+	publish_commit 'edit a file holding a base value' existing.txt
+	run_check --publish
+	[ "$status" -eq 0 ]
+	[ -z "$output" ]
+	printf 'refs/heads/main %s refs/heads/main %s\n' "$(git rev-parse HEAD)" "$base" >lines
+	DEVTOOLS_LEAK_MODE=publish run bash -c 'bash "$1" --pre-push-hook <"$2"' _ "$checker" lines
+	[ "$status" -eq 0 ]
+}
+@test "AC2 an added line is named by its number" {
+	publish_base
+	printf 'kestrel99\n' >>existing.txt
+	publish_commit 'add a line' existing.txt
+	publish_finding 'existing.txt:3: private literal O11Y_PRIVATE_STRINGS entry 6'
+	printf 'refs/heads/main %s refs/heads/main %s\n' "$(git rev-parse HEAD)" "$base" >lines
+	DEVTOOLS_LEAK_MODE=publish run bash -c 'bash "$1" --pre-push-hook <"$2"' _ "$checker" lines
+	[ "$status" -eq 1 ]
+	[[ $output == *'existing.txt:3: private literal'* ]]
+}
+@test "AC2 an added path name is opaque" {
+	publish_base
+	: >mango-secret.txt
+	publish_commit 'add a file' mango-secret.txt
+	publish_finding ''
+	[[ $output =~ path#[0-9a-f]{8}:path:\ private\ literal ]]
+}
+@test "AC2 a rename target is checked" {
+	publish_base
+	git mv plain.txt kestrel99.txt
+	publish_commit 'rename a file'
+	publish_finding ''
+	[[ $output =~ path#[0-9a-f]{8}:path:\ private\ literal ]]
+}
+publication_path_finding() {
+	export O11Y_PRIVATE_STRINGS='fixture\secret'
+	for mode in --publish --pre-push-hook; do
+		printf 'refs/heads/main %s refs/heads/main %s\n' "$(git rev-parse HEAD)" "$DEVTOOLS_LEAK_BASE" >lines
+		DEVTOOLS_LEAK_MODE=publish run_check "$mode" <lines
+		[ "$status" -eq 1 ]
+		[[ $output =~ path#[0-9a-f]{8}:path:\ private\ literal\ O11Y_PRIVATE_STRINGS\ entry\ 1 ]]
+		no_value 'fixture\secret'
+		no_value 'fixture\\secret'
+	done
+}
+@test "AC2 an added empty filename matches a backslash literal before escaping" {
+	publish_base
+	: >'fixture\secret.txt'
+	publish_commit 'add an empty file' 'fixture\secret.txt'
+	publication_path_finding
+}
+@test "AC2 a rename target matches a backslash literal before escaping" {
+	publish_base
+	git mv plain.txt 'fixture\secret.txt'
+	publish_commit 'rename a file'
+	publication_path_finding
+}
+@test "AC2 a commit message names the commit" {
+	publish_base
+	git commit -q --allow-empty -m 'test: mention kestrel99'
+	publish_finding ''
+	[[ $output =~ commit\ [0-9a-f]{7}:[0-9]+:\ private\ literal ]]
+}
+@test "AC2 a later commit that removes the value doesn't clear it" {
+	publish_base
+  publish_change existing.txt 'kestrel99\nclean\nkestrel99\n'
+  publish_change existing.txt 'kestrel99\nclean\n'
+	publish_finding 'existing.txt:3: private literal'
+}
+@test "AC2 a removed base occurrence doesn't offset an added one" {
+	publish_base
+  publish_change existing.txt 'clean\nkestrel99\n'
+	publish_finding 'existing.txt:2: private literal'
+}
+@test "AC2 a deleted and re-added file is scanned whole" {
+	publish_base
+	git rm -q -- existing.txt
+	publish_commit 'delete'
+	git show "$DEVTOOLS_LEAK_BASE:existing.txt" >existing.txt
+	publish_commit 're-add' existing.txt
+	publish_finding 'existing.txt:1: private literal'
+}
+@test "AC2 an added binary file is named by the binary marker" {
+	publish_base
+  publish_change blob.dat 'xx\0kestrel99\0yy'
+	publish_finding 'blob.dat:binary: private literal'
+}
+@test "scoped and whole-object pushes reject followed tag annotations" {
+	git init --bare -q "$work/origin.git"
+	git remote add origin "$work/origin.git"
+	git push -q origin main
+	export DEVTOOLS_LEAK_BASE=$base
+	git commit -q --allow-empty -m 'test: clean addition'
+	git tag -a release-fixture -m 'kestrel99'
+	tag_oid=$(git rev-parse release-fixture)
+	git config push.followTags true
+	cat >.git/hooks/pre-push <<HOOK
+exec bash "$checker" --pre-push-hook "\$@"
+HOOK
+	chmod +x .git/hooks/pre-push
+	git config core.hooksPath .git/hooks
+	for scope in '' publish; do
+		DEVTOOLS_LEAK_MODE=$scope run git push origin main
+		[ "$status" -ne 0 ]
+		[[ $output == *"tag ${tag_oid:0:7}:"*'private literal'* ]]
+		no_secrets
+		[ "$(git --git-dir=origin.git rev-parse main)" = "$base" ]
+		[ -z "$(git --git-dir=origin.git tag --list)" ]
+	done
+}
+@test "scoped and whole-object pushes reject tags of non-commit payloads" {
+	export DEVTOOLS_LEAK_BASE=$base
+	printf 'kestrel99\n' >payload.txt
+	git add -- payload.txt
+	for kind in blob tree; do
+		payload=$(git rev-parse :payload.txt)
+		if [ "$kind" = tree ]; then
+			payload=$(git write-tree)
+		fi
+		git tag -a "payload-$kind" "$payload" -m 'test payload'
+		printf 'refs/tags/payload-%s %s refs/tags/payload-%s %040d\n' "$kind" "$(git rev-parse "payload-$kind")" "$kind" 0 >lines
+		for scope in '' publish; do
+			DEVTOOLS_LEAK_MODE=$scope run bash -c 'bash "$1" --pre-push-hook <"$2"' _ "$checker" lines
+			[ "$status" -eq 1 ]
+			[[ $output == *'private literal O11Y_PRIVATE_STRINGS entry 6'* ]]
+			no_secrets
+		done
+	done
+}
+@test "AC3 publication needs a readable, complete base" {
+	publish_base
+	DEVTOOLS_LEAK_BASE= run_check --publish
+	[ "$status" -eq 2 ]
+	[[ $output == *"the publication scan needs a base commit"* ]]
+	DEVTOOLS_LEAK_BASE=missing-base run_check --publish
+	[ "$status" -eq 2 ]
+	[[ $output == *"could not read the base"* ]]
+	git clone -q --depth 1 "file://$work" shallow
+	cd shallow
+	DEVTOOLS_LEAK_BASE=HEAD run_check --publish
+	[ "$status" -eq 2 ]
+	[[ $output == *"the repository is shallow, so the scan can't be complete"* ]]
+}
+@test "AC2 a -diff attribute can't hide an added line" {
+	publish_base
+	printf '* -diff\n' >.gitattributes
+  publish_change existing.txt 'kestrel99\nclean\nkestrel99\n' .gitattributes
+	publish_finding 'existing.txt:3'
+}
+@test "AC2 a low core.bigFileThreshold can't hide an added line" {
+	publish_base
+	git config core.bigFileThreshold 1
+  publish_change existing.txt 'kestrel99\nclean\nkestrel99\n'
+	publish_finding 'existing.txt:3'
+}
+@test "AC2 GIT_DIFF_OPTS context can't shift the reported line" {
+	publish_base
+  publish_change plain.txt 'one\ntwo\nkestrel99\nfour\nfive\nsix\n'
+  GIT_DIFF_OPTS=-u3 publish_finding 'plain.txt:3'
+}
+@test "AC2 inter-hunk context can't shift the reported line" {
+	publish_base
+  publish_change plain.txt 'changed\ntwo\nthree\nfour\nkestrel99\nsix\n'
+	git config diff.interHunkContext 10
+	publish_finding 'plain.txt:5: private literal O11Y_PRIVATE_STRINGS entry 6'
+}
+@test "AC2 an unreadable diff order file can't leak a value or hide its line" {
+	publish_base
+  publish_change plain.txt 'one\ntwo\nkestrel99\nfour\nfive\nsix\n'
+	git config diff.orderFile "$work/mango-secret/missing"
+	mkdir scratch
+  TMPDIR="$work/scratch" publish_finding 'plain.txt:3: private literal O11Y_PRIVATE_STRINGS entry 6'
+	[ -z "$(find scratch -type f -print)" ]
+}
+@test "AC2 text classification and line numbers survive combined diff overrides" {
+	publish_base
+	printf '* -diff\n' >.gitattributes
+  publish_change plain.txt 'changed\ntwo\nthree\nfour\nkestrel99\nsix\n' .gitattributes
+	git config core.bigFileThreshold 1
+	git config diff.interHunkContext 10
+	git config diff.orderFile "$work/mango-secret/missing"
+	printf 'clean\n' >plain.txt
+	git add -- plain.txt
+  GIT_DIFF_OPTS=-u3 GIT_EXTERNAL_DIFF=false GIT_ATTR_SOURCE="$DEVTOOLS_LEAK_BASE" publish_finding 'plain.txt:5: private literal O11Y_PRIVATE_STRINGS entry 6'
+}
+@test "AC4 the scan reads commits, never a staged removal" {
+	publish_base
+	printf 'kestrel99\n' >>existing.txt
+	publish_commit 'add a value' existing.txt
+	printf 'kestrel99\nclean\n' >existing.txt
+	git add -- existing.txt
+	publish_finding ''
+}
+@test "publication cannot weaken its own base pattern configuration" {
+	printf 'forbidden-fixture\n' >.leak-patterns
+	git add -- .leak-patterns
+	git commit -qm 'test: base rule'
+	export DEVTOOLS_LEAK_BASE
+	DEVTOOLS_LEAK_BASE=$(git rev-parse HEAD)
+	printf 'forbidden-fixture\n' >new.txt
+	printf '^new.txt$\n' >.leak-allow
+	: >.leak-patterns
+	publish_commit 'try to remove the base rule' new.txt .leak-allow .leak-patterns
+	publish_finding 'new.txt:1: pattern: repository rule 1'
+	DEVTOOLS_LEAK_MODE=publish run_check --pre-push </dev/null
+	[ "$status" -eq 1 ]
+	[[ $output == *'new.txt:1: pattern: repository rule 1'* ]]
+}
+@test "AC6 publication keeps matched content inside its private temp directory" {
+	publish_base
+	printf 'kestrel99\n' >>existing.txt
+	publish_commit 'add a value' existing.txt
+	mkdir scratch
+	TMPDIR="$work/scratch" publish_finding ''
+	[ -z "$(find scratch -type f -print)" ]
+}
+@test "AC6 the task scopes only on request and the range scan still scans everything added" {
+	publish_base
+  publish_change existing.txt 'clean\nmore\n'
+	printf '[task_config]\nincludes = ["%s/.devtools/tasks/leaks.toml"]\n' "$repo_root" >mise.toml
+	export DEVTOOLS_DIR="$repo_root/.devtools"
+	mise trust -q "$work/mise.toml"
+	run mise run --quiet devtools:lint-leaks
+	[ "$status" -eq 1 ]
+	DEVTOOLS_LEAK_MODE=publish run mise run --quiet devtools:lint-leaks
+	[ "$status" -eq 0 ]
+	run_check --range "$base..HEAD"
+	[ "$status" -eq 1 ]
+}
+@test "AC6 escaped display labels cannot print a two-backslash private literal" {
+  publish_base
+  export O11Y_PRIVATE_STRINGS='fixture\\secret,kestrel99'
+  publish_change 'fixture\secret.txt' 'kestrel99\n'
+  for mode in --publish --pre-push-hook; do
+    printf 'refs/heads/main %s refs/heads/main %s\n' "$(git rev-parse HEAD)" "$DEVTOOLS_LEAK_BASE" >lines
+    DEVTOOLS_LEAK_MODE=publish run_check "$mode" <lines
+    [ "$status" -eq 1 ]
+    [[ $output =~ path#[0-9a-f]{8}:1:\ private\ literal ]]
+    no_value 'fixture\\secret'
+  done
+}
+publish_binary_base() {
+  printf '%s\n' forbidden-fixture "${2:-^fixture|forbidden-fixture}" >.leak-patterns
+  printf '%b' "$1" >blob.dat
+  publish_commit 'binary base' blob.dat .leak-patterns
+  export DEVTOOLS_LEAK_BASE
+  DEVTOOLS_LEAK_BASE=$(git rev-parse HEAD)
+}
+@test "AC1 modified binaries pass with inherited literal and pattern occurrences" {
+  publish_binary_base 'kestrel99\x00\x0010.1.2.3 forbidden-fixture clean'
+  publish_change blob.dat 'kestrel99\x00\x0010.1.2.3 forbidden-fixture changed'
+  run_check --publish
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+@test "AC2 modified binaries reject added occurrences of inherited values" {
+  publish_binary_base 'kestrel99\x0010.1.2.3 forbidden-fixture'
+  publish_change blob.dat 'kestrel99 kestrel99\x0010.1.2.3 10.1.2.3 forbidden-fixture forbidden-fixture'
+  for why in 'private literal' 'pattern: private IPv4 address' 'pattern: repository rule 1'; do
+    publish_finding "blob.dat:binary: $why"
+  done
+}
+@test "AC2 modified binaries compare pattern values rather than category totals" {
+  publish_binary_base 'clean\x0010.1.2.3'
+  publish_change blob.dat 'clean\x00192.168.1.1'
+  publish_finding 'blob.dat:binary: pattern: private IPv4 address'
+}
+@test "AC2 modified binaries count anchored and empty pattern matches" {
+  for value in 'tar\000tar' 'clean\000\000'; do
+    publish_binary_base 'tartar\x00clean' '^tar|^$'
+    publish_change blob.dat "$value"
+    publish_finding 'blob.dat:binary: pattern: repository rule'
+  done
+}
+publish_overlap() {
+  local kind=$1 path=blob.dat changes
+  if [[ $kind == literal ]]; then export O11Y_PRIVATE_STRINGS='tart tart'; fi
+  publish_binary_base 'clean\nclean\nclean\nclean\ntart tart\x00' 'tart tart'
+  if [[ $kind == rename ]]; then path=renamed.dat; git mv blob.dat "$path"; fi
+  publish_change "$path" 'clean\nclean\nclean\nclean\ntart tart tart\x00'
+  if [[ $kind == rename ]]; then
+    changes=$(git diff-tree --no-commit-id --name-status -r -M HEAD)
+    [[ $changes == R* ]]
+  fi
+  if [[ $kind == literal ]]; then publish_finding "$path:binary: private literal"
+  else publish_finding "$path:binary: pattern: repository rule"; fi
+  no_value 'tart tart'
+}
+@test "AC2 modified binaries reject overlapping pattern occurrences" { publish_overlap pattern; }
+@test "AC2 renamed modified binaries reject overlapping pattern occurrences" { publish_overlap rename; }
+@test "AC2 modified binaries reject overlapping literal occurrences" { publish_overlap literal; }
