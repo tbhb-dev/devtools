@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import tempfile
@@ -18,19 +19,35 @@ WARM_P99_LIMIT_MS = 20
 
 def main() -> int:
     root = Path(__file__).resolve().parents[1]
-    events = (
+    events = [
         "SessionStart",
         "PreToolUse",
         "PostToolUse",
         "PreInvocation",
         "PostInvocation",
         "Stop",
-    )
+    ]
     inputs = [
         (root / "cmd/agy-otel/testdata" / f"{event}.json").read_bytes()
         for event in events
     ]
     with tempfile.TemporaryDirectory(prefix="agy-otel-latency-") as directory:
+        for size in (10 * 1024, 1024 * 1024):
+            transcript = Path(directory) / f"transcript-{size}.jsonl"
+            response = (
+                json.dumps(
+                    {
+                        "type": "PLANNER_RESPONSE",
+                        "input_tokens": 12,
+                        "output_tokens": 23,
+                        "cache_read_tokens": 7,
+                    }
+                )
+                + "\n"
+            )
+            transcript.write_text(" " * (size - len(response) - 1) + "\n" + response)
+            events.append("PostInvocation")
+            inputs.append(json.dumps({"transcriptPath": str(transcript)}).encode())
         binary = Path(directory) / "agy-otel"
         subprocess.run(
             ["go", "build", "-o", str(binary), "./cmd/agy-otel"],
@@ -61,7 +78,8 @@ def main() -> int:
         durations = sorted(measure(index) for index in range(500))
         p99 = durations[494]
         print(
-            "Warm: 20 warm-up calls, 500 hook subprocesses over six fixtures: "
+            "Warm: 20 warm-up calls, 500 hook subprocesses "
+            "over hook/transcript fixtures: "
             f"p50 = {durations[249]:.3f} ms, p99 = {p99:.3f} ms, "
             f"max = {durations[-1]:.3f} ms",
             flush=True,
