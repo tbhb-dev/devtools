@@ -32,14 +32,14 @@ const maxJobs = 8
 
 // Run runs every discovered file and returns a failing status for invalid
 // input, failed discovery, or a failed Bats group.
-func Run(ctx context.Context, path, override string, out, diagnostic io.Writer) int {
+func Run(ctx context.Context, paths []string, override string, out, diagnostic io.Writer) int {
 	cpus := runtime.NumCPU()
 	count, err := jobs(override, cpus)
 	if err != nil {
 		fmt.Fprintln(diagnostic, "test-hooks:", err)
 		return 1
 	}
-	files, err := discover(path)
+	files, err := discoverAll(paths)
 	if err != nil {
 		fmt.Fprintln(diagnostic, "test-hooks:", err)
 		return 1
@@ -91,6 +91,19 @@ func jobs(override string, cpus int) (int, error) {
 		return 0, fmt.Errorf("%w: %q", errJobs, override)
 	}
 	return min(count, maxJobs), nil
+}
+
+func discoverAll(paths []string) ([]string, error) {
+	var files []string
+	for _, path := range paths {
+		found, err := discover(path)
+		if err != nil {
+			return nil, err
+		}
+		files = append(files, found...)
+	}
+	slices.Sort(files)
+	return slices.Compact(files), nil
 }
 
 func discover(root string) ([]string, error) {

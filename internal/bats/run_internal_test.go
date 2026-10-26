@@ -112,7 +112,7 @@ func TestRunRejectsInvalidInput(t *testing.T) {
 			var out, diagnostic bytes.Buffer
 			if status := Run(
 				t.Context(),
-				tt.path,
+				[]string{tt.path},
 				tt.override,
 				&out,
 				&diagnostic,
@@ -259,7 +259,7 @@ func TestRunBats(t *testing.T) {
 			t.Setenv("PATH", bin)
 			t.Setenv("BATS_RUNNER_TEST_EXIT", tt.code)
 			var out, diagnostic bytes.Buffer
-			status := Run(t.Context(), root, tt.override, &out, &diagnostic)
+			status := Run(t.Context(), []string{root}, tt.override, &out, &diagnostic)
 			if status != tt.want || !strings.Contains(out.String(), tt.override+" jobs") {
 				t.Fatalf("status %d, out %q, diagnostic %q", status, out.String(), diagnostic.String())
 			}
@@ -285,7 +285,7 @@ func TestUnreadableDirectory(t *testing.T) {
 	var out, diagnostic bytes.Buffer
 	if status := Run(
 		t.Context(),
-		root,
+		[]string{root},
 		"1",
 		&out,
 		&diagnostic,
@@ -312,7 +312,7 @@ func TestRunBuildsIsolatedHelper(t *testing.T) {
 				t.Setenv("BATS_RUNNER_BUILD_FAIL", "1")
 			}
 			var out, diagnostic bytes.Buffer
-			status := Run(t.Context(), root, "4", &out, &diagnostic)
+			status := Run(t.Context(), []string{root}, "4", &out, &diagnostic)
 			if fail {
 				require.NotZero(t, status)
 			} else {
@@ -329,6 +329,21 @@ func TestRunBuildsIsolatedHelper(t *testing.T) {
 	}
 }
 
+func TestDiscoveryPaths(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	first := filepath.Join(root, "a.bats")
+	second := filepath.Join(root, "b.bats")
+	require.NoError(t, os.WriteFile(first, nil, 0o600))
+	require.NoError(t, os.WriteFile(second, nil, 0o600))
+	files, err := discoverAll([]string{second, root, first})
+	require.NoError(t, err)
+	require.Equal(t, []string{first, second}, files)
+	files, err = discoverAll([]string{first, filepath.Join(root, "missing")})
+	require.ErrorContains(t, err, "discovering")
+	require.Nil(t, files)
+}
+
 func TestRunTempFailure(t *testing.T) {
 	root := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(root, "suite.bats"), nil, 0o600))
@@ -336,6 +351,6 @@ func TestRunTempFailure(t *testing.T) {
 	t.Setenv("TMP", filepath.Join(root, "missing"))
 	t.Setenv("TEMP", filepath.Join(root, "missing"))
 	var out, diagnostic bytes.Buffer
-	require.NotZero(t, Run(t.Context(), root, "1", &out, &diagnostic))
+	require.NotZero(t, Run(t.Context(), []string{root}, "1", &out, &diagnostic))
 	require.Contains(t, diagnostic.String(), "test-hooks:")
 }

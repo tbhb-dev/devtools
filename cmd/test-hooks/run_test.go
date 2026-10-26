@@ -5,8 +5,11 @@ package main
 
 import (
 	"bytes"
+	"os"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestRun(t *testing.T) {
@@ -17,11 +20,12 @@ func TestRun(t *testing.T) {
 	}{
 		{"default path", nil, "discovering tests"},
 		{"explicit path", []string{"missing"}, "discovering missing"},
-		{"extra args", []string{"a", "b"}, "usage: test-hooks [path]"},
+		{"missing later path", []string{".", "missing"}, "discovering missing"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Chdir(t.TempDir())
 			t.Setenv("HOOKS_JOBS", "1")
+			require.NoError(t, os.WriteFile("suite.bats", nil, 0o600))
 			var out, diagnostic bytes.Buffer
 			if status := Run(
 				tt.args,
