@@ -110,3 +110,36 @@ SH
 	[ "$status" -eq 23 ]
 	[ ! -e "$GITHUB_PATH" ]
 }
+
+@test "release builds and publishes bundles after signing the API commit" {
+	run uv run python - "$ROOT" <<'PY'
+import sys
+from pathlib import Path
+import yaml
+steps = yaml.safe_load((Path(sys.argv[1]) / ".github/workflows/release.yml").read_text())["jobs"]["release"]["steps"]
+names = [s["name"] for s in steps]
+sign = names.index("Sign and push the release tag")
+build = names.index("Build release bundles")
+publish = names.index("Publish and verify release assets")
+assert sign < build < publish
+assert 'go run ./cmd/release-assets build "$TAG" "$RUNNER_TEMP/assets"' in steps[build]["run"]
+assert 'go run ./cmd/release-assets publish "$TAG" "$RUNNER_TEMP/assets"' in steps[publish]["run"]
+assert steps[publish]["env"]["GH_TOKEN"] == "${{ steps.app-token.outputs.token }}"
+assert steps[publish]["env"]["DEVTOOLS_POST_IDENTITIES"] == "tbhb-dev-releases[bot]"
+assert not steps[build].get("continue-on-error")
+assert not steps[publish].get("continue-on-error")
+PY
+	[ "$status" -eq 0 ]
+}
+
+@test "bundle build and publication failures fail their workflow step" {
+	printf '#!/bin/bash\nexit 23\n' >"$BATS_TEST_TMPDIR/bin/go"
+	chmod +x "$BATS_TEST_TMPDIR/bin/go"
+	export PATH="$BATS_TEST_TMPDIR/bin:$PATH" TAG=v1.2.3
+	export RUNNER_TEMP="$BATS_TEST_TMPDIR"
+	for step in 'Build release bundles' 'Publish and verify release assets'; do
+		extract_step release "$step"
+		run bash -e "$BATS_TEST_TMPDIR/step.sh"
+		[ "$status" -eq 23 ]
+	done
+}

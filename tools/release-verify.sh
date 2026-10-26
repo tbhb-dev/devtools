@@ -22,14 +22,9 @@
 # leaves this task as the only thing standing between a bad release
 # commit and every consumer pinning the tag.
 #
-# The tag is the whole release. This repository publishes no GitHub
-# Release object, no release assets, and no built artifacts: consumers
-# resolve the ref directly, through apm, the Go module proxy, a
-# pre-commit rev, or a workflow pin. So nothing here looks for a
-# release object, and finding none is correct rather than a gap.
-#
-# Read-only. It reads the local tag, the remote's refs, and the API, and
-# writes nothing.
+# Tags containing internal/releaseassets/inventory.json also promise binary
+# bundles, metadata, and checksums. Earlier tags retain their historical
+# contract. Verification downloads evidence into a temporary directory.
 #
 # Usage: release-verify.sh [vX.Y.Z]
 #   With no argument it verifies the latest tag.
@@ -232,6 +227,25 @@ if [ "$tag" = "$latest" ]; then
   fi
 else
   printf 'INFO  skipping the literal check: the working tree names %s, not %s\n' "$latest" "$tag"
+fi
+
+# The inventory in the requested tag defines the release boundary and
+# expectations. Never read a newer working-tree inventory for an older tag.
+inventory_path=internal/releaseassets/inventory.json
+published_inventory=$(env git ls-tree --name-only "$tag_commit" -- "$inventory_path")
+if [ "$published_inventory" = "$inventory_path" ]; then
+  assets=$(mktemp -d)
+  trap 'rm -rf "$assets"' EXIT
+  env git show "$tag_commit:internal/releaseassets/inventory.json" >"$assets/inventory.json"
+  build_date=$(TZ=UTC env git -c log.showSignature=false show -s --format=%cd --date=format-local:%Y-%m-%dT%H:%M:%SZ "$tag_commit")
+  if gh release download "$tag" --dir "$assets" &&
+    go run ./cmd/release-assets verify "$tag" "$tag_commit" "$build_date" "$assets" "$assets/inventory.json"; then
+    ok "release archives, inventory, metadata, and checksums match $tag"
+  else
+    fail "release archives, inventory, metadata, and checksums match $tag" "asset evidence is missing or inconsistent"
+  fi
+else
+  printf 'INFO  %s predates the asset-bearing release contract\n' "$tag"
 fi
 
 finish
