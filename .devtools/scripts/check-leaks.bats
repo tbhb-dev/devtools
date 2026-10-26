@@ -148,6 +148,43 @@ run_check() {
 	[[ $output == *"leak.md:1: pattern: tailnet host name"* ]]
 }
 
+@test "documentation tailnet names pass and real names fail across scan modes" {
+	export DEVTOOLS_LEAK_BASE=$base
+	local mode
+	printf '%s\n' 'example.ts.net grafana.example.ts.net' >domains.txt
+	git add -- domains.txt
+	for mode in domains.txt --staged; do
+		run_check "$mode"
+		[ "$status" -eq 0 ]
+	done
+	git commit -qm 'test: documentation domains'
+	for mode in --range --publish --pre-push-hook; do
+		printf 'refs/heads/main %s refs/heads/main %s\n' "$(git rev-parse HEAD)" "$base" >lines
+		if [[ $mode == --range ]]; then
+			run_check "$mode" "$base..HEAD"
+		else DEVTOOLS_LEAK_MODE=publish run_check "$mode" <lines; fi
+		[ "$status" -eq 0 ]
+	done
+	printf '%s\n' 'example.ts.net node-1.tail1234.ts.net' >>domains.txt
+	git add -- domains.txt
+	for mode in domains.txt --staged; do
+		run_check "$mode"
+		[ "$status" -eq 1 ]
+		[[ $output == *'pattern: tailnet host name'* ]]
+		no_value 'node-1.tail1234.ts.net'
+	done
+	git commit -qm 'test: real tailnet domain'
+	for mode in --range --publish --pre-push-hook; do
+		printf 'refs/heads/main %s refs/heads/main %s\n' "$(git rev-parse HEAD)" "$base" >lines
+		if [[ $mode == --range ]]; then
+			run_check "$mode" "$base..HEAD"
+		else DEVTOOLS_LEAK_MODE=publish run_check "$mode" <lines; fi
+		[ "$status" -eq 1 ]
+		[[ $output == *'pattern: tailnet host name'* ]]
+		no_value 'node-1.tail1234.ts.net'
+	done
+}
+
 @test "the vendored leak suite is exempt from patterns without an allow list" {
 	rm .leak-allow
 	mkdir -p .devtools/scripts
@@ -1734,6 +1771,33 @@ publish_finding() {
 	[ "$status" -eq 1 ]
 	[[ $output == *"$1"* ]]
 }
+@test "publication accepts vendored leak payloads and rejects real names without an allow list" {
+	rm .leak-allow
+	export O11Y_PRIVATE_STRINGS=unmatched-''fixture-value DEVTOOLS_LEAK_BASE=$base
+	mkdir -p .devtools/scripts
+	cp "$checker" .devtools/scripts/check-leaks.sh
+	cp "$BATS_TEST_FILENAME" .devtools/scripts/check-leaks.bats
+	publish_commit 'vendor leak payload' .devtools/scripts/check-leaks.sh .devtools/scripts/check-leaks.bats
+	run_check --publish
+	[ "$status" -eq 0 ]
+	[ -z "$output" ]
+	DEVTOOLS_LEAK_BASE=$(git rev-parse HEAD)
+	printf '\n# Updated payload\n' >>.devtools/scripts/check-leaks.sh
+	cat "$checker" >>.devtools/scripts/check-leaks.sh
+	printf '\n# Updated suite\n' >>.devtools/scripts/check-leaks.bats
+	publish_commit 'update leak payload' .devtools/scripts/check-leaks.sh .devtools/scripts/check-leaks.bats
+	run_check --publish
+	[ "$status" -eq 0 ]
+	[ -z "$output" ]
+	DEVTOOLS_LEAK_BASE=$(git rev-parse HEAD)
+	cat "$checker" >>.devtools/scripts/check-leaks.sh
+	printf '%s\n' 'node-1.tail1234.ts.net' >>.devtools/scripts/check-leaks.sh
+	publish_commit 'update leak payload with a leak' .devtools/scripts/check-leaks.sh
+	publish_finding 'pattern: tailnet host name'
+	[[ $output == *'.devtools/scripts/check-leaks.sh:'* ]]
+	no_value 'node-1.tail1234.ts.net'
+}
+
 @test "AC1 publication passes when the branch adds no value, whatever the base holds" {
 	publish_base
 	printf 'kestrel99\nclean\nchanged\n' >existing.txt
@@ -2027,3 +2091,14 @@ publish_overlap() {
 @test "AC2 modified binaries reject overlapping pattern occurrences" { publish_overlap pattern; }
 @test "AC2 renamed modified binaries reject overlapping pattern occurrences" { publish_overlap rename; }
 @test "AC2 modified binaries reject overlapping literal occurrences" { publish_overlap literal; }
+
+@test "publication binary counts exempt documentation domains and reject new real names" {
+	publish_binary_base 'clean\x00clean'
+	publish_change blob.dat 'example.ts.net grafana.example.ts.net\x00changed'
+	run_check --publish
+	[ "$status" -eq 0 ]
+	[ -z "$output" ]
+	publish_change blob.dat 'example.ts.net grafana.example.ts.net\x00node-1.tail1234.ts.net'
+	publish_finding 'blob.dat:binary: pattern: tailnet host name'
+	no_value 'node-1.tail1234.ts.net'
+}

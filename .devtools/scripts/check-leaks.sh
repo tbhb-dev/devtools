@@ -573,7 +573,10 @@ scan_publish() {
           else if (budget[key] > 0) budget[key]--
           else report(why)
         }
-        offset = at # Resume one byte after the match start, including empty matches.
+        # Tailnet names consume the whole match, as in foreign_ts: an exempt
+        # documentation name must not be checked again from inside its label.
+        # Other rules keep overlapping matches, including empty matches.
+        offset = tailnet ? at + size - 1 : at
       }
     }
     function check(low, skip_patterns,    i) {
