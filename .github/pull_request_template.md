@@ -16,6 +16,12 @@
 
 <!-- What breaks if this is wrong, and how to back it out. -->
 
+<!-- Changes touching .devtools/, .config/mise/conf.d/, packages/agents/, vendir.toml, pins.toml or apm.toml also need one line:
+
+Compatibility: none
+
+or Compatibility: deprecates <key> since <version> -->
+
 ## Related
 
 <!-- Issues, pull requests, and docs. Write "None" when nothing relates. -->

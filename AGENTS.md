@@ -2,6 +2,8 @@
 
 Guidance for AI coding agents working in this repository. Read it alongside the per-tool documentation and any memory files the harness loads.
 
+Follow the [N-2 compatibility policy](docs/compatibility.md) when changing consumer-facing behavior.
+
 ## Commit messages
 
 Run the `commit` skill. It runs the whole sequence, from choosing the rebase base through the commit and the rebase that follows, and this section only summarizes it.
