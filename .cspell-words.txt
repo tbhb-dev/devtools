@@ -121,6 +121,7 @@ evals
 exitcode
 exptostd
 extensionless
+fanout
 fatcontext
 fe3dback
 fieldalignment
@@ -181,6 +182,7 @@ gosumdb
 govet
 govulncheck
 gpgsig
+gpgsign
 granit
 gremlins
 gsub
