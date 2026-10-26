@@ -281,6 +281,9 @@ func TestConcurrentReader(t *testing.T) {
 	binary := buildHook(t)
 	state := t.TempDir()
 	claimed := t.TempDir()
+	reader, openErr := os.OpenRoot(claimed)
+	require.NoError(t, openErr)
+	t.Cleanup(func() { require.NoError(t, reader.Close()) })
 	const calls = 32
 	var writers sync.WaitGroup
 	failures := make(chan error, calls)
@@ -307,7 +310,9 @@ func TestConcurrentReader(t *testing.T) {
 		for _, entry := range entries(t, state, "new") {
 			path := filepath.Join(claimed, entry.Name())
 			require.NoError(t, os.Rename(filepath.Join(state, "agy-otel", "new", entry.Name()), path))
-			data, err := os.ReadFile(path)
+			// Root.ReadFile shares delete access on Windows, so a publisher's
+			// rename handle can remain open while the claimed record is read.
+			data, err := reader.ReadFile(entry.Name())
 			require.NoError(t, err)
 			var got record
 			require.NoError(t, json.Unmarshal(data, &got), "published record must be complete")
