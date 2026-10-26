@@ -30,7 +30,7 @@ func (message contextError) Error() string { return string(message) }
 func contextCommand(code *int) *cobra.Command {
 	const maxArgs = 2
 	var framed bool
-	var libDir string
+	var libDir, shellHome string
 	command := &cobra.Command{
 		Use:   "context VALUE [ARG]",
 		Short: "Discover skill repository, session, and worktree context",
@@ -41,21 +41,26 @@ func contextCommand(code *int) *cobra.Command {
 			if len(args) == maxArgs {
 				argument = args[1]
 			}
-			*code = executeContext(cmd, args[0], argument, libDir, framed)
+			home := os.Getenv("HOME")
+			if cmd.Flags().Changed("home") {
+				home = shellHome
+			}
+			*code = executeContext(cmd, args[0], argument, libDir, home, framed)
 		},
 	}
 	command.Flags().BoolVar(&framed, "framed", false, "Frame responses for shell callers")
 	command.Flags().StringVar(&libDir, "lib-dir", "", "Sourcing skill library directory for harness detection")
+	command.Flags().StringVar(&shellHome, "home", "", "Home directory spelling from the sourcing shell")
 	return command
 }
 
-func executeContext(cmd *cobra.Command, kind, argument, libDir string, framed bool) int {
+func executeContext(cmd *cobra.Command, kind, argument, libDir, home string, framed bool) int {
 	var diagnostic bytes.Buffer
 	originalErr := cmd.ErrOrStderr()
 	if framed {
 		cmd.SetErr(&diagnostic)
 	}
-	value, err := contextValue(cmd, kind, argument, libDir)
+	value, err := contextValue(cmd, kind, argument, libDir, home)
 	if err != nil {
 		status := 1
 		if exit, ok := errors.AsType[*exec.ExitError](err); ok {
@@ -115,7 +120,7 @@ func contextRun(cmd *cobra.Command, name string, args ...string) (string, error)
 	return strings.TrimRight(string(output), "\n"), nil
 }
 
-func contextValue(cmd *cobra.Command, kind, argument, libDir string) (string, error) {
+func contextValue(cmd *cobra.Command, kind, argument, libDir, home string) (string, error) {
 	switch kind {
 	case "root":
 		return contextGit(cmd, "rev-parse", "--show-toplevel")
@@ -132,7 +137,7 @@ func contextValue(cmd *cobra.Command, kind, argument, libDir string) (string, er
 		if err != nil {
 			return "", err
 		}
-		dir = filepath.Join(dir, "agent-skills")
+		dir += "/agent-skills"
 		// Match shell directory creation with the caller's permission mask.
 		//nolint:gosec // Compatibility with existing shell state directory creation.
 		if mkdirErr := os.MkdirAll(dir, 0o777); mkdirErr != nil {
@@ -144,11 +149,11 @@ func contextValue(cmd *cobra.Command, kind, argument, libDir string) (string, er
 	case "digest":
 		return contextDigest(cmd, argument)
 	default:
-		return contextOther(cmd, kind, argument, libDir)
+		return contextOther(cmd, kind, argument, libDir, home)
 	}
 }
 
-func contextOther(cmd *cobra.Command, kind, argument, libDir string) (string, error) {
+func contextOther(cmd *cobra.Command, kind, argument, libDir, home string) (string, error) {
 	switch kind {
 	case "harness":
 		return contextHarness(libDir), nil
@@ -159,7 +164,7 @@ func contextOther(cmd *cobra.Command, kind, argument, libDir string) (string, er
 		return os.Getenv("CODEX_THREAD_ID"), nil
 	case "path":
 		if strings.HasPrefix(argument, "~/") {
-			return os.Getenv("HOME") + "/" + argument[2:], nil
+			return home + "/" + argument[2:], nil
 		}
 		return argument, nil
 	case "agent-context":

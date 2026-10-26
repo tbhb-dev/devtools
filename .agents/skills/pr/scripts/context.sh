@@ -23,7 +23,8 @@ _dt_context() {
   failure=$'devtools-context-error-v1\n'
   # The command buffers values and frames failure diagnostics separately.
   # Capture stdout so even a broken producer cannot leak a value.
-  if reply=$("$_DEVTOOLS_AGENTREPO_BIN" context --framed --lib-dir "$DT_LIB_DIR" -- "$@"); then
+  # Git Bash rewrites path arguments for native Windows commands.
+  if reply=$(MSYS2_ARG_CONV_EXCL='*' "$_DEVTOOLS_AGENTREPO_BIN" context --framed --lib-dir "$DT_LIB_DIR" --home "${HOME:-}" -- "$@"); then
     case $reply in
     "$prefix"*"$suffix") ;;
     *)

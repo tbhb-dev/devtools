@@ -73,7 +73,7 @@ STUB
 }
 
 @test "AC2 AC6: repository, unborn HEAD, linked worktree and paths match the shell" {
-  export _DEVTOOLS_AGENTREPO_BIN="$ROOT/bin/agentrepo"
+  export _DEVTOOLS_AGENTREPO_BIN="$(command -v agentrepo)"
   unset DEVTOOLS_HARNESS CLAUDE_CODE_SESSION_ID CLAUDECODE CODEX_THREAD_ID
   for function in dt_root dt_git_dir dt_repo_name dt_state_dir dt_head dt_harness dt_session_id; do compare_paths "$function"; done
   compare_paths dt_path '~/space here'
@@ -85,7 +85,7 @@ STUB
 }
 
 @test "AC6: harness values and every session variable precedence combination match" {
-  export _DEVTOOLS_AGENTREPO_BIN="$ROOT/bin/agentrepo"
+  export _DEVTOOLS_AGENTREPO_BIN="$(command -v agentrepo)"
   for ((bits=0; bits<16; bits++)); do
     unset DEVTOOLS_HARNESS CLAUDE_CODE_SESSION_ID CLAUDECODE CODEX_THREAD_ID
     ((bits & 1)) && export DEVTOOLS_HARNESS=custom
@@ -102,7 +102,7 @@ STUB
 }
 
 @test "AC10: checksum producer failures preserve both streams even after printing" {
-  export _DEVTOOLS_AGENTREPO_BIN="$ROOT/bin/agentrepo"
+  export _DEVTOOLS_AGENTREPO_BIN="$(command -v agentrepo)"
   mkdir bin
   export PATH="$PWD/bin:$PATH"
   for text in '' 'abc  draft'; do
@@ -113,7 +113,7 @@ STUB
 }
 
 @test "AC5: supported Git failures preserve the diagnostic and discard partial values" {
-  export _DEVTOOLS_AGENTREPO_BIN="$ROOT/bin/agentrepo"
+  export _DEVTOOLS_AGENTREPO_BIN="$(command -v agentrepo)"
   export _DEVTOOLS_AGENTREPO_CONTEXT=true
   mkdir bin
   export PATH="$PWD/bin:$PATH"
@@ -134,7 +134,7 @@ STUB
 }
 
 @test "AC7: supported readiness preserves the shell transcript and never changes trust" {
-  export _DEVTOOLS_AGENTREPO_BIN="$ROOT/bin/agentrepo"
+  export _DEVTOOLS_AGENTREPO_BIN="$(command -v agentrepo)"
   export READY="$ROOT/packages/agents/source/lib/worktree-ready.sh"
   mkdir bin
   export PATH="$PWD/bin:$PATH"
@@ -159,7 +159,7 @@ STUB
 }
 
 @test "AC2: successful discovery keeps producer diagnostics on stderr" {
-  export _DEVTOOLS_AGENTREPO_BIN="$ROOT/bin/agentrepo"
+  export _DEVTOOLS_AGENTREPO_BIN="$(command -v agentrepo)"
   mkdir bin
   export PATH="$PWD/bin:$PATH"
   printf '#!/bin/sh\necho /fixture\necho warning >&2\n' >bin/git
@@ -168,7 +168,7 @@ STUB
 }
 
 @test "AC7 AC9: standalone readiness ships its discovery bridge without the full library" {
-  export _DEVTOOLS_AGENTREPO_BIN="$ROOT/bin/agentrepo"
+  export _DEVTOOLS_AGENTREPO_BIN="$(command -v agentrepo)"
   export _DEVTOOLS_AGENTREPO_CONTEXT=true
   mkdir standalone
   cp "$ROOT/packages/agents/source/lib/worktree-ready.sh" "$ROOT/packages/agents/source/lib/context.sh" standalone/
@@ -177,4 +177,28 @@ STUB
   [ -z "$output" ]
   [ -z "$stderr" ]
   [ ! -e standalone/lib.sh ]
+}
+
+@test "AC6 AC8: the bridge preserves literal shell paths for a native command" {
+  export HOME='/c/shell home' EXPECTED_SHELL_HOME='/c/shell home'
+  export _DEVTOOLS_AGENTREPO_CONTEXT=true MSYS2_ARG_CONV_EXCL=original
+  cat >"$_DEVTOOLS_AGENTREPO_BIN" <<'STUB'
+#!/bin/sh
+[ "$MSYS2_ARG_CONV_EXCL" = '*' ] || exit 90
+while [ "$#" -gt 0 ]; do
+  if [ "$1" = --home ]; then
+    shift
+    [ "$1" = "$EXPECTED_SHELL_HOME" ] || exit 91
+    printf 'devtools-context-v1\n/c/shell home/docs\ndevtools-context-end\n'
+    exit 0
+  fi
+  shift
+done
+exit 92
+STUB
+  run --separate-stderr bash -c '. "$LIB"; dt_path "~/docs"'
+  [ "$status" -eq 0 ]
+  [ "$output" = '/c/shell home/docs' ]
+  [ -z "$stderr" ]
+  [ "$MSYS2_ARG_CONV_EXCL" = original ]
 }
