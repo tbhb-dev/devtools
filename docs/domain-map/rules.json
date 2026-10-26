@@ -1,0 +1,40 @@
+{
+  "release": [
+    ".github/workflows/*release*",
+    ".cog/*",
+    "cog.toml",
+    "CHANGELOG.md",
+    "tools/release-*",
+    "tests/tools/release-*"
+  ],
+  "skills": [
+    "packages/agents/*",
+    ".agents/*",
+    ".claude/*",
+    "apm.yml",
+    "apm.lock.yaml",
+    "tools/*skills*",
+    "tools/skill-*",
+    "tests/tools/generate-skills.bats"
+  ],
+  "go": [
+    "cmd/*",
+    "internal/*",
+    "vendor/*",
+    "go.mod",
+    "go.sum",
+    ".go-arch-lint.yml",
+    ".golangci.yml",
+    ".gremlins.yaml",
+    ".testcoverage.yml",
+    "tools/go-*"
+  ],
+  "consumer": [
+    ".devtools/*",
+    ".config/mise/*",
+    "scripts/*",
+    "packages/devtools/*"
+  ],
+  "workflows": [".github/*"],
+  "shared": ["*"]
+}
