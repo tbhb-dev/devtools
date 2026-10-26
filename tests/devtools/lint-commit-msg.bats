@@ -4,7 +4,7 @@
 setup_file() {
 	local source_root
 	source_root=$(git -C "$BATS_TEST_DIRNAME" rev-parse --show-toplevel)
-	(cd "$source_root" && go build -o "$BATS_FILE_TMPDIR/commit-lint" ./cmd/commit-lint)
+	(cd "$source_root" && go build -o "$BATS_FILE_TMPDIR/commit-lint" ./cmd/commit-lint && go build -o "$BATS_FILE_TMPDIR/agentrepo" ./cmd/agentrepo)
 }
 
 setup() {
@@ -145,4 +145,60 @@ STUB
 	run bash "$helper"
 	[ "$status" -eq 2 ]
 	[ ! -e captured ]
+}
+
+@test "capable selected binary probes without arguments then owns operational failure" {
+	cat >bin/agentrepo <<'STUB'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >>calls
+if [[ $* == 'commit-preview --probe' ]]; then exit 0; fi
+printf 'selected stdout\n'
+printf 'selected stderr\n' >&2
+exit 7
+STUB
+	chmod +x bin/agentrepo
+	run bash "$helper" 'literal argument' --unexpected
+	[ "$status" -eq 7 ]
+	[[ $output == *'selected stdout'* && $output == *'selected stderr'* ]]
+	printf 'commit-preview --probe\ncommit-preview literal argument --unexpected\n' >expected
+	cmp expected calls
+	[ ! -e captured ]
+}
+
+@test "old or unsupported selected binary falls back without consulting later binaries" {
+	mkdir -p later
+	cat >bin/agentrepo <<'STUB'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >>calls
+printf 'unsupported\n' >&2
+exit 5
+STUB
+	cat >later/agentrepo <<'STUB'
+#!/usr/bin/env bash
+exit 99
+STUB
+	chmod +x bin/agentrepo later/agentrepo
+	export PATH="$work/bin:$work/later:$PATH"
+	run bash "$helper" ignored
+	[ "$status" -eq 0 ]
+	[ -z "$output" ]
+	printf 'commit-preview --probe\n' >expected
+	cmp expected calls
+	cmp original COMMIT_AGENTMSG
+	[ -e captured ]
+}
+
+@test "absent binary uses the frozen fallback" {
+	local tool shell
+	shell=$(command -v bash)
+	mkdir tools
+	for tool in git cp awk grep mktemp rm dirname commit-lint prek; do
+		ln -s "$(command -v "$tool")" "tools/$tool"
+	done
+	ln -s "$shell" tools/bash
+	export PATH="$work/tools"
+	run "$shell" "$helper"
+	[ "$status" -eq 0 ]
+	[ -e captured ]
+	"$work/tools/cp" COMMIT_AGENTMSG after
 }

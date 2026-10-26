@@ -7,3 +7,5 @@ When the draft has no sign-off trailer, the preview appends `Signed-off-by` usin
 The real commit-msg hook still requires a sign-off. Previewing doesn't change the hook or make an unsigned commit pass.
 
 Consumers inherit this behavior through the `devtools:lint-commit-msg` task template and its helper in the vendored payload. Squash-message lint continues to check the supplied message directly.
+
+The helper probes `agentrepo commit-preview --probe` using the consumer-selected binary. When supported, `agentrepo commit-preview` runs the preview. Older or absent binaries use the frozen shell fallback throughout the N-2 compatibility window. A failed Go preview returns its status without rerunning the shell preview.
