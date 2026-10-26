@@ -149,3 +149,41 @@ func TestLintExecutionStreamsAndStatus(t *testing.T) {
 	require.Empty(t, stdout.String())
 	require.Contains(t, stderr.String(), "unknown option")
 }
+
+func TestLintSourceCommand(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name           string
+		args           []string
+		code           int
+		stdout, stderr string
+	}{
+		{"help", []string{"--help"}, 0, "agentrepo lint-source-files MODE", ""},
+		{"missing mode", nil, 1, "", "mode required"},
+		{"unsupported mode", []string{"unsupported"}, 1, "", "unsupported mode"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			var stdout, stderr bytes.Buffer
+			require.Equal(t, tc.code, Run(append([]string{"lint-source-files"}, tc.args...), nil, &stdout, &stderr))
+			if tc.stdout == "" {
+				require.Empty(t, stdout.String())
+			} else {
+				require.Contains(t, stdout.String(), tc.stdout)
+			}
+			if tc.stderr == "" {
+				require.Empty(t, stderr.String())
+			} else {
+				require.Contains(t, stderr.String(), tc.stderr)
+			}
+		})
+	}
+}
+
+func TestLintSourceMissingDiscovery(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	var stdout, stderr bytes.Buffer
+	require.Equal(t, 127, Run([]string{"lint-source-files", "shell"}, nil, &stdout, &stderr))
+	require.Empty(t, stdout.String())
+	require.Contains(t, stderr.String(), "git")
+}
