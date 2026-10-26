@@ -41,6 +41,7 @@ avirt
 awk
 bbolt
 benchmem
+benchtime
 bestpractices
 bidi
 bidichk
