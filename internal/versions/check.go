@@ -151,12 +151,22 @@ func (c *checker) apmLock() {
 		manifest := c.read(path + "/apm.yml")
 		version := ""
 		for _, line := range manifest {
-			if value, ok := strings.CutPrefix(line, "version: "); ok {
-				version = value
+			if strings.HasPrefix(line, "version: ") {
+				version = secondField(line)
 			}
 		}
 		c.apmEntry(lines, path, version)
 	}
+}
+
+// secondField returns the second whitespace-separated field, so trailing
+// comments and whitespace don't change the value, as in the shell checker.
+func secondField(line string) string {
+	fields := strings.Fields(line)
+	if len(fields) <= 1 {
+		return ""
+	}
+	return fields[1]
 }
 
 func (c *checker) apmEntry(lines []string, path, want string) {
@@ -168,8 +178,8 @@ func (c *checker) apmEntry(lines []string, path, want string) {
 		case strings.HasPrefix(line, "- repo_url:"):
 			version, number = "", 0
 		case strings.HasPrefix(line, "  version: "):
-			version, number = strings.TrimPrefix(line, "  version: "), i+1
-		case line == "  local_path: ./"+path:
+			version, number = secondField(line), i+1
+		case strings.HasPrefix(line, "  local_path: ") && secondField(line) == "./"+path:
 			found = true
 			if version != want {
 				c.report(

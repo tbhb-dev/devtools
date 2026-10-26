@@ -246,6 +246,33 @@ func TestLocks(t *testing.T) {
 	)
 }
 
+func TestLockScalarsIgnoreCommentsAndWhitespace(t *testing.T) {
+	t.Parallel()
+	root := fixture(t)
+	var lock strings.Builder
+	for _, name := range []string{"agy", "codex", "claude", "common"} {
+		write(t, root, "packages/agents/"+name+"/apm.yml", "name: "+name+"\nversion: 1.2.3 # release\n")
+		fmt.Fprintf(
+			&lock,
+			"- repo_url: _local/%s\n  version:   1.2.3   \n  source: local\n"+
+				"  local_path: ./packages/agents/%s \t# local\n",
+			name,
+			name,
+		)
+	}
+	write(t, root, "apm.lock.yaml", lock.String())
+	require.Empty(t, check(t, root, "1.2.3", 0), "AC1, AC5: comments and whitespace are not part of the value")
+
+	write(t, root, "packages/agents/codex/apm.yml", "name: codex\nversion: 1.2.2 # release\n")
+	out := check(t, root, "1.2.3", 1)
+	require.Contains(
+		t,
+		out,
+		"packages/agents/codex expected `version: 1.2.2`, found `version: 1.2.3`",
+		"AC5: drift is still reported",
+	)
+}
+
 func TestTagsAndShallowClone(t *testing.T) {
 	t.Parallel()
 	root := fixture(t)
