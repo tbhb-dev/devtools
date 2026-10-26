@@ -113,12 +113,12 @@ Run `uv run pytest tests/tools/test_script_inventory.py` to check the real tree 
 | `scripts/clear-commit-agentmsg.sh` | #715 | 27 | logic | none | n/a | none: `repository/clear-commit-agentmsg` deletes the used message draft in Bash. |
 | `scripts/cspell-commit-msg.sh` | #715 | 52 | logic | none | n/a | none: `repository/cspell-commit-msg` checks message spelling in Bash. |
 | `scripts/vale-commit-msg.sh` | #715 | 80 | logic | none | n/a | none: `repository/vale-commit-msg` checks message prose in Bash. |
-| `tests/skills/agent-merge-pr/test_helper.bash` | #334 | 58 | logic | none | n/a | none: fixture setup for `tests/skills/agent-merge-pr` uses Bash. |
-| `tests/skills/agent-pr/test_helper.bash` | #334 | 24 | logic | none | n/a | none: fixture setup for `tests/skills/agent-pr` uses Bash. |
-| `tests/skills/merge-pr/gh-merge.bash` | #334 | 55 | logic | none | n/a | none: `merge-pr/gh-merge` simulates GitHub merging in Bash. |
-| `tests/skills/merge-pr/test_helper.bash` | #334 | 213 | logic | none | n/a | none: fixture setup for `tests/skills/merge-pr` uses Bash. |
-| `tests/skills/pr/test_helper.bash` | #334 | 154 | logic | none | n/a | none: fixture setup for `tests/skills/pr` uses Bash. |
-| `tests/skills/redesign.bash` | #334 | 90 | logic | none | n/a | none: `redesign.bash/redesign` exercises review redesign states in Bash. |
+| `tests/skills/agent-merge-pr/test_helper.bash` | #588 | 58 | logic | none | n/a | none: fixture setup for `tests/skills/agent-merge-pr` uses Bash. |
+| `tests/skills/agent-pr/test_helper.bash` | #588 | 24 | logic | none | n/a | none: fixture setup for `tests/skills/agent-pr` uses Bash. |
+| `tests/skills/merge-pr/gh-merge.bash` | #588 | 55 | logic | none | n/a | none: `merge-pr/gh-merge` simulates GitHub merging in Bash. |
+| `tests/skills/merge-pr/test_helper.bash` | #588 | 213 | logic | none | n/a | none: fixture setup for `tests/skills/merge-pr` uses Bash. |
+| `tests/skills/pr/test_helper.bash` | #588 | 154 | logic | none | n/a | none: fixture setup for `tests/skills/pr` uses Bash. |
+| `tests/skills/redesign.bash` | #588 | 90 | logic | none | n/a | none: `redesign.bash/redesign` exercises review redesign states in Bash. |
 | `tests/skills/test_content_posts.py` | #757 | 126 | logic | none | `tests/skills/test_content_posts.py` | The scanner uses `pytest` assertions. none: no Go bypass scanner yet. |
 | `tests/test_helper.bash` | #334 | 30 | logic | none | n/a | none: fixture setup for `tests` uses Bash. |
 | `tools/agy_otel_latency.py` | #754 | 80 | logic | none | `tests/tools/test_agy_otel_latency.py` | Excluded from migration: telemetry analysis stays Python. none: `agy_otel_latency` stays Python. |
