@@ -49,8 +49,8 @@ func Run(ctx context.Context, args []string, in io.Reader, out, errOut io.Writer
 		fmt.Fprintln(errOut, "gh-post:", err)
 		return exitEnvironment
 	}
-	if r.operation == prReview && !r.matchesReviewBody(body) {
-		fmt.Fprintln(errOut, "gh-post: first line must be Reviewed head: <sha> matching --commit")
+	if err = r.completeBody(body); err != nil {
+		fmt.Fprintln(errOut, "gh-post:", err)
 		return 1
 	}
 	config, err := settings(repo)

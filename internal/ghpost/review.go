@@ -6,8 +6,10 @@ package ghpost
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"regexp"
 	"strings"
 )
 
@@ -16,6 +18,61 @@ func (r *request) matchesReviewBody(body []byte) bool {
 	line = strings.TrimSuffix(line, "\r")
 	head, ok := strings.CutPrefix(line, "Reviewed head: ")
 	return ok && (strings.EqualFold(head, r.commit) || strings.EqualFold(head, "`"+r.commit+"`"))
+}
+
+var (
+	errReviewFirstLine = errors.New("first line must be Reviewed head: <sha> matching --commit")
+	errMissingRound    = errors.New("missing closing line Round: <n> of 3 (n from 1 to 3)")
+	errUnclosedFence   = errors.New("unclosed fenced code block")
+)
+
+var bodyFence = regexp.MustCompile("^ {0,3}(`{3,}|~{3,})(.*)$")
+
+func (r *request) completeBody(body []byte) error {
+	if r.operation == prReview && !r.matchesReviewBody(body) {
+		return errReviewFirstLine
+	}
+	lines := strings.Split(string(body), "\n")
+	first, last := "", ""
+	for _, line := range lines {
+		line = strings.TrimSuffix(line, "\r")
+		if strings.TrimSpace(line) != "" {
+			if first == "" {
+				first = line
+			}
+			last = line
+		}
+	}
+	refinement := r.operation == "issue comment" && strings.HasPrefix(first, "Refinement:")
+	if !refinement && r.operation != prReview {
+		return nil
+	}
+	if refinement && last != "Round: 1 of 3" && last != "Round: 2 of 3" && last != "Round: 3 of 3" {
+		return errMissingRound
+	}
+	if unclosedBodyFence(lines) {
+		return errUnclosedFence
+	}
+	return nil
+}
+
+func unclosedBodyFence(lines []string) bool {
+	fence := ""
+	for _, line := range lines {
+		match := bodyFence.FindStringSubmatch(strings.TrimSuffix(line, "\r"))
+		if match == nil {
+			continue
+		}
+		if fence == "" {
+			// A CommonMark backtick fence's info string can't contain backticks.
+			if match[1][0] != '`' || !strings.Contains(match[2], "`") {
+				fence = match[1]
+			}
+		} else if match[1][0] == fence[0] && len(match[1]) >= len(fence) && strings.Trim(match[2], " ") == "" {
+			fence = ""
+		}
+	}
+	return fence != ""
 }
 
 func (r *request) checkReviewHead(ctx context.Context, errOut io.Writer) int {
