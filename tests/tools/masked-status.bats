@@ -97,15 +97,15 @@ stub() {
 
 @test "hygiene checks propagate both file discovery errors and diagnostic parser errors" {
 	stub git 'if [[ $* == *rev-parse* ]]; then pwd; else echo tools/example.sh; exit 23; fi'
-	run bash "$ROOT/tools/check-script-hygiene.sh"
+	run bash "$ROOT/tools/legacy/check-script-hygiene.sh"
 	[ "$status" -eq 23 ]
 	stub git 'if [[ $* == *rev-parse* ]]; then pwd; elif [[ $* == *claude/skills* ]]; then echo example.sh; exit 23; fi'
-	run bash "$ROOT/tools/check-script-hygiene.sh"
+	run bash "$ROOT/tools/legacy/check-script-hygiene.sh"
 	[ "$status" -eq 23 ]
 	printf '#!/bin/bash\necho example\n' >example.sh
 	stub ast-grep 'echo "{}"'
 	stub jq 'exit 23'
-	run bash "$ROOT/tools/check-script-hygiene.sh" example.sh
+	run bash "$ROOT/tools/legacy/check-script-hygiene.sh" example.sh
 	[ "$status" -eq 23 ]
 }
 
