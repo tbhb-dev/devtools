@@ -144,7 +144,7 @@ PY
 }
 
 @test "pin checks reject failed count commands even when they print one" {
-	task_body .devtools/tasks/pins.toml devtools:check-pins >task.sh
+	cp "$ROOT/.devtools/scripts/check-pins-legacy.sh" task.sh
 	# Feed the comparison section directly; discovery is covered by the pin suite.
 	sed -n '/^version_count=/,$p' task.sh >comparison.sh
 	stub wc 'echo 1; exit 23'

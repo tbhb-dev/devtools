@@ -9,6 +9,8 @@ setup() {
   cp -R "${BATS_TEST_DIRNAME}/fixtures/pins/." "$WORK/"
   cp "${BATS_TEST_DIRNAME}/../../.devtools/vendir.yml" "$WORK/vendir.yml"
   extract_task devtools:update-pins > "${BATS_TEST_TMPDIR}/update.sh"
+  mkdir -p "$WORK/.devtools/scripts"
+  cp "${BATS_TEST_DIRNAME}/../../.devtools/scripts/check-pins-legacy.sh" "$WORK/.devtools/scripts/"
   extract_task devtools:check-pins > "${BATS_TEST_TMPDIR}/check.sh"
   export REAL_GIT
   REAL_GIT=$(command -v git)

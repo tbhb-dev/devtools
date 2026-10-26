@@ -367,6 +367,8 @@ extract_task() {
 	git commit --quiet -m 'test: both preset ref forms'
 	BASE=$(git rev-parse HEAD)
 	extract_task devtools:update-pins >"$BATS_TEST_TMPDIR/update.sh"
+	mkdir -p .devtools/scripts
+	cp "$ROOT/.devtools/scripts/check-pins-legacy.sh" .devtools/scripts/
 	extract_task devtools:check-pins >"$BATS_TEST_TMPDIR/check.sh"
 	local real_git
 	real_git=$(command -v git)
