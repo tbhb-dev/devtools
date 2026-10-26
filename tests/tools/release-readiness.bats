@@ -156,3 +156,28 @@ setup() {
   [ "$status" -eq 1 ]
   [[ $output == *"origin has no main"* ]]
 }
+
+@test "refuses a release whose contract validation fails, naming the entry" {
+  # The validator runs through mise exec; the changelog preview runs through
+  # mise run. Only the former reports the undeclared entry.
+  cat > "$BIN/mise" <<'SH'
+#!/bin/sh
+if [ "$1" = exec ]; then
+  printf 'undeclared consumer transition: required-key-added .agents/agent-skills.conf:gamma\n' >&2
+  exit 1
+fi
+printf -- "- a changelog entry\n"
+SH
+  chmod +x "$BIN/mise"
+
+  run "$SCRIPT"
+  [ "$status" -eq 1 ]
+  [[ $output == *"FAIL  consumer contract declares every transition"* ]]
+  [[ $output == *"gamma"* ]]
+}
+
+@test "passes the consumer contract check when the validator accepts the candidate" {
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [[ $output == *"OK    consumer contract declares every transition"* ]]
+}

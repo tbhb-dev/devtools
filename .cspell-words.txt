@@ -21,6 +21,7 @@ RUSTDOCFLAGS
 Sprintf
 TSSDK
 Tricolon
+Typeflag
 USERPROFILE
 Uncomparables
 Worktree
@@ -68,6 +69,7 @@ codeql
 codespell
 commitlint
 complexipy
+consumercontract
 containedctx
 contextcheck
 contexttemplate
@@ -417,6 +419,7 @@ unparseable
 unreviewed
 unsanctionable
 unsets
+untar
 usestdlibvars
 usetesting
 vendir

@@ -104,6 +104,20 @@ else
   fail "version literals name the latest tag" "$(printf '%s' "$literals" | tr '\n' ' ')"
 fi
 
+# --- Consumer contract ---
+#
+# The same validator cog.toml runs before its first mutation, against the
+# same tree. It reads the candidate's contract and the preceding tag's
+# actual reader, so a transition the release needs but does not declare
+# fails here rather than after the tag.
+
+if contract=$(mise exec -- go run ./cmd/agentrepo contract validate 2>&1); then
+  ok "consumer contract declares every transition"
+else
+  # shellcheck disable=SC2312 # tr only formats diagnostic text after the verdict is settled
+  fail "consumer contract declares every transition" "$(printf '%s' "$contract" | tr '\n' ' ')"
+fi
+
 # --- Checks green on HEAD ---
 #
 # A commit with no check runs is a failure rather than a pass. The bump

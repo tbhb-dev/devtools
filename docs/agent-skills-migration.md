@@ -159,3 +159,35 @@ Existing lint, review, stamps, and the `merge` confirmation chain serve these sc
 Before merging, execution changes the base of dependent pull requests only for a same-repository head. Execution never retries a GitHub write automatically. It verifies the resulting merge commit and its message before cleanup. An unknown outcome or message mismatch preserves evidence. Remote deletion leases on the reviewed head, fork branches stay, and local removal preserves the current worktree, non-agent worktrees, changed branches, dirty trees, and ignored files outside `disposable_ignored`. Reports keep the full merge commit and any owner override, even if later cleanup is incomplete.
 
 The remaining issue 241 work is commit-specific owner-path delegation and external commit reporting. Consumers requiring those behaviors keep their local commit copy until its replacement supports them.
+
+## Consumer configuration transitions
+
+### Declaring a transition
+
+Releases that change what `.agents/agent-skills.conf` must contain declare the change in `.devtools/consumer-contract.toml`. The file is machine-readable and versioned. Running `mise run generate-consumer-notes` renders it into [the consumer transitions page](consumer-transitions.md), which is the source of the release notes. Notes for the exact candidate either say that no consumer action applies or list every transition.
+
+Every entry states:
+
+- the affected file and key
+- the condition that triggers it
+- the target value
+- the release the consumer must already run (`after_release`)
+- a verification step and a rollback action
+
+The file also has a schema version, and readers that don't support it reject the file.
+
+### Validating a release
+
+`agentrepo contract validate` judges a candidate before anything changes on disk. It runs the preceding tag's real readers (the shell `dt_repo_conf` and the merge policy inspector) over every state of every key, then compares the result with the candidate's contract. A new required key, a changed required value, or a removed accepted value fails the check unless an entry declares it, and the failure lists the changed entry. A declaration the readers don't need fails the same way, and an explicit none passes only when the contract matches the preceding one.
+
+The first contract release is the baseline. Its contract must equal what the preceding tag's readers accept, and it declares none. For every declared entry, validation requires the preceding reader to accept the state the entry moves a consumer to: the entry's target value, or the key's absence when the entry removes the key. Otherwise no conf passes both readers, validation rejects the transition, and the release needs a bridge first. The probes measure absence, an empty value, an arbitrary nonempty value, and the sample each contract lists for a key in the preceding contract and in the candidate contract. A reader's acceptance of any other exact value isn't measured.
+
+`tools/release-readiness.sh` runs the validator before a dispatch. The first `pre_bump_hooks` entry in `cog.toml` runs it against the same tree before `cog` rewrites a literal, commits, or tags. After a release declares a transition, reset the declaration to none in the next release.
+
+### Updating a consumer
+
+`devtools:update-pins` consults the contract before it edits any file. Consumers that predate the baseline get a refusal that states the baseline tag. Before any edit, the planned conf has to pass the consumer's own reader (as committed at its `HEAD`) and the target's reader. The updater refuses a conf either reader would reject, including one the consumer's reader already rejects. When the refusal follows from the target's entries, it states the bridge release to adopt first. When the target declares nothing that applies but its reader rejects the conf, the updater looks through the declarations of the published releases below the target. It gives the newest release whose declaration applies, or that declaration's bridge when the consumer's reader doesn't yet accept the result. If no earlier declaration applies, the refusal states only the reason. Adjacent releases never serve as evidence for the consumer's reader.
+
+After the sync, the task writes the applicable entries beside the pins and both readers check the tree. Consumers that already meet an entry keep their conf unchanged. The body that runs is the one the consumer already has, so the first bump to the baseline uses the previous updater and the checks apply from the following bump. The task resolves `agentrepo` through mise, then the `PATH`, and refuses to run when neither provides a version with the `contract` command. Declaring the tool pin in `mise.toml` at the baseline or later is the supported way to provide it.
+
+The contract covers what the readers accept in `.agents/agent-skills.conf`. It doesn't migrate arbitrary code, move a consumer across a missing baseline, or describe settings read elsewhere.

@@ -1,0 +1,172 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright Tony Burns
+
+# The consumer contract for this release: the settings the release's readers
+# accept in a consumer's .agents/agent-skills.conf, and the transitions a
+# consumer must make to adopt the release. Rendered into
+# docs/consumer-transitions.md by `agentrepo contract render`.
+#
+# A key is required when the readers reject the conf without it, and accepts
+# lists the value classes the readers take once it is present. Every release
+# declares its transitions explicitly: `none = true`, or one entry for each
+# required change. `baseline = true` marks the release that introduced this
+# contract. Its keys must equal what the preceding tag's reader does.
+schema_version = 1
+baseline = true
+
+[[key]]
+file = ".agents/agent-skills.conf"
+name = "lint_commit_cmd"
+required = false
+accepts = ["empty", "nonempty"]
+sample = "probe-sample"
+
+[[key]]
+file = ".agents/agent-skills.conf"
+name = "required_hooks"
+required = false
+accepts = ["empty", "nonempty"]
+sample = "probe-sample"
+
+[[key]]
+file = ".agents/agent-skills.conf"
+name = "hook_marker"
+required = false
+accepts = ["empty", "nonempty"]
+sample = "probe-sample"
+
+[[key]]
+file = ".agents/agent-skills.conf"
+name = "review_max_rounds"
+required = false
+accepts = ["empty", "nonempty"]
+sample = "probe-sample"
+
+[[key]]
+file = ".agents/agent-skills.conf"
+name = "pr_template"
+required = false
+accepts = ["empty", "nonempty"]
+sample = "probe-sample"
+
+[[key]]
+file = ".agents/agent-skills.conf"
+name = "lint_pr_cmd"
+required = false
+accepts = ["empty", "nonempty"]
+sample = "probe-sample"
+
+[[key]]
+file = ".agents/agent-skills.conf"
+name = "pr_log_entry"
+required = false
+accepts = ["empty", "nonempty"]
+sample = "probe-sample"
+
+[[key]]
+file = ".agents/agent-skills.conf"
+name = "pr_related_pattern"
+required = false
+accepts = ["empty", "nonempty"]
+sample = "probe-sample"
+
+[[key]]
+file = ".agents/agent-skills.conf"
+name = "pr_title_check_cmd"
+required = false
+accepts = ["empty", "nonempty"]
+sample = "probe-sample"
+
+[[key]]
+file = ".agents/agent-skills.conf"
+name = "mail_cmd"
+required = false
+accepts = ["empty", "nonempty"]
+sample = "probe-sample"
+
+[[key]]
+file = ".agents/agent-skills.conf"
+name = "mail_to"
+required = false
+accepts = ["empty", "nonempty"]
+sample = "probe-sample"
+
+[[key]]
+file = ".agents/agent-skills.conf"
+name = "mail_from"
+required = false
+accepts = ["empty", "nonempty"]
+sample = "probe-sample"
+
+[[key]]
+file = ".agents/agent-skills.conf"
+name = "lint_squash_cmd"
+required = false
+accepts = ["empty", "nonempty"]
+sample = "probe-sample"
+
+[[key]]
+file = ".agents/agent-skills.conf"
+name = "owner_review_label"
+required = false
+accepts = ["empty", "nonempty"]
+sample = "probe-sample"
+
+[[key]]
+file = ".agents/agent-skills.conf"
+name = "ruleset_dir"
+required = false
+accepts = ["empty", "nonempty"]
+sample = "probe-sample"
+
+[[key]]
+file = ".agents/agent-skills.conf"
+name = "merge_ready_cmd"
+required = false
+accepts = ["empty", "nonempty"]
+sample = "probe-sample"
+
+[[key]]
+file = ".agents/agent-skills.conf"
+name = "constitutional_paths"
+required = false
+accepts = ["nonempty"]
+sample = "^$"
+
+[[key]]
+file = ".agents/agent-skills.conf"
+name = "owner_paths"
+required = true
+accepts = ["nonempty"]
+sample = "^$"
+
+[[key]]
+file = ".agents/agent-skills.conf"
+name = "golden_paths"
+required = true
+accepts = ["nonempty"]
+sample = "^$"
+
+[[key]]
+file = ".agents/agent-skills.conf"
+name = "loosening_markers"
+required = true
+accepts = ["nonempty"]
+sample = "^$"
+
+[[key]]
+file = ".agents/agent-skills.conf"
+name = "gate_config_paths"
+required = true
+accepts = ["nonempty"]
+sample = "^$"
+
+[[key]]
+file = ".agents/agent-skills.conf"
+name = "disposable_ignored"
+required = true
+accepts = ["nonempty"]
+sample = "^$"
+
+[transition]
+none = true

@@ -31,9 +31,20 @@ elif [ "$*" = 'tasks ls --all' ]; then
   echo 'devtools:check-pins '
 elif [ "$*" = 'run devtools:check-pins' ]; then
   bash "$CHECK_SCRIPT"
+elif [ "$*" = 'which agentrepo' ]; then
+  [ -z "${NO_AGENTREPO:-}" ] || exit 1
+  printf '%s\n' "$AGENTREPO_BIN"
 fi
 STUB
+  # The contract steps have their own suite; here the tool only has to
+  # answer and succeed, and record that it was asked.
+  cat > "$STUB/agentrepo-stub" <<'STUB'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$AGENTREPO_CALLS"
+STUB
   printf '#!/usr/bin/env bash\nexit 0\n' > "$STUB/vendir"
+  export AGENTREPO_BIN="$STUB/agentrepo-stub"
+  export AGENTREPO_CALLS="${BATS_TEST_TMPDIR}/agentrepo-calls"
   chmod +x "$STUB/"*
   export PATH="$STUB:$PATH"
   export MISE_CALLS="${BATS_TEST_TMPDIR}/mise-calls"
@@ -267,4 +278,44 @@ YAML
   run env usage_version=v0.11.0 bash "${BATS_TEST_TMPDIR}/update.sh"
   [ "$status" -eq 0 ]
   grep -Fq 'gh-post" = "v0.11.0"' mise.toml
+}
+
+@test "update plans before editing and applies and verifies the contract after the sync" {
+  run env usage_version=v0.11.0 bash "${BATS_TEST_TMPDIR}/update.sh"
+  [ "$status" -eq 0 ]
+  calls=()
+  while IFS= read -r call; do calls+=("$call"); done < "$AGENTREPO_CALLS"
+  [ "${#calls[@]}" -eq 4 ]
+  [[ "${calls[0]}" == 'contract --help' ]]
+  [[ "${calls[1]}" == 'contract plan --remote '*' --tag v0.11.0 --state '* ]]
+  [[ "${calls[2]}" == 'contract apply --state '* ]]
+  [[ "${calls[3]}" == 'contract verify --state '* ]]
+}
+
+@test "a refused plan stops the update before any file changes" {
+  printf '#!/usr/bin/env bash\ncase "$2" in plan) echo "bump refused: update to v0.10.5 first" >&2; exit 1;; esac\n' > "$AGENTREPO_BIN"
+  cp mise.toml mise.before
+  cp vendir.yml vendir.before
+  cp .github/renovate.json5 renovate.before
+  run env usage_version=v0.11.0 bash "${BATS_TEST_TMPDIR}/update.sh"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *'update to v0.10.5 first'* ]]
+  cmp mise.before mise.toml
+  cmp vendir.before vendir.yml
+  cmp renovate.before .github/renovate.json5
+  ! grep -Fxq 'run devtools:apm-sync' "$MISE_CALLS"
+}
+
+@test "update fails closed when the consumer does not declare agentrepo" {
+  # Drop any directory that holds a real agentrepo, so only mise could find one.
+  local kept="" dir
+  local -a dirs
+  IFS=: read -ra dirs <<< "$PATH"
+  for dir in "${dirs[@]}"; do
+    [ -x "$dir/agentrepo" ] || kept="${kept:+$kept:}$dir"
+  done
+  run env PATH="$kept" NO_AGENTREPO=1 usage_version=v0.11.0 bash "${BATS_TEST_TMPDIR}/update.sh"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *'declare "go:github.com/tbhb-dev/devtools/cmd/agentrepo"'* ]]
+  ! grep -Fq 'v0.11.0' mise.toml
 }
