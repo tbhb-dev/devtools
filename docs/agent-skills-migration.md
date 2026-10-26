@@ -22,6 +22,20 @@ To adopt base merge mode, pin a package containing it and run `apm install`. Use
 
 Their interfaces remain available for the later `agentrepo` port.
 
+## Consumer test selection
+
+Sync a consumer-defined `test-affected` task into every consumer before bumping its harness package pin to this version and running `apm install`.
+
+Updating the deployed skills alone leaves consumers without the required task. Commit and PR test gates refuse with `test gate: missing mise task test-affected` when it's absent. Both exit nonzero before writing and don't fall back to `mise run test`.
+
+Require `--base <rev>` and accept optional `--staged` arguments. Without `--staged`, compare `<rev>` with `HEAD` and exclude index and working-tree changes. With `--staged`, compare `<rev>` with the index and exclude unstaged changes. Use endpoint comparisons, without substituting a three-dot diff or computing another merge base. For normal commits the gate supplies `--staged --base HEAD`. An amend uses the first parent of `HEAD`, or the empty tree for a root commit. A new root commit also uses the empty tree. PR gates supply `--base <merge-base>`, using the merge base of the resolved base ref and `HEAD` for the branch's committed changes.
+
+An empty selection must succeed and print `No affected tests were selected.`
+
+Return nonzero for invalid revisions or diff errors. A test command that fails or can't start must also return nonzero. That failure blocks the commit or publication.
+
+Each consumer defines how changed paths map to suites. Preserve the full `test` task and CI coverage. Go package inputs in devtools include fixtures and embedded files, and a shared `internal/` package selects the whole Go suite. Test-family inputs select their existing suite, while paths without a known owner select the full `mise run test`. Only docs-only paths may select nothing.
+
 ## Cached gate passes
 
 Pin the harness package containing this change and run `apm install`. Saved passes remain reusable while their cache key is unchanged. This also applies to message and description lint passes. The key still requires a clean committed tree and matching commands, tool versions, and gate inputs. Message and description lint also bind their drafts. Use `--rerun-gates` to force fresh runs.

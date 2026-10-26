@@ -86,7 +86,7 @@ grant() {
   [ ! -e .git/agent-skills/commit.stamp ]
   printf 'tester %s\n' "$(cat "$BATS_TEST_TMPDIR/key.pub")" >"$BATS_TEST_TMPDIR/signers"
   git -c gpg.ssh.allowedSignersFile="$BATS_TEST_TMPDIR/signers" verify-commit HEAD
-  [ "$(cat "$GATE_LOG")" = $'lint-commit-msg\ndevtools:lint-leaks\ndevtools:gitleaks\nlint\ntest' ]
+  [ "$(cat "$GATE_LOG")" = $'lint-commit-msg\ndevtools:lint-leaks\ndevtools:gitleaks\nlint\ntest-affected' ]
 }
 
 @test "delegation refusal and deferral preserve the change, grant commits it" {

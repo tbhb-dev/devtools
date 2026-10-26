@@ -39,3 +39,14 @@ def test_every_mapping_names_defined_tasks_and_prefers_shared_names() -> None:
                 task: str = match.group(1)
                 assert task in SHARED_TASKS or task in REPO_TASKS, (job, task)
                 assert "devtools:" + task not in SHARED_TASKS, (job, task)
+
+
+def test_ci_aggregate_keeps_full_suites() -> None:
+    """AC7: the local selector does not replace any aggregate suite."""
+    assert REPO_TASKS["test"]["run"] == [
+        "mise run check-generated-skills",
+        "mise run test-go",
+        "mise run test-py",
+        "mise run test-hooks",
+        "mise run test-leaks",
+    ]

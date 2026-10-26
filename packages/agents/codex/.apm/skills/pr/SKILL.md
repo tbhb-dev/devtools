@@ -169,6 +169,8 @@ Use `--dry-run` to check without writing and `--rerun-gates` to force fresh gate
 
 Use `--check-description` to run the description validator and prose lint along with labels and property checks. This skips scans, review, lint, tests, and publication. Publication runs description checks, leak scans, lint, the scripted review, and tests in that order.
 
+The test gate requires `test-affected`. Tests cover the committed diff from the merge base of the resolved base ref and `HEAD`. A missing task refuses publication without a full-suite fallback.
+
 Report the URL.
 
 ## Step 8: route the rest

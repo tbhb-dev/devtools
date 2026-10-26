@@ -75,7 +75,7 @@ assert_merge() {
   [ "$(git show -s --format=%P HEAD)" = "$OURS $BASE" ]
   printf 'tester %s\n' "$(cat "$BATS_TEST_TMPDIR/key.pub")" >"$BATS_TEST_TMPDIR/signers"
   git -c gpg.ssh.allowedSignersFile="$BATS_TEST_TMPDIR/signers" verify-commit HEAD
-  [ "$(cat "$GATE_LOG")" = $'lint-commit-msg\ndevtools:lint-leaks\ndevtools:gitleaks\nlint\ntest' ]
+  [ "$(cat "$GATE_LOG")" = $'lint-commit-msg\ndevtools:lint-leaks\ndevtools:gitleaks\nlint\ntest-affected' ]
 }
 
 @test "agent commits the resolved base tip through review, gates and signing" {

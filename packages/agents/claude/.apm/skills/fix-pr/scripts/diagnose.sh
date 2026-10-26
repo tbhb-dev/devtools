@@ -109,7 +109,7 @@ reproducer() {
   *lint*) printf 'mise run lint\n' ;;
   *race*) printf 'mise run devtools:test-go-race\n' ;;
   *cover*) printf 'mise run devtools:cover-go-check\n' ;;
-  *test*) printf 'mise run test\n' ;;
+  *test*) printf 'mise run test (full CI suite); if changed paths cover the failure: mise run test-affected --base <merge-base>\n' ;;
   *vendor*) printf 'mise run devtools:vendor-check\n' ;;
   *vuln*) printf 'mise run devtools:vuln\n' ;;
   *gitleaks* | *secret*) printf 'mise run devtools:gitleaks\n' ;;

@@ -549,6 +549,22 @@ run = [
   "mise run test-leaks",
 ]
 
+[tasks.test-affected]
+description = "Run test suites covering the selected diff"
+usage = '''
+flag "--base <rev>" required=#true
+flag "--staged"
+'''
+run = '''
+#!/usr/bin/env bash
+set -eu
+if [ "${usage_staged:-false}" = true ]; then
+  go run ./cmd/agentrepo test-affected --base "$usage_base" --staged
+else
+  go run ./cmd/agentrepo test-affected --base "$usage_base"
+fi
+'''
+
 # Extra invocation args append to the run string, so `mise run test-go
 # -- -run TestFoo` reaches `go test` unchanged.
 [tasks.test-go]
