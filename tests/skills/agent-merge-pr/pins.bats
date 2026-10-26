@@ -382,11 +382,17 @@ STUB
 	cat >"$BATS_TEST_TMPDIR/bin/mise" <<STUB
 #!/usr/bin/env bash
 case "\$*" in
+'which agentrepo') echo "$BATS_TEST_TMPDIR/bin/agentrepo" ;;
 'tasks ls --all') echo 'devtools:check-pins ' ;;
 'run devtools:check-pins') exec bash "$BATS_TEST_TMPDIR/check.sh" ;;
 esac
 STUB
 	printf '#!/usr/bin/env bash\nexit 0\n' >"$BATS_TEST_TMPDIR/bin/vendir"
+	# update-pins refuses to run without a contract-aware agentrepo. This test
+	# measures the pin rewrite, so the tool accepts every contract step; the
+	# contract steps themselves run against the real tool in
+	# tests/tasks/pins-contract.bats.
+	printf '#!/usr/bin/env bash\nexit 0\n' >"$BATS_TEST_TMPDIR/bin/agentrepo"
 	chmod +x "$BATS_TEST_TMPDIR/bin/"*
 	run env PATH="$BATS_TEST_TMPDIR/bin:$PATH" usage_version=v0.11.0 bash "$BATS_TEST_TMPDIR/update.sh"
 	[ "$status" -eq 0 ]

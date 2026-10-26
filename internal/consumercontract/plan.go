@@ -60,14 +60,34 @@ func Prepare(ctx context.Context, consumer, remote, tag, state string) (*Plan, e
 	if err != nil {
 		return nil, err
 	}
-	if target == nil {
-		// A tag from before the contract declares nothing to apply.
-		return &Plan{Conf: conf}, nil
-	}
-	if err = checkConsumerBaseline(consumer, target, tag); err != nil {
+	plan, err := newPlan(consumer, tag, conf, target)
+	if err != nil {
 		return nil, err
 	}
+	// A tag from before the contract declares nothing to apply, but both
+	// readers still have to take the conf the bump leaves.
+	if err = checkReaders(ctx, state, remote, tag, conf, plan); err != nil {
+		return nil, err
+	}
+	if target == nil {
+		return plan, nil
+	}
+	if err = os.WriteFile(filepath.Join(state, planFile), []byte(plan.Conf), 0o600); err != nil {
+		return nil, fmt.Errorf("write plan: %w", err)
+	}
+	return plan, nil
+}
+
+// newPlan applies the target's entries to conf. A target without a contract
+// declares nothing to apply.
+func newPlan(consumer, tag, conf string, target *Document) (*Plan, error) {
 	plan := &Plan{Target: target, Conf: conf}
+	if target == nil {
+		return plan, nil
+	}
+	if err := checkConsumerBaseline(consumer, target, tag); err != nil {
+		return nil, err
+	}
 	for _, entry := range target.Transition.Entries {
 		if applies(entry, plan.Conf, target) {
 			plan.Actions = append(plan.Actions, entry)
@@ -75,12 +95,6 @@ func Prepare(ctx context.Context, consumer, remote, tag, state string) (*Plan, e
 		}
 	}
 	plan.Changed = plan.Conf != conf
-	if err = checkReaders(ctx, state, conf, plan); err != nil {
-		return nil, err
-	}
-	if err = os.WriteFile(filepath.Join(state, planFile), []byte(plan.Conf), 0o600); err != nil {
-		return nil, fmt.Errorf("write plan: %w", err)
-	}
 	return plan, nil
 }
 
@@ -103,33 +117,45 @@ func checkConsumerBaseline(consumer string, target *Document, tag string) error 
 	)
 }
 
-// checkReaders refuses a bump that would leave a conf one of the two readers
-// rejects after the other accepted it. A conf the source reader already
-// rejected is the consumer's existing problem and doesn't block.
-func checkReaders(ctx context.Context, state, before string, plan *Plan) error {
+// checkReaders refuses a bump when either reader rejects the planned conf,
+// even if the conf was already invalid. It judges the plan before any edit,
+// so no rejection appears after the pins have moved.
+func checkReaders(ctx context.Context, state, remote, tag, before string, plan *Plan) error {
 	source := filepath.Join(state, sourceDir)
-	wasValid, err := AcceptsConf(ctx, source, before)
+	accepted, err := AcceptsConf(ctx, source, plan.Conf)
 	if err != nil {
 		return fmt.Errorf("source reader: %w", err)
 	}
-	if !wasValid {
-		return nil
-	}
-	accepted, err := AcceptsConf(ctx, source, plan.Conf)
-	if err != nil || !accepted {
-		return refuseSequence(plan, err, "the consumer's current reader would reject the result")
+	if !accepted {
+		reason := "the consumer's current reader would reject the result"
+		if plan.Conf == before {
+			reason = "the consumer's current reader rejects " + ConfFile + " as it stands"
+		}
+		return refuseSequence(plan, reason)
 	}
 	accepted, err = AcceptsConf(ctx, filepath.Join(state, targetDir), plan.Conf)
-	if err != nil || !accepted {
-		return refuseSequence(plan, err, "the target reader would reject the result")
+	if err != nil {
+		return fmt.Errorf("target reader: %w", err)
 	}
-	return nil
+	if accepted {
+		return nil
+	}
+	const reason = "the target reader would reject the result"
+	if len(plan.Actions) == 0 {
+		// The target declares nothing for this conf, so an earlier release
+		// that did is the one to adopt first.
+		guide, guideErr := bridgeFromHistory(ctx, state, remote, tag, plan.Conf)
+		if guideErr != nil {
+			return guideErr
+		}
+		if guide != "" {
+			return fmt.Errorf("%w: %s, so update to %s first and bump again from there", ErrRefused, reason, guide)
+		}
+	}
+	return refuseSequence(plan, reason)
 }
 
-func refuseSequence(plan *Plan, err error, reason string) error {
-	if err != nil {
-		return err
-	}
+func refuseSequence(plan *Plan, reason string) error {
 	next := make([]string, 0, len(plan.Actions))
 	for _, entry := range plan.Actions {
 		next = append(next, entry.AfterRelease)

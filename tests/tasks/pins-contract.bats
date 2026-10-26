@@ -6,7 +6,7 @@
 #
 # The history is tests/fixtures/contract: v1.0.0 has no contract, v1.1.0 is
 # the baseline, v1.2.0 is the bridge whose reader accepts gamma, and v1.3.0
-# requires gamma. The fixture readers are synthetic, so nothing here depends
+# requires gamma, and v1.4.0 declares no transition. The fixture readers are synthetic, so nothing here depends
 # on a real release.
 
 setup() {
@@ -50,6 +50,7 @@ build_history() {
   release v1.1.0 reader-v1 contract-baseline.toml
   release v1.2.0 reader-v2 contract-bridge.toml
   release v1.3.0 reader-v3 contract-require.toml
+  release v1.4.0 reader-v3 contract-after-require.toml
 }
 
 # consumer <tag> <conf> checks the remote out at a release, adds the pin
@@ -170,4 +171,33 @@ update() {
   update v1.1.0
   [ "$status" -eq 0 ]
   grep -Fq 'guard-markdown" = "v1.1.0"' mise.toml
+}
+
+# AC10: a later release that declares none still refuses a consumer that
+# never took what an earlier one required, and names the bridge from that
+# release's declaration.
+@test "update to a later no-transition release names the earlier bridge and edits nothing" {
+  consumer v1.1.0 $'alpha = x\n'
+  cp mise.toml mise.before
+  cp .agents/agent-skills.conf conf.before
+  update v1.4.0
+  [ "$status" -eq 1 ]
+  [[ "$output" == *'update to v1.2.0 first'* ]]
+  cmp mise.before mise.toml
+  cmp conf.before .agents/agent-skills.conf
+  ! grep -Fxq 'run devtools:apm-sync' "$MISE_CALLS"
+}
+
+# AC10: a conf the consumer's own reader rejects is refused before the pins
+# move, even when the target declares nothing to apply.
+@test "update refuses an invalid starting conf before any pin moves" {
+  consumer v1.3.0 $'alpha = x\ngamma = on\nmystery = 1\n'
+  cp mise.toml mise.before
+  cp .agents/agent-skills.conf conf.before
+  update v1.4.0
+  [ "$status" -eq 1 ]
+  [[ "$output" == *'as it stands'* ]]
+  cmp mise.before mise.toml
+  cmp conf.before .agents/agent-skills.conf
+  ! grep -Fxq 'run devtools:apm-sync' "$MISE_CALLS"
 }
