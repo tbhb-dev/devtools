@@ -5,7 +5,9 @@ package bats
 
 import (
 	"bytes"
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"slices"
@@ -182,14 +184,55 @@ func TestExecuteEmptyGroups(t *testing.T) {
 }
 
 func TestMain(m *testing.M) {
-	if code := os.Getenv("BATS_RUNNER_TEST_EXIT"); code != "" {
-		status, err := strconv.Atoi(code)
-		if err != nil {
-			os.Exit(99)
-		}
-		os.Exit(status)
+	code := os.Getenv("BATS_RUNNER_TEST_EXIT")
+	if code == "" {
+		os.Exit(m.Run())
 	}
-	os.Exit(m.Run())
+	if len(os.Args) > 1 && os.Args[1] == "install" {
+		os.Exit(fakeBuild())
+	}
+	os.Exit(fakeBats(code))
+}
+
+func fakeBuild() int {
+	name := "agentrepo"
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	output := filepath.Join(os.Getenv("GOBIN"), name)
+	_, _ = fmt.Fprintln(os.Stdout, "helper:", output)
+	if os.Getenv("BATS_RUNNER_BUILD_FAIL") != "" {
+		return 6
+	}
+	executable, err := os.Executable()
+	if err != nil {
+		return 98
+	}
+	if err = os.Link(executable, output); err != nil {
+		return 97
+	}
+	return 0
+}
+
+func fakeBats(code string) int {
+	if os.Getenv("BATS_RUNNER_CHECK_HELPER") != "" {
+		if _, err := exec.LookPath("agentrepo"); err != nil {
+			return 96
+		}
+	}
+	status, err := strconv.Atoi(code)
+	if err != nil {
+		return 99
+	}
+	return status
+}
+
+func installTool(t *testing.T, executable, bin, name string) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	require.NoError(t, os.Link(executable, filepath.Join(bin, name)))
 }
 
 func TestRunBats(t *testing.T) {
@@ -209,12 +252,9 @@ func TestRunBats(t *testing.T) {
 			root := t.TempDir()
 			require.NoError(t, os.WriteFile(filepath.Join(root, "suite.bats"), nil, 0o600))
 			bin := t.TempDir()
-			name := "bats"
-			if runtime.GOOS == "windows" {
-				name += ".exe"
-			}
+			installTool(t, executable, bin, "go")
 			if tt.installed {
-				require.NoError(t, os.Link(executable, filepath.Join(bin, name)))
+				installTool(t, executable, bin, "bats")
 			}
 			t.Setenv("PATH", bin)
 			t.Setenv("BATS_RUNNER_TEST_EXIT", tt.code)
@@ -253,4 +293,49 @@ func TestUnreadableDirectory(t *testing.T) {
 		!strings.Contains(diagnostic.String(), "discovering") {
 		t.Fatalf("status %d, diagnostic %q", status, diagnostic.String())
 	}
+}
+
+func TestRunBuildsIsolatedHelper(t *testing.T) {
+	executable, err := os.Executable()
+	require.NoError(t, err)
+	for _, fail := range []bool{false, true} {
+		t.Run(strconv.FormatBool(fail), func(t *testing.T) {
+			root := t.TempDir()
+			require.NoError(t, os.WriteFile(filepath.Join(root, "suite.bats"), nil, 0o600))
+			bin := t.TempDir()
+			installTool(t, executable, bin, "go")
+			installTool(t, executable, bin, "bats")
+			t.Setenv("PATH", bin)
+			t.Setenv("BATS_RUNNER_TEST_EXIT", "0")
+			t.Setenv("BATS_RUNNER_CHECK_HELPER", "1")
+			if fail {
+				t.Setenv("BATS_RUNNER_BUILD_FAIL", "1")
+			}
+			var out, diagnostic bytes.Buffer
+			status := Run(t.Context(), root, "4", &out, &diagnostic)
+			if fail {
+				require.NotZero(t, status)
+			} else {
+				require.Zero(t, status, diagnostic.String())
+			}
+			require.Equal(t, 1, strings.Count(out.String(), "helper: "))
+			_, built, found := strings.Cut(out.String(), "helper: ")
+			require.True(t, found)
+			path, _, _ := strings.Cut(built, "\n")
+			require.True(t, filepath.IsAbs(path))
+			_, statErr := os.Stat(filepath.Dir(path))
+			require.ErrorIs(t, statErr, os.ErrNotExist)
+		})
+	}
+}
+
+func TestRunTempFailure(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(root, "suite.bats"), nil, 0o600))
+	t.Setenv("TMPDIR", filepath.Join(root, "missing"))
+	t.Setenv("TMP", filepath.Join(root, "missing"))
+	t.Setenv("TEMP", filepath.Join(root, "missing"))
+	var out, diagnostic bytes.Buffer
+	require.NotZero(t, Run(t.Context(), root, "1", &out, &diagnostic))
+	require.Contains(t, diagnostic.String(), "test-hooks:")
 }

@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
@@ -52,9 +53,23 @@ func Run(ctx context.Context, path, override string, out, diagnostic io.Writer) 
 		len(parallel),
 		len(serial),
 	)
+	bin, err := os.MkdirTemp("", "test-hooks-")
+	if err != nil {
+		fmt.Fprintln(diagnostic, "test-hooks:", err)
+		return 1
+	}
+	defer func() { _ = os.RemoveAll(bin) }()
+	build := exec.CommandContext(ctx, "go", "install", "./cmd/agentrepo")
+	build.Env = append(os.Environ(), "GOBIN="+bin)
+	build.Stdout, build.Stderr = out, diagnostic
+	if err = build.Run(); err != nil {
+		fmt.Fprintln(diagnostic, "test-hooks: building agentrepo:", err)
+		return 1
+	}
 	return execute(parallel, serial, count, func(args []string) int {
 		cmd := exec.CommandContext(ctx, "bats", args...)
 		cmd.Stdout, cmd.Stderr = out, diagnostic
+		cmd.Env = append(os.Environ(), "PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 		if runErr := cmd.Run(); runErr != nil {
 			fmt.Fprintln(diagnostic, "test-hooks:", runErr)
 			var exit *exec.ExitError
