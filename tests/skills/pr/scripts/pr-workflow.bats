@@ -480,7 +480,7 @@ STUB
   run bash "$SCRIPTS/create-pr.sh" --check-description
   [ "$status" -ne 0 ]
   [[ "$output" == *"no label named"* ]]
-  [ "$(cat "$GATE_LOG")" = lint-pr-description ]
+  [ ! -s "$GATE_LOG" ]
 }
 
 @test "a scripted review failure exits before test (#198)" {

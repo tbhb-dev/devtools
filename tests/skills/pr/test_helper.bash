@@ -55,7 +55,9 @@ done
 out() { jq -r "$filter" || return 1; }
 case "$1 $2" in
 "auth status") exit 0 ;;
-"label list") printf '%s\n' "$GH_LABELS" ;;
+"label list")
+  if [ -n "${GH_LABEL_ERROR:-}" ]; then echo "$GH_LABEL_ERROR" >&2; exit 1; fi
+  printf '%s\n' "$GH_LABELS" ;;
 "api user") echo 'gh: API rate limit exceeded for user ID 1. (HTTP 403)' >&2; exit 1 ;;
 "api graphql")
   case "$*" in

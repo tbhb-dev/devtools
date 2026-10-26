@@ -52,3 +52,25 @@ pr_description_policy() {
   fi
   return "$failed"
 }
+
+# Read once before expensive gates and report every unknown draft label.
+pr_description_labels() {
+  local draft=$1 field labels known want failed=0
+  field=$(pr_field "$draft" labels) || return $?
+  labels=$(pr_sequence "$field") || return $?
+  known=$(dt_gh label list --limit 200 --json name --jq '.[].name') || {
+    printf 'repository label set could not be read\n' >&2
+    return 1
+  }
+  while IFS= read -r want; do
+    [ -n "$want" ] || continue
+    if ! printf '%s\n' "$known" | grep -qxF -- "$want"; then
+      printf 'no label named "%s" in this repository\n' "$want" >&2
+      failed=1
+    fi
+  done <<<"$labels"
+  if [ "$failed" -ne 0 ]; then
+    printf 'Available labels:\n%s\n' "$known" >&2
+  fi
+  return "$failed"
+}
