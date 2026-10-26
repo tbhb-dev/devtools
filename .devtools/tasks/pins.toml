@@ -61,149 +61,16 @@ usage = 'arg "<version>" help="The devtools release to move to, with or without 
 run = '''
 #!/usr/bin/env bash
 set -euo pipefail
-
-version=$usage_version
-case "$version" in v*) ;; *) version="v$version" ;; esac
-
-# Validate APM forms before changing any file.
-if [ -f apm.yml ]; then
-  awk '
-    /^[[:space:]]*-[[:space:]]*["\047]?tbhb-dev\/devtools/ && !/tbhb-dev\/devtools(\/packages\/agents\/(common|claude|codex|agy))?#v[0-9]+\.[0-9]+\.[0-9]+/ {
-      print "unsupported devtools APM pin: " $0 > "/dev/stderr"; bad = 1
-    }
-    END { exit bad }
-  ' apm.yml
+# Probe the consumer-selected executable before any mutation. Keep the frozen
+# fallback through the N-2 window and binary distribution transition (#333).
+agentrepo_bin=$(mise which agentrepo 2>/dev/null) || agentrepo_bin=""
+if [ -z "$agentrepo_bin" ]; then
+  agentrepo_bin=$(command -v agentrepo) || agentrepo_bin=""
 fi
-if ! grep -Eq '^"go:github.com/tbhb-dev/devtools/cmd/guard-markdown"[[:space:]]*=' mise.toml; then
-  echo 'declare "go:github.com/tbhb-dev/devtools/cmd/guard-markdown" in mise.toml [tools]' >&2
-  exit 1
+if [ -n "$agentrepo_bin" ] && "$agentrepo_bin" update-pins --help >/dev/null 2>&1; then
+  exec "$agentrepo_bin" update-pins "$usage_version"
 fi
-guard_version=$(sed -nE 's|^"go:github.com/tbhb-dev/devtools/cmd/guard-markdown"[[:space:]]*=[[:space:]]*"([^"]*)"|\1|p' mise.toml)
-if ! grep -Eq '^"go:github.com/tbhb-dev/devtools/cmd/commit-lint"[[:space:]]*=' mise.toml; then
-  printf '"go:github.com/tbhb-dev/devtools/cmd/commit-lint" = "%s"\n' "$guard_version" >&2
-  exit 1
-fi
-if ! grep -Eq '^"go:github.com/tbhb-dev/devtools/cmd/gh-post"[[:space:]]*=' mise.toml; then
-  printf '"go:github.com/tbhb-dev/devtools/cmd/gh-post" = "%s"\n' "$guard_version" >&2
-  exit 1
-fi
-
-remote=https://github.com/tbhb-dev/devtools
-
-# ^{} dereferences an annotated tag to the commit it points at. devtools
-# publishes signed annotated tags, so the bare ref is the tag object and
-# pinning it would name something no `uses:` or `rev:` can resolve. The
-# fallback covers a lightweight tag, where no dereferenced ref exists.
-sha=$(git ls-remote "$remote" "refs/tags/$version^{}" | cut -f1)
-if [ -z "$sha" ]; then
-  sha=$(git ls-remote "$remote" "refs/tags/$version" | cut -f1)
-fi
-if [ -z "$sha" ]; then
-  echo "no tag $version at $remote" >&2
-  exit 1
-fi
-echo "$version resolves to $sha"
-
-# Every rewrite below goes through a temporary file rather than an
-# in-place flag. `sed -i` takes a mandatory backup suffix on BSD sed and
-# none on GNU sed, and this task runs wherever a consumer's developers
-# do -- a macOS machine without GNU coreutils ahead of it on PATH would
-# otherwise write a file named by the expression.
-edit() {
-  local file=$1
-  shift
-  "$@" "$file" > "$file.pins.tmp" && mv "$file.pins.tmp" "$file"
-}
-
-# The two tag-string sites and the preset extends are self-contained
-# lines, so each is one substitution.
-if [ -f apm.yml ]; then
-  edit apm.yml sed -E "s@(tbhb-dev/devtools(/packages/agents/(common|claude|codex|agy))?#)v[^[:space:]\"']+@\\1$version@"
-fi
-
-# The adapted tombi header names the release it came from. Bash does the
-# substitution so the line needs no further sed expression.
-move_tombi_version() {
-  local line
-  while IFS= read -r line || [ -n "$line" ]; do
-    if [[ $line =~ ^(.*tbhb-dev/devtools[[:space:]]+)v[0-9]+\.[0-9]+\.[0-9]+(.*)$ ]]; then
-      line=${BASH_REMATCH[1]}$version${BASH_REMATCH[2]}
-    fi
-    printf '%s\n' "$line"
-  done < "$1"
-}
-if [ -f tombi.toml ]; then
-  move_tombi_version tombi.toml > tombi.toml.pins.tmp && mv tombi.toml.pins.tmp tombi.toml
-fi
-
-edit mise.toml sed -E "s|^(\"go:github.com/tbhb-dev/devtools/cmd/guard-markdown\"[[:space:]]*=[[:space:]]*)\"[^\"]*\"|\\1\"$version\"|"
-edit mise.toml sed -E "s|^(\"go:github.com/tbhb-dev/devtools/cmd/commit-lint\"[[:space:]]*=[[:space:]]*)\"[^\"]*\"|\\1\"$version\"|"
-edit mise.toml sed -E "s|^(\"go:github.com/tbhb-dev/devtools/cmd/gh-post\"[[:space:]]*=[[:space:]]*)\"[^\"]*\"|\\1\"$version\"|"
-edit mise.toml sed -E "s|^(\"go:github.com/tbhb-dev/devtools/cmd/agentrepo\"[[:space:]]*=[[:space:]]*)\"[^\"]*\"|\\1\"$version\"|"
-
-for wf in .github/workflows/*.yml .github/workflows/*.yaml; do
-  [ -f "$wf" ] || continue
-  edit "$wf" sed -E "s|(uses:[[:space:]]*tbhb-dev/devtools/[^@]*@)[0-9a-f]{7,40}([[:space:]]*#[[:space:]]*)v[^[:space:]]*|\\1$sha\\2$version|"
-done
-
-# Move existing refs on every devtools preset, then maintain their version
-# comments. References without a ref are left alone.
-if [ -f .github/renovate.json5 ]; then
-  edit .github/renovate.json5 sed -E "s|(github>tbhb-dev/devtools//\\.github/[^/\"]+\\.json5)(#[^\"]+)\"|\\1#$sha\"|"
-  edit .github/renovate.json5 sed -E "s|(github>tbhb-dev/devtools//\\.github/[^/\"]+\\.json5#[0-9a-f]{7,40}\",?[[:space:]]*//[[:space:]]*)v[^[:space:]]*|\\1$version|"
-fi
-
-# vendir.yml and .pre-commit-config.yaml carry the version on a line that
-# names no repository. Both are one key below the line that does, so the
-# rewrite tracks whether the block it is inside belongs to devtools and
-# clears that state as soon as it fires.
-if [ -f vendir.yml ]; then
-  awk -v ver="$version" '
-    /url:[[:space:]]*https:\/\/github\.com\/tbhb-dev\/devtools([[:space:]]|$)/ { in_block = 1 }
-    in_block && /^[[:space:]]*ref:[[:space:]]*/ {
-      sub(/ref:[[:space:]]*.*/, "ref: " ver)
-      in_block = 0
-    }
-    { print }
-  ' vendir.yml > vendir.yml.pins.tmp && mv vendir.yml.pins.tmp vendir.yml
-fi
-
-if [ -f .pre-commit-config.yaml ]; then
-  awk -v ver="$version" -v sha="$sha" '
-    /repo:[[:space:]]*https:\/\/github\.com\/tbhb-dev\/devtools([[:space:]]|$)/ { in_block = 1 }
-    in_block && /^[[:space:]]*rev:[[:space:]]*/ {
-      sub(/rev:[[:space:]]*.*/, "rev: " sha "  # frozen: " ver)
-      in_block = 0
-    }
-    { print }
-  ' .pre-commit-config.yaml > .pre-commit-config.yaml.pins.tmp && mv .pre-commit-config.yaml.pins.tmp .pre-commit-config.yaml
-fi
-
-# The payload arrives first: the lock and the install below have to see
-# the tool pins this sync delivers, not the ones it replaced.
-env -u GIT_DIR -u GIT_COMMON_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE \
-    -u GIT_OBJECT_DIRECTORY vendir sync
-
-if [ -n "${DEVTOOLS_LOCK_PLATFORMS:-}" ]; then
-  mise lock --platform "$DEVTOOLS_LOCK_PLATFORMS"
-else
-  echo "DEVTOOLS_LOCK_PLATFORMS is unset, so the lockfiles were left alone" >&2
-  echo "         set it in the root mise.toml [env], then run 'mise lock --platform <list>'" >&2
-fi
-
-mise install
-mise run devtools:apm-sync
-
-# The verification runs against the payload the sync just delivered, so
-# it is the post-update task rather than this one. A release that
-# predates check-pins leaves nothing to run, which is a downgrade rather
-# than a bump and is reported instead of failing: the rewrite above
-# already succeeded.
-if mise tasks ls --all 2>/dev/null | grep -q '^devtools:check-pins[[:space:]]'; then
-  mise run devtools:check-pins
-else
-  echo "$version does not ship devtools:check-pins, so the rewrite went unverified" >&2
-fi
+exec mise -q run devtools:update-pins-legacy "$usage_version"
 '''
 
 # The gate over what update-pins writes, and over a hand-edit that moved
@@ -393,4 +260,156 @@ if ! printf '%s\n' "$mentions" | awk -v pin="$guard_version" '
 fi
 
 echo "every devtools pin is on $versions"
+'''
+
+# Frozen N-2 fallback: retain the original task body without changing behavior.
+["devtools:update-pins-legacy"]
+hide = true
+usage = 'arg "<version>"'
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+
+version=$usage_version
+case "$version" in v*) ;; *) version="v$version" ;; esac
+
+# Validate APM forms before changing any file.
+if [ -f apm.yml ]; then
+  awk '
+    /^[[:space:]]*-[[:space:]]*["\047]?tbhb-dev\/devtools/ && !/tbhb-dev\/devtools(\/packages\/agents\/(common|claude|codex|agy))?#v[0-9]+\.[0-9]+\.[0-9]+/ {
+      print "unsupported devtools APM pin: " $0 > "/dev/stderr"; bad = 1
+    }
+    END { exit bad }
+  ' apm.yml
+fi
+if ! grep -Eq '^"go:github.com/tbhb-dev/devtools/cmd/guard-markdown"[[:space:]]*=' mise.toml; then
+  echo 'declare "go:github.com/tbhb-dev/devtools/cmd/guard-markdown" in mise.toml [tools]' >&2
+  exit 1
+fi
+guard_version=$(sed -nE 's|^"go:github.com/tbhb-dev/devtools/cmd/guard-markdown"[[:space:]]*=[[:space:]]*"([^"]*)"|\1|p' mise.toml)
+if ! grep -Eq '^"go:github.com/tbhb-dev/devtools/cmd/commit-lint"[[:space:]]*=' mise.toml; then
+  printf '"go:github.com/tbhb-dev/devtools/cmd/commit-lint" = "%s"\n' "$guard_version" >&2
+  exit 1
+fi
+if ! grep -Eq '^"go:github.com/tbhb-dev/devtools/cmd/gh-post"[[:space:]]*=' mise.toml; then
+  printf '"go:github.com/tbhb-dev/devtools/cmd/gh-post" = "%s"\n' "$guard_version" >&2
+  exit 1
+fi
+
+remote=https://github.com/tbhb-dev/devtools
+
+# ^{} dereferences an annotated tag to the commit it points at. devtools
+# publishes signed annotated tags, so the bare ref is the tag object and
+# pinning it would name something no `uses:` or `rev:` can resolve. The
+# fallback covers a lightweight tag, where no dereferenced ref exists.
+sha=$(git ls-remote "$remote" "refs/tags/$version^{}" | cut -f1)
+if [ -z "$sha" ]; then
+  sha=$(git ls-remote "$remote" "refs/tags/$version" | cut -f1)
+fi
+if [ -z "$sha" ]; then
+  echo "no tag $version at $remote" >&2
+  exit 1
+fi
+echo "$version resolves to $sha"
+
+# Every rewrite below goes through a temporary file rather than an
+# in-place flag. `sed -i` takes a mandatory backup suffix on BSD sed and
+# none on GNU sed, and this task runs wherever a consumer's developers
+# do -- a macOS machine without GNU coreutils ahead of it on PATH would
+# otherwise write a file named by the expression.
+edit() {
+  local file=$1
+  shift
+  "$@" "$file" > "$file.pins.tmp" && mv "$file.pins.tmp" "$file"
+}
+
+# The two tag-string sites and the preset extends are self-contained
+# lines, so each is one substitution.
+if [ -f apm.yml ]; then
+  edit apm.yml sed -E "s@(tbhb-dev/devtools(/packages/agents/(common|claude|codex|agy))?#)v[^[:space:]\"']+@\\1$version@"
+fi
+
+# The adapted tombi header names the release it came from. Bash does the
+# substitution so the line needs no further sed expression.
+move_tombi_version() {
+  local line
+  while IFS= read -r line || [ -n "$line" ]; do
+    if [[ $line =~ ^(.*tbhb-dev/devtools[[:space:]]+)v[0-9]+\.[0-9]+\.[0-9]+(.*)$ ]]; then
+      line=${BASH_REMATCH[1]}$version${BASH_REMATCH[2]}
+    fi
+    printf '%s\n' "$line"
+  done < "$1"
+}
+if [ -f tombi.toml ]; then
+  move_tombi_version tombi.toml > tombi.toml.pins.tmp && mv tombi.toml.pins.tmp tombi.toml
+fi
+
+edit mise.toml sed -E "s|^(\"go:github.com/tbhb-dev/devtools/cmd/guard-markdown\"[[:space:]]*=[[:space:]]*)\"[^\"]*\"|\\1\"$version\"|"
+edit mise.toml sed -E "s|^(\"go:github.com/tbhb-dev/devtools/cmd/commit-lint\"[[:space:]]*=[[:space:]]*)\"[^\"]*\"|\\1\"$version\"|"
+edit mise.toml sed -E "s|^(\"go:github.com/tbhb-dev/devtools/cmd/gh-post\"[[:space:]]*=[[:space:]]*)\"[^\"]*\"|\\1\"$version\"|"
+edit mise.toml sed -E "s|^(\"go:github.com/tbhb-dev/devtools/cmd/agentrepo\"[[:space:]]*=[[:space:]]*)\"[^\"]*\"|\\1\"$version\"|"
+
+for wf in .github/workflows/*.yml .github/workflows/*.yaml; do
+  [ -f "$wf" ] || continue
+  edit "$wf" sed -E "s|(uses:[[:space:]]*tbhb-dev/devtools/[^@]*@)[0-9a-f]{7,40}([[:space:]]*#[[:space:]]*)v[^[:space:]]*|\\1$sha\\2$version|"
+done
+
+# Move existing refs on every devtools preset, then maintain their version
+# comments. References without a ref are left alone.
+if [ -f .github/renovate.json5 ]; then
+  edit .github/renovate.json5 sed -E "s|(github>tbhb-dev/devtools//\\.github/[^/\"]+\\.json5)(#[^\"]+)\"|\\1#$sha\"|"
+  edit .github/renovate.json5 sed -E "s|(github>tbhb-dev/devtools//\\.github/[^/\"]+\\.json5#[0-9a-f]{7,40}\",?[[:space:]]*//[[:space:]]*)v[^[:space:]]*|\\1$version|"
+fi
+
+# vendir.yml and .pre-commit-config.yaml carry the version on a line that
+# names no repository. Both are one key below the line that does, so the
+# rewrite tracks whether the block it is inside belongs to devtools and
+# clears that state as soon as it fires.
+if [ -f vendir.yml ]; then
+  awk -v ver="$version" '
+    /url:[[:space:]]*https:\/\/github\.com\/tbhb-dev\/devtools([[:space:]]|$)/ { in_block = 1 }
+    in_block && /^[[:space:]]*ref:[[:space:]]*/ {
+      sub(/ref:[[:space:]]*.*/, "ref: " ver)
+      in_block = 0
+    }
+    { print }
+  ' vendir.yml > vendir.yml.pins.tmp && mv vendir.yml.pins.tmp vendir.yml
+fi
+
+if [ -f .pre-commit-config.yaml ]; then
+  awk -v ver="$version" -v sha="$sha" '
+    /repo:[[:space:]]*https:\/\/github\.com\/tbhb-dev\/devtools([[:space:]]|$)/ { in_block = 1 }
+    in_block && /^[[:space:]]*rev:[[:space:]]*/ {
+      sub(/rev:[[:space:]]*.*/, "rev: " sha "  # frozen: " ver)
+      in_block = 0
+    }
+    { print }
+  ' .pre-commit-config.yaml > .pre-commit-config.yaml.pins.tmp && mv .pre-commit-config.yaml.pins.tmp .pre-commit-config.yaml
+fi
+
+# The payload arrives first: the lock and the install below have to see
+# the tool pins this sync delivers, not the ones it replaced.
+env -u GIT_DIR -u GIT_COMMON_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE \
+    -u GIT_OBJECT_DIRECTORY vendir sync
+
+if [ -n "${DEVTOOLS_LOCK_PLATFORMS:-}" ]; then
+  mise lock --platform "$DEVTOOLS_LOCK_PLATFORMS"
+else
+  echo "DEVTOOLS_LOCK_PLATFORMS is unset, so the lockfiles were left alone" >&2
+  echo "         set it in the root mise.toml [env], then run 'mise lock --platform <list>'" >&2
+fi
+
+mise install
+mise run devtools:apm-sync
+
+# The verification runs against the payload the sync just delivered, so
+# it is the post-update task rather than this one. A release that
+# predates check-pins leaves nothing to run, which is a downgrade rather
+# than a bump and is reported instead of failing: the rewrite above
+# already succeeded.
+if mise tasks ls --all 2>/dev/null | grep -q '^devtools:check-pins[[:space:]]'; then
+  mise run devtools:check-pins
+else
+  echo "$version does not ship devtools:check-pins, so the rewrite went unverified" >&2
+fi
 '''
