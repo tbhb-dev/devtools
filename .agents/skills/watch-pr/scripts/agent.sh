@@ -47,6 +47,10 @@ dt_owner_review_label() {
 }
 
 dt_agent_context() {
+  if [ "${_DEVTOOLS_AGENTREPO_CONTEXT:-false}" = true ]; then
+    _dt_context agent-context "${1:-}"
+    return $?
+  fi
   local dir marker
   dir=$(dt_git_dir) || return $?
   for marker in MERGE_HEAD CHERRY_PICK_HEAD REVERT_HEAD rebase-merge rebase-apply; do

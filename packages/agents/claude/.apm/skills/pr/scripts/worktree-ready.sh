@@ -7,6 +7,18 @@ export LC_ALL=C
 unset CDPATH GREP_OPTIONS
 IFS=$' \t\n'
 
+# Readiness must not ask mise to resolve tools before checking trust.
+if [ -z "${_DEVTOOLS_AGENTREPO_BIN+set}" ]; then
+  _DEVTOOLS_AGENTREPO_BIN=$(command -v agentrepo) || _DEVTOOLS_AGENTREPO_BIN=''
+fi
+DT_LIB_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck disable=SC1091 # generated beside this script
+. "$DT_LIB_DIR/context.sh"
+if [ "$_DEVTOOLS_AGENTREPO_CONTEXT" = true ]; then
+  _dt_context ready
+  exit $?
+fi
+
 root=$(git rev-parse --show-toplevel)
 cd "$root"
 

@@ -7,6 +7,9 @@ setup() {
   ROOT="${BATS_TEST_DIRNAME}/../../../.."
   LIB="$ROOT/packages/agents/claude/.apm/skills/commit/scripts/lib.sh"
   export LIB
+  # These cases replace shell functions. Keep their frozen fallback under
+  # test; discovery.bats exercises the supported command with failing tools.
+  export _DEVTOOLS_AGENTREPO_CONTEXT=false
   git init --quiet --initial-branch=main "$BATS_TEST_TMPDIR/repo"
   cd "$BATS_TEST_TMPDIR/repo"
   git config user.name Tester
@@ -187,7 +190,7 @@ function_from() {
   mkdir -p skill/scripts skill/templates
   cp "$ROOT/packages/agents/claude/.apm/skills/analyze-session/scripts/new-retro.sh" skill/scripts/
   cp "$LIB" skill/scripts/lib.sh
-  cp "${LIB%/*}/agent.sh" "${LIB%/*}/signing.sh" skill/scripts/
+  cp "${LIB%/*}/agent.sh" "${LIB%/*}/signing.sh" "${LIB%/*}/context.sh" skill/scripts/
   echo template >skill/templates/RETRO.md
   cat >skill/scripts/session.py <<'STUB'
 #!/usr/bin/env bash

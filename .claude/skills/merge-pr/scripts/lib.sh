@@ -67,12 +67,28 @@ gitr() {
     "$@"
 }
 
-dt_root() { gitr rev-parse --show-toplevel; }
-dt_git_dir() { gitr rev-parse --absolute-git-dir; }
+dt_root() {
+  if [ "${_DEVTOOLS_AGENTREPO_CONTEXT:-false}" = true ]; then
+    _dt_context root
+    return $?
+  fi
+  gitr rev-parse --show-toplevel
+}
+dt_git_dir() {
+  if [ "${_DEVTOOLS_AGENTREPO_CONTEXT:-false}" = true ]; then
+    _dt_context git-dir
+    return $?
+  fi
+  gitr rev-parse --absolute-git-dir
+}
 
 # The name the machine configuration knows the repository by: the
 # directory of the main checkout, whichever worktree the caller is in.
 dt_repo_name() {
+  if [ "${_DEVTOOLS_AGENTREPO_CONTEXT:-false}" = true ]; then
+    _dt_context repo-name
+    return $?
+  fi
   local common parent
   common=$(gitr rev-parse --path-format=absolute --git-common-dir) || return $?
   parent=$(dirname "$common") || return $?
@@ -83,6 +99,10 @@ dt_repo_name() {
 # stamps. The name matches space-geese's agent-* skills, whose stamp
 # format this one keeps.
 dt_state_dir() {
+  if [ "${_DEVTOOLS_AGENTREPO_CONTEXT:-false}" = true ]; then
+    _dt_context state-dir
+    return $?
+  fi
   local dir
   dir=$(dt_git_dir) || return $?
   dir=$dir/agent-skills
@@ -91,6 +111,10 @@ dt_state_dir() {
 }
 
 dt_digest() {
+  if [ "${_DEVTOOLS_AGENTREPO_CONTEXT:-false}" = true ]; then
+    _dt_context digest "$1"
+    return $?
+  fi
   local digest
   if command -v sha256sum >/dev/null 2>&1; then
     digest=$(sha256sum "$1") || return $?
@@ -102,6 +126,10 @@ dt_digest() {
 
 # dt_head prints the commit at HEAD, or `unborn` before the first commit.
 dt_head() {
+  if [ "${_DEVTOOLS_AGENTREPO_CONTEXT:-false}" = true ]; then
+    _dt_context head
+    return $?
+  fi
   gitr rev-parse --verify --quiet HEAD || printf 'unborn\n'
 }
 
@@ -113,6 +141,10 @@ dt_head() {
 # copy under .claude/skills belongs to Claude, one under .agents/skills
 # to Codex.
 dt_harness() {
+  if [ "${_DEVTOOLS_AGENTREPO_CONTEXT:-false}" = true ]; then
+    _dt_context harness
+    return $?
+  fi
   if [ -n "${DEVTOOLS_HARNESS:-}" ]; then
     printf '%s\n' "$DEVTOOLS_HARNESS"
   elif [ -n "${CLAUDE_CODE_SESSION_ID:-}" ] || [ -n "${CLAUDECODE:-}" ]; then
@@ -131,6 +163,10 @@ dt_harness() {
 # dt_session_id prints the id the pre-approval record is keyed on, with
 # the same preference `mise run preapprove` applies when both are set.
 dt_session_id() {
+  if [ "${_DEVTOOLS_AGENTREPO_CONTEXT:-false}" = true ]; then
+    _dt_context session-id
+    return $?
+  fi
   printf '%s\n' "${CLAUDE_CODE_SESSION_ID:-${CODEX_THREAD_ID:-}}"
 }
 
@@ -180,6 +216,9 @@ if [ -z "${_DEVTOOLS_AGENTREPO_BIN+set}" ]; then
     _DEVTOOLS_AGENTREPO_CONFIG=true
   fi
 fi
+
+# shellcheck disable=SC1091 # generator deploys the discovery bridge beside lib.sh
+. "$DT_LIB_DIR/context.sh"
 
 # Probe in the sourcing shell once, even when callers classify in subshells.
 # Cobra prints group help for an unknown subcommand with exit status zero.
@@ -268,6 +307,10 @@ dt_signoff_identity() {
 
 # A configured path may start with ~/.
 dt_path() {
+  if [ "${_DEVTOOLS_AGENTREPO_CONTEXT:-false}" = true ]; then
+    _dt_context path "$1"
+    return $?
+  fi
   case $1 in
   \~/*) printf '%s\n' "$HOME/${1#??}" ;;
   *) printf '%s\n' "$1" ;;

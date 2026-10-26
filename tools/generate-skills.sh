@@ -111,10 +111,12 @@ build() {
   if [ -d "$out/scripts" ] && grep -rqF 'lib.sh' "$out/scripts"; then
     cp -p "$LIB" "$out/scripts/lib.sh"
     cp -p "$SOURCE/lib/gates.py" "$out/scripts/gates.py"
+    cp -p "$SOURCE/lib/context.sh" "$out/scripts/context.sh"
     cp -p "$SOURCE/lib/agent.sh" "$SOURCE/lib/signing.sh" "$out/scripts/"
   fi
   if [ -d "$out/scripts" ] && grep -rqF 'worktree-ready.sh' "$out/scripts"; then
     cp -p "$WORKTREE_READY" "$out/scripts/worktree-ready.sh"
+    cp -p "$SOURCE/lib/context.sh" "$out/scripts/context.sh"
   fi
 }
 
