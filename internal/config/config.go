@@ -26,6 +26,10 @@ func (l Lookup) Machine(key, fallback string) (string, error) {
 	if value, ok := l.LookupEnv("DEVTOOLS_" + strings.ToUpper(key)); ok {
 		return value, nil
 	}
+	return l.machineFile(key, fallback)
+}
+
+func (l Lookup) machineFile(key, fallback string) (string, error) {
 	name, err := l.RepositoryName()
 	if err != nil {
 		return "", fmt.Errorf("repository name: %w", err)

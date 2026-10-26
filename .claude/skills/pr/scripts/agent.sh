@@ -11,9 +11,15 @@ dt_repo_conf() {
   fi
   # #321 removes this fallback when config is in the minimum agentrepo version
   # on every host and in every consumer.
-  local root file value
+  local root file
   root=$(dt_root) || return $?
   file=$root/.agents/agent-skills.conf
+  dt_repo_conf_file "$file" "$@"
+}
+
+dt_repo_conf_file() {
+  local file=$1 value
+  shift
   if [ -e "$file" ]; then
     [ -f "$file" ] && [ ! -L "$file" ] || dt_die "Repository configuration must be a regular file: $file"
     awk '

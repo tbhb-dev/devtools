@@ -95,7 +95,9 @@ Reports print locally unless both `mail_cmd` and `mail_to` are nonempty. The com
 | `owner_paths` | Same key for publication and merge delegation and reporting. Commit migration remains pending |
 | `mail_cmd`, `mail_to`, `mail_from` | Same keys for publication and merge reports. Commit reporting remains pending |
 | `signoff_identity` | Optional machine configuration under `~/.config/devtools/`, required when the Git identity is an agent |
-| `review_cmd`, `review_model`, `review_effort`, `delegation_check`, `gh_login`, `required_reviewer`, `required_reviewer_type`, `merge_owner` | Machine configuration under `~/.config/devtools/` or corresponding `DEVTOOLS_` variables |
+| `review_cmd`, `review_model`, `review_effort` | Machine configuration under `~/.config/devtools/` or corresponding `DEVTOOLS_` variables |
+| `delegation_check`, `gh_login` | Machine configuration files for merges. Commit and PR workflows also accept corresponding `DEVTOOLS_` variables |
+| `required_reviewer`, `required_reviewer_type`, `merge_owner` | Machine configuration files only |
 | `review_commit_criteria`, `review_pr_criteria`, `review_squash_criteria` | Installed review skills plus the existing trusted repository review policy |
 | `lint_squash_cmd`, `owner_review_label`, `ruleset_dir`, `merge_ready_cmd` | Repository configuration. Readiness can refuse but can't grant authority |
 | `golden_paths`, `constitutional_paths`, `loosening_markers`, `gate_config_paths`, `disposable_ignored` | Repository configuration. Inspect patterns before migration |
@@ -130,7 +132,15 @@ A successful publication records `pr.result.json` under the worktree's Git `agen
 
 Machine configuration must name `gh_login` and `required_reviewer`. The latest decisive review from that reviewer must approve the exact current PR head. A comment or pending review supplies no approval, and a later change request or dismissal blocks. Use the GraphQL login without the REST `[bot]` suffix. Optional machine `required_reviewer_type` accepts `Bot` or `User`. Leaving it unset keeps login-only matching. A wrong author type can't approve the head. A GitHub App installation needs Contents read and write permission for its approval to count. [#300](https://github.com/tbhb-dev/devtools/issues/300) documents the installation permission and down-scoped review tokens. The shared reviewer CLI remains selected only through machine review settings.
 
-Golden-file changes and detected gate loosening require an APPROVED review from optional machine `merge_owner` on the same exact head. Configure it through `dt_conf`, such as `merge_owner` in machine configuration or `DEVTOOLS_MERGE_OWNER`. Use its GraphQL login without `[bot]` too. Keep `merge_owner` a person, since an App owner override can approve its own golden-file waivers. The reviewer type setting applies only to `required_reviewer`. Repository configuration can't name that login. A push invalidates approval.
+Merge authority (`merge_owner`, `required_reviewer`, `required_reviewer_type`, `delegation_check`, and `gh_login`) comes only from machine configuration files. A corresponding `DEVTOOLS_` variable refuses a merge, even when empty. Commit and PR workflows keep their existing environment overrides.
+
+Merge gates read `golden_paths`, `loosening_markers`, `gate_config_paths`, `owner_paths`, `owner_review_label`, `ruleset_dir`, `merge_ready_cmd`, and `lint_squash_cmd` from `.agents/agent-skills.conf` at the pinned base commit. They report and ignore a differing checkout copy. Environment and checkout settings can't override these gates.
+
+Merge entry scripts load their verifier and helpers from a private snapshot of the pinned base before executing deployed helpers. The snapshot checks the original checkout, including at the final gate. A divergent helper can't turn off the dispatcher or verifier. The trusted inputs are the invoked entry script, Git and GitHub, tools, machine files, and the base commit. Changes to those trusted inputs and concurrent filesystem attacks by the same OS user stay out of scope.
+
+Before gates run and again before the merge write, every file in both sibling `merge-pr` and `agent-merge-pr` directories must match the base lock's `deployed_file_hashes`. Local packages use the base blobs at the same paths. Missing, changed, and extra files refuse with a merge integrity error. Restore deployed copies with `apm install` after debugging edits. For a skill re-pin, run the merge from a checkout of the base commit: its scripts match the base lock while the PR updates the next deployment.
+
+Golden-file changes and detected gate loosening require an APPROVED review from optional machine `merge_owner` on the same exact head. Configure `merge_owner` in the machine configuration file. Use its GraphQL login without `[bot]` too. Keep `merge_owner` a person, since an App owner override can approve its own golden-file waivers. The reviewer type setting applies only to `required_reviewer`. Repository configuration can't name that login. A push invalidates approval.
 
 Golden findings alone can proceed without owner approval when the required App's latest decisive review approves the exact current head and supplies the header-position statement below. The format is `Loosens: yes|no`. Only `no` permits the waiver.
 
