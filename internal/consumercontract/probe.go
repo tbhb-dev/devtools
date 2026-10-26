@@ -74,7 +74,9 @@ func newProber(ctx context.Context, root string) (*Prober, func(), error) {
 }
 
 // ProbeReader returns the states each key accepts, measured by running the
-// release's shell reader and merge policy reader against scratch trees.
+// release's shell reader and merge policy reader against scratch trees. A key
+// listed more than once, with different samples, is probed at each sample, so
+// a caller can ask a reader about exact values another release pinned.
 func ProbeReader(ctx context.Context, root string, keys []Key) (Matrix, error) {
 	prober, cleanup, err := newProber(ctx, root)
 	if err != nil {
@@ -85,15 +87,31 @@ func ProbeReader(ctx context.Context, root string, keys []Key) (Matrix, error) {
 		return nil, err
 	}
 	matrix := Matrix{}
-	for _, key := range keys {
+	for _, group := range groupKeys(keys) {
 		var states StateSet
-		states, err = prober.probeKey(ctx, key)
+		states, err = prober.probeKey(ctx, group)
 		if err != nil {
 			return nil, err
 		}
-		matrix[key.ID()] = states
+		matrix[group[0].ID()] = states
 	}
 	return matrix, nil
+}
+
+// groupKeys collects the entries for each key ID, in first-seen order.
+func groupKeys(keys []Key) [][]Key {
+	var groups [][]Key
+	index := map[string]int{}
+	for _, key := range keys {
+		position, seen := index[key.ID()]
+		if !seen {
+			index[key.ID()] = len(groups)
+			groups = append(groups, []Key{key})
+			continue
+		}
+		groups[position] = append(groups[position], key)
+	}
+	return groups
 }
 
 func (p *Prober) setup(ctx context.Context) error {
@@ -129,15 +147,17 @@ func (p *Prober) setup(ctx context.Context) error {
 	return nil
 }
 
-// probeKey measures the four states one key can be in.
-func (p *Prober) probeKey(ctx context.Context, key Key) (StateSet, error) {
+// probeKey measures the states one key can be in. The group holds the key
+// once for each sample to try.
+func (p *Prober) probeKey(ctx context.Context, group []Key) (StateSet, error) {
+	name := group[0].Name
 	states := StateSet{}
 	for _, probe := range []struct{ state, line string }{
 		{StateAbsent, ""},
-		{StateEmpty, key.Name + " ="},
-		{StateNonempty, key.Name + " = " + altValue},
+		{StateEmpty, name + " ="},
+		{StateNonempty, name + " = " + altValue},
 	} {
-		accepted, err := p.accepts(ctx, key.Name, probe.line)
+		accepted, err := p.accepts(ctx, name, probe.line)
 		if err != nil {
 			return nil, err
 		}
@@ -145,8 +165,14 @@ func (p *Prober) probeKey(ctx context.Context, key Key) (StateSet, error) {
 			states.Add(probe.state)
 		}
 	}
-	if !states[StateNonempty] && key.Sample != "" {
-		accepted, err := p.accepts(ctx, key.Name, key.Name+" = "+key.Sample)
+	if states[StateNonempty] {
+		return states, nil
+	}
+	for _, key := range group {
+		if key.Sample == "" {
+			continue
+		}
+		accepted, err := p.accepts(ctx, name, name+" = "+key.Sample)
 		if err != nil {
 			return nil, err
 		}
@@ -338,14 +364,16 @@ func AcceptsConf(ctx context.Context, root, conf string) (bool, error) {
 
 // discoverContext finds the settings that must appear with a probed one for
 // the readers to take the conf at all, such as a key a release has made
-// required. It tries every contract key at its sample first, then adds keys
-// one at a time while the readers keep accepting. A key the reader rejects on
-// its own stays out, so an older reader's probe omits keys it doesn't know.
+// required. It tries every contract key at its first sample first, then adds
+// keys one at a time while the readers keep accepting, trying each sample a
+// key lists until one is taken. A key the reader rejects on its own stays
+// out, so an older reader's probe omits keys it doesn't know.
 func (p *Prober) discoverContext(ctx context.Context, keys []Key) error {
+	groups := groupKeys(keys)
 	var pending []Key
-	for _, key := range keys {
-		if !slices.Contains(p.mergeKeys, key.Name) && key.Sample != "" {
-			pending = append(pending, key)
+	for _, group := range groups {
+		if usable := p.canScaffold(group[0]); usable {
+			pending = append(pending, group[0])
 		}
 	}
 	ok, err := p.acceptsScaffold(ctx, pending)
@@ -356,17 +384,38 @@ func (p *Prober) discoverContext(ctx context.Context, keys []Key) error {
 		p.scaffold = pending
 		return nil
 	}
-	for _, key := range pending {
-		trial := append(slices.Clone(p.scaffold), key)
-		accepted, trialErr := p.acceptsScaffold(ctx, trial)
-		if trialErr != nil {
-			return trialErr
-		}
-		if accepted {
-			p.scaffold = trial
+	for _, group := range groups {
+		if err = p.addScaffold(ctx, group); err != nil {
+			return err
 		}
 	}
 	return nil
+}
+
+// addScaffold keeps the first sample of a key that the readers take beside
+// the scaffold found so far.
+func (p *Prober) addScaffold(ctx context.Context, group []Key) error {
+	for _, key := range group {
+		if !p.canScaffold(key) {
+			continue
+		}
+		trial := append(slices.Clone(p.scaffold), key)
+		accepted, err := p.acceptsScaffold(ctx, trial)
+		if err != nil {
+			return err
+		}
+		if accepted {
+			p.scaffold = trial
+			return nil
+		}
+	}
+	return nil
+}
+
+// canScaffold says whether a key can stand beside a probed one: the merge
+// reader's own keys are filled in separately, and a key needs a sample.
+func (p *Prober) canScaffold(key Key) bool {
+	return !slices.Contains(p.mergeKeys, key.Name) && key.Sample != ""
 }
 
 func (p *Prober) acceptsScaffold(ctx context.Context, keys []Key) (bool, error) {

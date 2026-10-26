@@ -109,11 +109,14 @@ func previousKeys(doc *Document) []Key {
 	return doc.Keys
 }
 
-// unionKeys lists each key once, preferring the first list's sample.
+// unionKeys lists the first list's keys, then each key of the second whose
+// ID and sample the first doesn't already carry. A key present in both lists
+// with different samples appears twice. A probe then tries the exact values
+// of both releases. The first list's samples come first.
 func unionKeys(first, second []Key) []Key {
 	keys := slices.Clone(first)
 	for _, key := range second {
-		if !slices.ContainsFunc(keys, func(k Key) bool { return k.ID() == key.ID() }) {
+		if !slices.ContainsFunc(keys, func(k Key) bool { return k.ID() == key.ID() && k.Sample == key.Sample }) {
 			keys = append(keys, key)
 		}
 	}

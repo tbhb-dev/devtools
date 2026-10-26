@@ -1,0 +1,30 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright Tony Burns
+
+schema_version = 1
+baseline_tag = "v1.1.0"
+
+[[key]]
+file = ".agents/agent-skills.conf"
+name = "alpha"
+required = false
+accepts = ["empty", "nonempty"]
+sample = "x"
+
+[[key]]
+file = ".agents/agent-skills.conf"
+name = "beta"
+required = false
+accepts = ["empty", "nonempty"]
+sample = "x"
+
+[[key]]
+file = ".agents/agent-skills.conf"
+name = "mode"
+required = false
+accepts = ["value"]
+value = "new"
+sample = "new"
+
+[transition]
+none = true

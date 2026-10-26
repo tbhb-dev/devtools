@@ -198,3 +198,56 @@ func TestValidateCandidateRejectsAnUnsupportedSchema(t *testing.T) {
 		t.Fatalf("got %v", err)
 	}
 }
+
+// pinHistory is a history whose baseline reader accepts mode at one exact
+// value, old.
+func pinHistory(t *testing.T) string {
+	t.Helper()
+	requireProbeTools(t)
+	return releases(t,
+		release{"v1.0.0", "reader-v1", ""},
+		release{"v1.1.0", "reader-pin-old", "contract-pin-old.toml"},
+	)
+}
+
+// AC3 and AC8: a reader that swaps one exact value for another asks every
+// consumer to change, so a candidate declaring none fails. The preceding
+// reader is probed at the value its own contract pins, not only at the
+// candidate's.
+func TestValidateCandidateRefusesAnExactValueChangeDeclaredNone(t *testing.T) {
+	t.Parallel()
+	repo := pinHistory(t)
+	candidate(t, repo, "reader-pin-new", "contract-pin-new.toml")
+	_, err := consumercontract.ValidateCandidate(t.Context(), repo)
+	if !errors.Is(err, consumercontract.ErrUndeclared) || !strings.Contains(err.Error(), ":mode") {
+		t.Fatalf("got %v", err)
+	}
+}
+
+// AC8: the same exact value in both releases is no change.
+func TestValidateCandidateAcceptsAnUnchangedExactValueDeclaredNone(t *testing.T) {
+	t.Parallel()
+	repo := pinHistory(t)
+	candidate(t, repo, "reader-pin-old", "contract-pin-same.toml")
+	if _, err := consumercontract.ValidateCandidate(t.Context(), repo); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// AC7: removing a key the preceding reader requires has no conf both
+// readers accept, because the preceding reader rejects the key's absence.
+func TestValidateCandidateRefusesRemovingARequiredKeyWithoutOverlap(t *testing.T) {
+	t.Parallel()
+	requireProbeTools(t)
+	repo := releases(t,
+		release{"v1.0.0", "reader-v1", ""},
+		release{"v1.1.0", "reader-v1", "contract-baseline.toml"},
+		release{"v1.2.0", "reader-v2", "contract-bridge.toml"},
+		release{"v1.3.0", "reader-v3", "contract-require.toml"},
+	)
+	candidate(t, repo, "reader-v1", "contract-remove-required.toml")
+	_, err := consumercontract.ValidateCandidate(t.Context(), repo)
+	if !errors.Is(err, consumercontract.ErrNoOverlap) || !strings.Contains(err.Error(), ":gamma") {
+		t.Fatalf("got %v", err)
+	}
+}

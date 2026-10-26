@@ -231,6 +231,14 @@ func checkSequence(entry Entry, change Change, previous Previous, doc *Document)
 		)
 	case change.AppliesWhen == WhenValueRejected && kept && !before.Covers(entry.TargetValue):
 		return fmt.Errorf("%w: %s (target %q)", ErrNoOverlap, id, entry.TargetValue)
+	case change.AppliesWhen == WhenValueRejected && !kept && !before[StateAbsent]:
+		// A removed key's target state is its absence, and the preceding
+		// reader must take that too, or the consumer has no safe step.
+		return fmt.Errorf(
+			"%w: %s (the preceding reader requires the key, so its absence is rejected)",
+			ErrNoOverlap,
+			id,
+		)
 	case entry.AfterRelease != previous.Tag:
 		return fmt.Errorf(
 			"%w: %s must wait for %s, the release whose reader accepts the target",
