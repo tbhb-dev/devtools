@@ -192,3 +192,17 @@ func TestInvalidDocument(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, `[1,2]`, string(data))
 }
+
+func TestSidecarFailureStillRemovesOtherSidecars(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(root, ".claude/apm-hooks.json"), 0o750))
+	for _, harness := range []string{".agents", ".codex"} {
+		require.NoError(t, os.MkdirAll(filepath.Join(root, harness), 0o750))
+		require.NoError(t, os.WriteFile(filepath.Join(root, harness, "apm-hooks.json"), nil, 0o600))
+	}
+	require.Error(t, reconcile(root))
+	for _, harness := range []string{".agents", ".codex"} {
+		require.NoFileExists(t, filepath.Join(root, harness, "apm-hooks.json"))
+	}
+}

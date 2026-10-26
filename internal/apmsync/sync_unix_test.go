@@ -26,7 +26,7 @@ func TestUnreadableSettingsStopInstall(t *testing.T) {
 	path := filepath.Join(root, ".claude/settings.json")
 	require.NoError(t, os.WriteFile(path, []byte(`{"hooks":{}}`), 0o000))
 	var out, stderr bytes.Buffer
-	require.Equal(t, 1, apmsync.Run(t.Context(), root, nil, &out, &stderr))
+	require.Equal(t, 2, apmsync.Run(t.Context(), root, nil, &out, &stderr))
 	require.Empty(t, out.String())
 	require.Contains(t, stderr.String(), "permission denied")
 	require.FileExists(t, path)

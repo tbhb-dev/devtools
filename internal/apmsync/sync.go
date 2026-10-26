@@ -16,7 +16,10 @@ import (
 	"path/filepath"
 )
 
+var errReadSettings = errors.New("read settings")
+
 const (
+	unreadableSettings     = 2
 	invalidJSON            = 4 // JSON parse failure.
 	invalidDocument        = 5 // A named key requires an object.
 	missingExecutable      = 127
@@ -27,13 +30,18 @@ const (
 func Run(ctx context.Context, root string, in io.Reader, out, stderr io.Writer) int {
 	if err := reconcile(root); err != nil {
 		_, _ = fmt.Fprintln(stderr, err)
-		if syntax, ok := errors.AsType[*json.SyntaxError](err); ok && syntax != nil {
+		syntax, syntaxOK := errors.AsType[*json.SyntaxError](err)
+		shape, shapeOK := errors.AsType[*json.UnmarshalTypeError](err)
+		switch {
+		case errors.Is(err, errReadSettings):
+			return unreadableSettings
+		case syntaxOK && syntax != nil:
 			return invalidJSON
-		}
-		if shape, ok := errors.AsType[*json.UnmarshalTypeError](err); ok && shape != nil {
+		case shapeOK && shape != nil:
 			return invalidDocument
+		default:
+			return 1
 		}
-		return 1
 	}
 	cmd := exec.CommandContext(ctx, "apm", "install")
 	cmd.Dir = root
@@ -81,16 +89,18 @@ func reconcile(root string) error {
 }
 
 func removeSidecars(root string) error {
+	var result error
 	for _, harness := range []string{".claude", ".agents", ".codex"} {
 		path := filepath.Join(root, harness, "apm-hooks.json")
 		if info, err := os.Lstat(path); err == nil && info.IsDir() {
-			return fmt.Errorf("remove %s: %w", path, fs.ErrInvalid)
+			result = errors.Join(result, fmt.Errorf("remove %s: %w", path, fs.ErrInvalid))
+			continue
 		}
 		if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("reconcile hooks: %w", err)
+			result = errors.Join(result, fmt.Errorf("reconcile hooks: %w", err))
 		}
 	}
-	return nil
+	return result
 }
 
 func clean(path, key string) error {
@@ -102,7 +112,7 @@ func clean(path, key string) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		_ = tmp.Close()
-		return fmt.Errorf("reconcile hooks: %w", err)
+		return fmt.Errorf("%w: %w", errReadSettings, err)
 	}
 	var settings map[string]json.RawMessage
 	if err = json.Unmarshal(data, &settings); err != nil {

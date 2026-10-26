@@ -201,3 +201,42 @@ PY
   [ ! -e .claude/settings.json ]
   [ "$(cat trace)" = install ]
 }
+
+@test "cleanup failures preserve frozen status and partial sidecar removal" {
+  for failure in unreadable sidecar; do
+    for implementation in frozen go; do
+      dir="$BATS_TEST_TMPDIR/$failure-$implementation"
+      mkdir -p "$dir/.claude" "$dir/.agents" "$dir/.codex"
+      cd "$dir"
+      touch .claude/apm-hooks.json .agents/apm-hooks.json .codex/apm-hooks.json
+      if [[ $failure == unreadable ]]; then
+        printf '{"hooks":{}}\n' >.claude/settings.json
+        chmod 000 .claude/settings.json
+        [[ ! -r .claude/settings.json ]] || skip 'settings remain readable with this platform or identity'
+        expected=2
+      else
+        rm .claude/apm-hooks.json
+        mkdir .claude/apm-hooks.json
+        expected=1
+      fi
+      if [[ $implementation == frozen ]]; then
+        run --separate-stderr bash "$ROOT/tests/tools/testdata/apm-sync-frozen.sh"
+      else
+        run --separate-stderr "$ROOT/bin/agentrepo" apm-sync
+      fi
+      [ "$status" -eq "$expected" ]
+      [ -z "$output" ]
+      [ -n "$stderr" ]
+      [ ! -e trace ]
+      if [[ $failure == sidecar ]]; then
+        [ -d .claude/apm-hooks.json ]
+        [ ! -e .agents/apm-hooks.json ]
+        [ ! -e .codex/apm-hooks.json ]
+      else
+        [ -f .claude/settings.json ]
+        [ -f .agents/apm-hooks.json ]
+        [ -f .codex/apm-hooks.json ]
+      fi
+    done
+  done
+}
