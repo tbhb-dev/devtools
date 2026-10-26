@@ -36,3 +36,7 @@ Repository settings are declarative lines in `.agents/agent-skills.conf`: `pr_te
 A successful publication records `pr.result.json` under the worktree's Git `agent-skills` directory and resets the finding counter. Reports print locally unless the configuration supplies a mailbox command and recipient. A failed report delivery prints the report without retrying publication. See the consumer migration note in devtools for settings and cleanup.
 
 When the unattended finding bound returns exit 3, run `agentrepo review redesign KIND --reason TEXT` with `KIND` set to `commit`, `pr` or `squash`, then rewrite the draft from scratch. A rejected digest for the same subject refuses review before invoking the reviewer. Each active record permits one redesign. A bound after redesign requires inspection and refuses another start. Legacy records without rejected digests require inspection. The command leaves write authority and every other gate unchanged. A fresh description reset, where supported, remains separate from redesign.
+
+## Bring a branch current
+
+Use `gh pr update-branch` when the base merges cleanly. When it conflicts, fetch origin, merge `origin/<base>` into the branch, resolve conflicts, and stage the resolved paths by name. Finish through `agent-commit` base merge mode before publishing. It accepts only the current fetched base tip and preserves published history without a rebase or force push.

@@ -88,10 +88,17 @@ draft=$root/COMMIT_AGENTMSG
 state=$(dt_state_dir)
 here=$DT_LIB_DIR
 if [ "${DEVTOOLS_UNATTENDED:-0}" = 1 ]; then
-  dt_agent_context
+  dt_agent_context commit
   dt_agent_signing
-  commit_ref=$(gitr symbolic-ref --quiet HEAD)
 fi
+
+dt_commit_context
+merge_head=$(dt_commit_merge_head)
+if [ "$merge_head" != none ]; then
+  [ "$mode" = normal ] || fail "HELD: cannot amend during a base merge."
+  mode=merge
+fi
+commit_ref=$(gitr symbolic-ref --quiet HEAD || true)
 
 [ -s "$draft" ] || fail "COMMIT_AGENTMSG is empty or missing. Draft the message first."
 start=$(dt_head)
@@ -110,10 +117,13 @@ fi
 
 # The stamp has to match everything the review read.
 require_reviewed() {
-  local now_tree now_head review_suffix=""
+  local now_tree now_head now_merge_head review_suffix=""
   [ "$mode" != amend ] || review_suffix=" --amend"
   now_tree=$(gitr write-tree) || return $?
   now_head=$(dt_head) || return $?
+  now_merge_head=$(dt_commit_merge_head) || return $?
+  [ "$now_head" = "$start" ] && [ "$now_merge_head" = "$merge_head" ] ||
+    fail "HEAD or MERGE_HEAD changed during the commit gates. Run the review again."
   [ -f "$state/commit.stamp" ] || fail "No independent review has cleared this draft.
 
 That review is the only gate on the things linting cannot see: claims the
@@ -121,7 +131,7 @@ diff does not support, restating the diff instead of explaining it, and
 whether the staged change is really one logical change. Run it:
 
   bash $here/review.sh$review_suffix"
-  (dt_require_stamp commit "$draft" tree "$now_tree" head "$now_head" mode "$mode") ||
+  (dt_require_stamp commit "$draft" tree "$now_tree" head "$now_head" mode "$mode" merge_head "$now_merge_head" parents "$now_head $now_merge_head") ||
     fail "The reviewed change and the change about to be committed are no longer
 the same. Run the review again against the current draft and index:
 
@@ -190,7 +200,7 @@ reviewed_digest=$(dt_stamp_value commit draft) || exit $?
 # file, so the bytes the reviewer cleared would stop matching the bytes
 # git records.
 set -- -c commit.cleanup=whitespace commit -F "$message"
-[ "$mode" = normal ] || set -- "$@" --amend
+[ "$mode" != amend ] || set -- "$@" --amend
 
 # snapshot prints one line naming the index, the tracked edits in the
 # worktree, and the untracked files. Taken before and after the attempt,
@@ -205,7 +215,14 @@ snapshot() {
   } | gitr hash-object --stdin
 }
 if [ "${DEVTOOLS_UNATTENDED:-0}" = 1 ]; then
-  dt_agent_context
+  dt_agent_context commit
+  dt_agent_signing
+  dt_agent_before_commit "$message" "$commit_ref"
+  set -- "$@" -S
+fi
+dt_commit_context
+require_reviewed
+if [ "$mode" = merge ] && [ "${DEVTOOLS_UNATTENDED:-0}" != 1 ]; then
   dt_agent_signing
   dt_agent_before_commit "$message" "$commit_ref"
   set -- "$@" -S
@@ -250,8 +267,8 @@ if [ "$status" != 0 ]; then
   exit "$status"
 fi
 
-if [ "${DEVTOOLS_UNATTENDED:-0}" = 1 ]; then
-  dt_agent_verify_commit "$start" "$tree" "$mode" "$state"
+if [ "${DEVTOOLS_UNATTENDED:-0}" = 1 ] || [ "$mode" = merge ]; then
+  dt_agent_verify_commit "$start" "$tree" "$mode" "$state" "$merge_head"
 fi
 
 # What the commit actually holds, against what the manifest named. An
