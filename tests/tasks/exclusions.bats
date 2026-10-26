@@ -15,11 +15,13 @@ setup() {
 	WORK="${BATS_TEST_TMPDIR}/consumer"
 	mkdir -p "$WORK/.devtools/scripts" "$WORK/.devtools/tasks" "$WORK/.config/mise/conf.d"
 	cp "$ROOT/.config/mise/conf.d/10-devtools-tools.toml" "$WORK/.config/mise/conf.d/"
+	cp "$ROOT/.devtools/scripts/lint-source-files-legacy.sh" "$WORK/.devtools/scripts/"
 	cp "$ROOT/.devtools/scripts/filter-apm-deployed.py" "$WORK/.devtools/scripts/"
 	export DEVTOOLS_DIR="$WORK/.devtools"
 	cp "$ROOT/.devtools/tasks/lint.toml" "$WORK/.devtools/tasks/"
 	cp "$ROOT/.config/mise/mise.lock" "$WORK/.config/mise/"
 	cp "$ROOT/mise.lock" "$WORK/"
+	cp "$ROOT/.editorconfig" "$WORK/"
 	cd "$WORK"
 	git init -q
 	cat >mise.toml <<'TOML'
