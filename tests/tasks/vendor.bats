@@ -14,6 +14,7 @@ setup() {
   printf '#!/usr/bin/env bash\nexit 0\n' >bin/go
   cp bin/go bin/vendir
   chmod +x bin/go bin/vendir
+  export DEVTOOLS_DIR="$ROOT/.devtools"
   export PATH="$WORK/bin:$PATH"
   extract_task go devtools:vendor-check >go-check.sh
   extract_task vendir devtools:check-vendored >vendir-check.sh
