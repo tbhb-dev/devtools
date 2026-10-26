@@ -161,6 +161,9 @@
     // `github.com/tbhb-dev/devtools/cmd/<tool>`. Every cmd binary shares
     // the devtools release, so the glob also covers future tools.
     {
+      // First-party releases are eligible immediately, including weekdays.
+      minimumReleaseAge: null,
+      schedule: ["at any time"],
       groupName: "devtools",
       matchPackageNames: [
         "tbhb-dev/devtools",
