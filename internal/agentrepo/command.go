@@ -82,7 +82,7 @@ func NewCommand() (*cobra.Command, *int) {
 	evaluate.Flags().
 		StringVar(&mergeBase, "merge-base", "", "Merge base of the base commit and the head; empty when unknown")
 	group.AddCommand(evaluate)
-	root.AddCommand(group, reviewCommand(code), configCommand(code), markersCommand(code))
+	root.AddCommand(group, reviewCommand(code), configCommand(code), markersCommand(code), contentPostsCommand(code))
 	return root, code
 }
 
