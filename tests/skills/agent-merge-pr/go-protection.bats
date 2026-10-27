@@ -99,7 +99,8 @@ assert_replacement() {
 @test "AC2 existing pattern alternatives are preserved and helpers excluded" {
   local key old current path
   for key in golden_paths constitutional_paths owner_paths; do
-    old=$(git -C "$ROOT" show origin/main:.agents/agent-skills.conf | sed -n "s/^$key = //p")
+    # Pin the pre-replacement policy without requiring Git history or remote refs.
+    old=$(sed -n "s/^$key = //p" "$BATS_TEST_DIRNAME/fixtures/pre-go-protection.conf")
     current=$(sed -n "s/^$key = //p" "$ROOT/.agents/agent-skills.conf")
     # The old expression is kept byte for byte as the first alternative.
     [[ "$current" == "$old" || "$current" == "$old"'|^('* ]]
