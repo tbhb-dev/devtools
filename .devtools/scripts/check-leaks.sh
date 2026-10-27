@@ -631,14 +631,10 @@ publish_diff() (
   local format=$1
   shift
   unset GIT_DIFF_OPTS GIT_EXTERNAL_DIFF GIT_ATTR_SOURCE
-  if [[ $format == raw ]]; then
-    set -- --raw --no-abbrev -z "$@"
-  else
-    set -- -U0 "$@"
-  fi
+  if [[ $format == raw ]]; then set -- --no-patch --raw --no-abbrev -z "$@"; fi
   git -c diff.orderFile= -c diff.interHunkContext=0 -c core.attributesFile=/dev/null \
     -c diff.ignoreSubmodules=none diff --text --no-ext-diff --no-textconv \
-    -O/dev/null --no-color --no-relative --ignore-submodules=none -M --diff-filter=ACMRTU "$@"
+    -U0 -O/dev/null --no-color --no-relative --ignore-submodules=none -M --diff-filter=ACMRTU "$@"
 )
 
 emit_publish() {
