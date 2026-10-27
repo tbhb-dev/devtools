@@ -8,9 +8,18 @@ Consumers don't need to change their configuration when it arrives.
 
 This change doesn't add gate wiring or automatic file discovery.
 
-The library parses shell scripts and reports unlisted commands.
+To try the analyzer from a devtools checkout, specify each file:
 
-A stacked follow-up adds the command and its tests.
+```sh
+go run ./cmd/shell-allowlist \
+  --allowlist .devtools/shell-allowlist.toml script.sh
+```
+
+The command checks only the supplied files. Exit codes are:
+
+- 0: no findings
+- 1: findings
+- 2: a read or parse error
 
 Later changes cover executable distribution and gate integration.
 
