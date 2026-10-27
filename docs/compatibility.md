@@ -6,6 +6,10 @@ New configuration keys are optional. Their defaults keep the previous behavior. 
 
 Security fixes can break compatibility when necessary. Such a fix uses the transition declaration from [#631](https://github.com/tbhb-dev/devtools/issues/631) to explain the required consumer changes.
 
+## Go build metadata
+
+`DEVTOOLS_GO_VERSION` is optional and requires an installed `agentrepo` with the `go-ldflags` subcommand. A nonempty value fixes Version for the existing build and install tasks. Unset or empty preserves the Git-derived default. Commit and Date keep their existing derivation. The metadata helper probes the mise-selected binary, or PATH when mise selects none. Missing, older, or unsupported binaries keep the frozen shell behavior throughout N-2. That fallback doesn't support the new Version override. A failed calculation from a capable binary stops the caller rather than retrying through shell.
+
 ## Pull request declarations
 
 [The description validator](../packages/agents/source/skills/pr/shared/scripts/validate-description.sh) defines the paths that require compatibility declarations. When adding a configuration file or directory that consumers use, extend the path list and its tests so later pull requests must declare their compatibility impact.
