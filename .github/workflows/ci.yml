@@ -208,7 +208,7 @@ jobs:
         with:
           # renovate: datasource=github-releases depName=jdx/mise
           version: 2026.10.17
-          install_args: go
+          install_args: go aqua:boyter/scc
 
       - name: Run tests with coverage
         env:
