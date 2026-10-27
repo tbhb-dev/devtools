@@ -1,0 +1,159 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright Tony Burns
+
+// Package apmsync reconciles the hook keys cleared before APM installation.
+package apmsync
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"io/fs"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"syscall"
+)
+
+var errReadSettings = errors.New("read settings")
+
+const (
+	unreadableSettings     = 2
+	invalidJSON            = 4 // JSON parse failure.
+	invalidDocument        = 5 // A named key requires an object.
+	missingExecutable      = 127
+	inaccessibleExecutable = 126
+)
+
+// Run clears obsolete hooks and installs once, preserving install streams and status.
+func Run(ctx context.Context, root string, in io.Reader, out, stderr io.Writer) int {
+	if err := reconcile(root); err != nil {
+		_, _ = fmt.Fprintln(stderr, err)
+		syntax, syntaxOK := errors.AsType[*json.SyntaxError](err)
+		shape, shapeOK := errors.AsType[*json.UnmarshalTypeError](err)
+		switch {
+		case errors.Is(err, errReadSettings):
+			return unreadableSettings
+		case syntaxOK && syntax != nil:
+			return invalidJSON
+		case shapeOK && shape != nil:
+			return invalidDocument
+		default:
+			return 1
+		}
+	}
+	cmd := exec.CommandContext(ctx, "apm", "install")
+	cmd.Dir = root
+	cmd.Stdin = in
+	cmd.Stdout = out
+	cmd.Stderr = stderr
+	if err := cmd.Run(); err != nil {
+		if exit, ok := errors.AsType[*exec.ExitError](err); ok {
+			return installerExitCode(exit)
+		}
+		_, _ = fmt.Fprintln(stderr, err)
+		if errors.Is(err, exec.ErrNotFound) {
+			return missingExecutable
+		}
+		if errors.Is(err, os.ErrPermission) {
+			return inaccessibleExecutable
+		}
+		return 1
+	}
+	return 0
+}
+
+func installerExitCode(exit *exec.ExitError) int {
+	const signalExitBase = 128
+	if status, ok := exit.Sys().(syscall.WaitStatus); ok && status.Signaled() {
+		return signalExitBase + int(status.Signal())
+	}
+	return exit.ExitCode()
+}
+
+func reconcile(root string) error {
+	for _, document := range []struct{ path, key string }{
+		{".claude/settings.json", "hooks"},
+		{".agents/hooks.json", "apm"},
+		{".codex/hooks.json", "hooks"},
+	} {
+		path := filepath.Join(root, document.path)
+		info, err := os.Stat(path)
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return fmt.Errorf("reconcile hooks: %w", err)
+		}
+		if !info.Mode().IsRegular() {
+			continue
+		}
+		if err = clean(path, document.key); err != nil {
+			return fmt.Errorf("reconcile hooks: %w", err)
+		}
+	}
+	return removeSidecars(root)
+}
+
+func removeSidecars(root string) error {
+	var result error
+	for _, harness := range []string{".claude", ".agents", ".codex"} {
+		path := filepath.Join(root, harness, "apm-hooks.json")
+		if info, err := os.Lstat(path); err == nil && info.IsDir() {
+			result = errors.Join(result, fmt.Errorf("remove %s: %w", path, fs.ErrInvalid))
+			continue
+		}
+		if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+			result = errors.Join(result, fmt.Errorf("reconcile hooks: %w", err))
+		}
+	}
+	return result
+}
+
+func clean(path, key string) error {
+	// Like the shell redirection, create the temporary file before inspecting settings.
+	tmp, err := os.Create(path + ".tmp")
+	if err != nil {
+		return fmt.Errorf("reconcile hooks: %w", err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("%w: %w", errReadSettings, err)
+	}
+	var settings map[string]json.RawMessage
+	// The shell accepts an input stream without any JSON values.
+	if len(bytes.Trim(data, " \t\r\n")) != 0 {
+		err = json.Unmarshal(data, &settings)
+	}
+	if err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("%s: %w", path, err)
+	}
+	delete(settings, key)
+	data, err = json.MarshalIndent(settings, "", "  ")
+	if err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("reconcile hooks: %w", err)
+	}
+	_, writeErr := tmp.Write(append(data, '\n'))
+	closeErr := tmp.Close()
+	if writeErr != nil {
+		return fmt.Errorf("write settings: %w", writeErr)
+	}
+	if closeErr != nil {
+		return fmt.Errorf("close settings: %w", closeErr)
+	}
+	if err = os.Rename(path+".tmp", path); err != nil {
+		return fmt.Errorf("reconcile hooks: %w", err)
+	}
+	if len(settings) == 0 {
+		if err = os.Remove(path); err != nil {
+			return fmt.Errorf("remove empty settings: %w", err)
+		}
+	}
+	return nil
+}

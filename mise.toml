@@ -830,31 +830,7 @@ run = [
 # package's .apm/hooks/ and on any dependency bump.
 [tasks.apm-sync]
 description = "Redeploy APM primitives from a cleared hook state"
-depends_post = ["lint-apm"]
-run = '''
-#!/usr/bin/env bash
-set -eu
-if [[ -f .claude/settings.json ]]; then
-    jq 'del(.hooks)' .claude/settings.json > .claude/settings.json.tmp
-    mv .claude/settings.json.tmp .claude/settings.json
-    length=$(jq 'length' .claude/settings.json)
-    [[ $length -gt 0 ]] || rm -f .claude/settings.json
-fi
-if [[ -f .agents/hooks.json ]]; then
-    jq 'del(.apm)' .agents/hooks.json > .agents/hooks.json.tmp
-    mv .agents/hooks.json.tmp .agents/hooks.json
-    length=$(jq 'length' .agents/hooks.json)
-    [[ $length -gt 0 ]] || rm -f .agents/hooks.json
-fi
-if [[ -f .codex/hooks.json ]]; then
-    jq 'del(.hooks)' .codex/hooks.json > .codex/hooks.json.tmp
-    mv .codex/hooks.json.tmp .codex/hooks.json
-    length=$(jq 'length' .codex/hooks.json)
-    [[ $length -gt 0 ]] || rm -f .codex/hooks.json
-fi
-rm -f .claude/apm-hooks.json .agents/apm-hooks.json .codex/apm-hooks.json
-apm install
-'''
+run = ["bash .devtools/scripts/apm-sync.sh", "mise run lint-apm"]
 
 # `apm audit --ci` replays the install into a scratch tree and diffs it
 # against the deployed files, which catches both hook-merge failures
