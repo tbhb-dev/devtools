@@ -237,6 +237,7 @@ mset
 msgnum
 msrv
 msvc
+msys
 mtimes
 musttag
 mvdan

@@ -13,6 +13,7 @@ setup() {
   src=packages/agents/source/skills/demo
   mkdir -p "$src/parts" "$src/shared/scripts" "$src/claude/scripts" packages/agents/source/lib
   printf 'lib\n' >packages/agents/source/lib/lib.sh
+  printf 'discovery helper\n' >packages/agents/source/lib/context.sh
   printf 'gate helper\n' >packages/agents/source/lib/gates.py
   printf 'agent helper\n' >packages/agents/source/lib/agent.sh
   printf 'signing helper\n' >packages/agents/source/lib/signing.sh
@@ -40,6 +41,7 @@ setup() {
   [ -x "$CLAUDE_OUT/scripts/guard.sh" ]
   [ ! -e "$CODEX_OUT/scripts/guard.sh" ]
   [ "$(cat "$CODEX_OUT/scripts/lib.sh")" = lib ]
+  [ "$(cat "$CODEX_OUT/scripts/context.sh")" = 'discovery helper' ]
   [ "$(cat "$CODEX_OUT/scripts/gates.py")" = 'gate helper' ]
   [ "$(cat "$CODEX_OUT/scripts/agent.sh")" = 'agent helper' ]
   [ "$(cat "$CODEX_OUT/scripts/signing.sh")" = 'signing helper' ]
@@ -58,6 +60,7 @@ setup() {
   bash "$GEN"
 
   [ "$(cat "$CLAUDE_OUT/scripts/worktree-ready.sh")" = 'worktree helper' ]
+  [ "$(cat "$CLAUDE_OUT/scripts/context.sh")" = 'discovery helper' ]
   [ ! -e "$CLAUDE_OUT/scripts/lib.sh" ]
 }
 

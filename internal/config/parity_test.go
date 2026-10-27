@@ -298,7 +298,7 @@ dt_repo_conf hook_marker fallback
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "--version\nconfig --help\nreview --help\n"
+	want := "--version\nconfig --help\n--help\nreview --help\n"
 	if support == "true" {
 		want += strings.Repeat(
 			"config machine -- review_cmd fallback\nconfig repository -- hook_marker fallback\n", 2,
