@@ -48,16 +48,44 @@ def classification(source: str) -> str:
     lines = [line.strip() for line in source.splitlines()]
     code = [line for line in lines if line and not line.startswith("#")]
     preparation = re.compile(
-        r"set -[a-zA-Z ]+|export [A-Z_]+=\S+|"
+        r"set -[a-zA-Z]+(?: pipefail)?|export [A-Z_]+=[a-zA-Z0-9_./:-]+|"
         r'here=\$\(cd "\$\(dirname "\$\{BASH_SOURCE\[0\]\}"\)" && pwd\)'
     )
+    # Only the existing script-location expansion may execute a command.
+    argument = (
+        r'[a-zA-Z0-9_./:-]+|"\$here/[a-zA-Z0-9_./-]+"|'
+        r'"\$\{DEVTOOLS_DIR:-\$\(dirname "\$0"\)/../\.devtools\}'
+        r'/scripts/[a-zA-Z0-9_.-]+"'
+    )
+    forwarding = re.compile(rf'exec (?:{argument})(?: (?:{argument}))* "\$@"')
     if (
         code
-        and re.fullmatch(r'exec .+ "\$@"', code[-1])
+        and forwarding.fullmatch(code[-1])
         and all(preparation.fullmatch(line) for line in code[:-1])
     ):
         return "thin"
     return "logic"
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        'exec tool "$(probe)" "$@"',
+        'exec "$(probe)" "$@"',
+        'exec tool `probe` "$@"',
+        'exec tool "${VALUE:-$(probe)}" "$@"',
+        'exec tool "$@"; probe "$@"',
+        'exec tool && probe "$@"',
+        'exec tool >output "$@"',
+        'export VALUE=$(probe)\nexec tool "$@"',
+        'export VALUE=`probe`\nexec tool "$@"',
+        'export VALUE=1;probe\nexec tool "$@"',
+        'export VALUE=1&&probe\nexec tool "$@"',
+        'export VALUE=1>output\nexec tool "$@"',
+    ],
+)
+def test_executable_operations_are_logic(source: str) -> None:
+    assert classification(source) == "logic"
 
 
 def inventory_errors(root: Path, document: str) -> list[str]:

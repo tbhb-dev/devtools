@@ -6,7 +6,7 @@ This inventory tracks [#588](https://github.com/tbhb-dev/devtools/issues/588) an
 
 Include shell scripts and Python helpers under `packages/agents/source/`, `.devtools/`, `tools/`, `.claude/skills/*/scripts`, `scripts/` and `tests/`. Exclude generated package and deployed skill copies when canonical sources exist, vendored dependencies, fixtures, Bats suites, and Python test suites. Include the content-post scanner because it enforces posting rules, and include the Bash test-support helpers. The inline task bodies aren't files in this inventory.
 
-Each maintained file appears once. Each issue covers the next migration slice. Shared libraries can keep functions for later work. Use the epic for files without a narrower issue. Python helpers outside migration scope name #754 and give the exclusion reason.
+Each maintained file appears once. Each issue covers the next migration slice. Shared libraries can keep functions for later work. Use the epic for files it explicitly lists without a narrower issue. Python helpers outside migration scope name #754 and give the exclusion reason.
 
 Lines count newline characters, including blanks and comments, as `wc -l` does. An unterminated final line isn't counted: `tools/mise-bootstrap` has 401 newlines and 402 visible lines. This differs from the source-line metric produced by `tools/script_lines.py`, which excludes blanks and full-line comments.
 
@@ -62,8 +62,8 @@ Run `uv run pytest tests/tools/test_script_inventory.py` to check the real tree 
 | `packages/agents/source/skills/analyze-session/shared/scripts/session.py` | #754 | 885 | logic | none | none | Excluded from migration: transcript analysis stays Python. none: transcript reporting has shell integration tests only. |
 | `packages/agents/source/skills/commit/claude/scripts/guard-git.sh` | #719 | 186 | logic | none | n/a | none: `commit/guard-git` restricts Git writes in Bash. |
 | `packages/agents/source/skills/commit/shared/scripts/commit.sh` | #588 | 325 | logic | none | n/a | none: `commit/commit` commits reviewed changes in Bash. |
-| `packages/agents/source/skills/commit/shared/scripts/preflight.sh` | #588 | 338 | logic | none | n/a | none: `commit/preflight` checks prerequisites in Bash. |
-| `packages/agents/source/skills/commit/shared/scripts/review.sh` | #588 | 163 | logic | none | n/a | none: `commit/review` invokes the independent reviewer in Bash. |
+| `packages/agents/source/skills/commit/shared/scripts/preflight.sh` | #588 | 338 | logic | `internal/commitlint/identities.go` | n/a | Partial: sign-off validation via the shared library. prerequisite checks and reporting stay shell. |
+| `packages/agents/source/skills/commit/shared/scripts/review.sh` | #588 | 163 | logic | `internal/review/run.go`. `internal/review/verdict.go` | n/a | Partial: the Go code runs the reviewer and parses its verdict through the shared library. shell snapshots the staged tree and binds the commit stamp. |
 | `packages/agents/source/skills/fix-pr/claude/scripts/guard-fix.sh` | #588 | 79 | logic | none | n/a | none: `fix-pr/guard-fix` restricts remediation writes in Bash. |
 | `packages/agents/source/skills/fix-pr/shared/scripts/diagnose.sh` | #588 | 162 | logic | none | n/a | none: `fix-pr/diagnose` reads failing Actions logs in Bash. |
 | `packages/agents/source/skills/fix-pr/shared/scripts/populate-description.sh` | #588 | 108 | logic | none | n/a | none: the shell copies the existing PR body for remediation. |
@@ -79,7 +79,7 @@ Run `uv run pytest tests/tools/test_script_inventory.py` to check the real tree 
 | `packages/agents/source/skills/merge-pr/shared/scripts/populate-description.sh` | #588 | 108 | logic | none | n/a | none: shell extracts briefing material before a squash. |
 | `packages/agents/source/skills/merge-pr/shared/scripts/preflight.sh` | #723 | 224 | logic | none | n/a | none: `merge-pr/preflight` checks prerequisites in Bash. |
 | `packages/agents/source/skills/merge-pr/shared/scripts/pull-request.sh` | #723 | 165 | logic | none | n/a | none: `merge-pr/pull-request` reads pinned pull request details in Bash. |
-| `packages/agents/source/skills/merge-pr/shared/scripts/review.sh` | #588 | 154 | logic | none | n/a | none: `merge-pr/review` invokes the independent reviewer in Bash. |
+| `packages/agents/source/skills/merge-pr/shared/scripts/review.sh` | #588 | 154 | logic | `internal/review/run.go`. `internal/review/verdict.go` | n/a | Partial: the shared library uses Go to control the process and interpret the verdict. Bash gathers the pinned merge inputs and records approval evidence. |
 | `packages/agents/source/skills/merge-pr/shared/scripts/squash-merge.sh` | #723 | 376 | logic | `internal/commitlint/message.go`. `internal/ghpost/run.go` | n/a | Partial: message rules and scanned posting. owner covers check-judge caller only. the epic retains merge execution. |
 | `packages/agents/source/skills/merge-pr/shared/scripts/squash-message.sh` | #588 | 278 | logic | `internal/commitlint/identities.go` | n/a | Partial: sign-off validation. briefing stays shell. |
 | `packages/agents/source/skills/pr/claude/scripts/guard-gh.sh` | #719 | 77 | logic | none | n/a | none: `pr/guard-gh` restricts GitHub verbs in Bash. |
@@ -91,7 +91,7 @@ Run `uv run pytest tests/tools/test_script_inventory.py` to check the real tree 
 | `packages/agents/source/skills/pr/shared/scripts/preflight.sh` | #588 | 404 | logic | none | n/a | none: `pr/preflight` checks prerequisites in Bash. |
 | `packages/agents/source/skills/pr/shared/scripts/properties.sh` | #588 | 64 | logic | none | n/a | none: `pr/properties` resolves publication properties in Bash. |
 | `packages/agents/source/skills/pr/shared/scripts/publish.sh` | #588 | 226 | logic | `internal/ghpost/run.go` | n/a | Partial: scanned content publication. properties and Git orchestration stay shell. |
-| `packages/agents/source/skills/pr/shared/scripts/review.sh` | #588 | 134 | logic | none | n/a | none: `pr/review` invokes the independent reviewer in Bash. |
+| `packages/agents/source/skills/pr/shared/scripts/review.sh` | #588 | 134 | logic | `internal/review/run.go`. `internal/review/verdict.go` | n/a | Partial: reviewer invocation and verdict handling use Go via the library. description snapshots and publication stamps remain in Bash. |
 | `packages/agents/source/skills/pr/shared/scripts/scaffold-description.sh` | #588 | 91 | logic | none | n/a | none: `pr/scaffold-description` writes a template scaffold in Bash. |
 | `packages/agents/source/skills/pr/shared/scripts/validate-description.sh` | #718 | 553 | logic | none | n/a | none: `pr/validate-description` checks the draft structure in Bash. |
 | `packages/agents/source/skills/rebase/claude/scripts/guard-rebase.sh` | #722 | 194 | logic | none | n/a | none: `rebase/guard-rebase` rejects unsafe replay commands in Bash. |
@@ -113,12 +113,12 @@ Run `uv run pytest tests/tools/test_script_inventory.py` to check the real tree 
 | `scripts/clear-commit-agentmsg.sh` | #715 | 27 | logic | none | n/a | none: `repository/clear-commit-agentmsg` deletes the used message draft in Bash. |
 | `scripts/cspell-commit-msg.sh` | #715 | 52 | logic | none | n/a | none: `repository/cspell-commit-msg` checks message spelling in Bash. |
 | `scripts/vale-commit-msg.sh` | #715 | 80 | logic | none | n/a | none: `repository/vale-commit-msg` checks message prose in Bash. |
-| `tests/skills/agent-merge-pr/test_helper.bash` | #588 | 61 | logic | none | n/a | none: fixture setup for `tests/skills/agent-merge-pr` uses Bash. |
-| `tests/skills/agent-pr/test_helper.bash` | #588 | 24 | logic | none | n/a | none: fixture setup for `tests/skills/agent-pr` uses Bash. |
-| `tests/skills/merge-pr/gh-merge.bash` | #588 | 55 | logic | none | n/a | none: `merge-pr/gh-merge` simulates GitHub merging in Bash. |
-| `tests/skills/merge-pr/test_helper.bash` | #588 | 213 | logic | none | n/a | none: fixture setup for `tests/skills/merge-pr` uses Bash. |
-| `tests/skills/pr/test_helper.bash` | #588 | 154 | logic | none | n/a | none: fixture setup for `tests/skills/pr` uses Bash. |
-| `tests/skills/redesign.bash` | #588 | 90 | logic | none | n/a | none: `redesign.bash/redesign` exercises review redesign states in Bash. |
+| `tests/skills/agent-merge-pr/test_helper.bash` | #334 | 61 | logic | none | n/a | none: fixture setup for `tests/skills/agent-merge-pr` uses Bash. |
+| `tests/skills/agent-pr/test_helper.bash` | #334 | 24 | logic | none | n/a | none: fixture setup for `tests/skills/agent-pr` uses Bash. |
+| `tests/skills/merge-pr/gh-merge.bash` | #334 | 55 | logic | none | n/a | none: `merge-pr/gh-merge` simulates GitHub merging in Bash. |
+| `tests/skills/merge-pr/test_helper.bash` | #334 | 213 | logic | none | n/a | none: fixture setup for `tests/skills/merge-pr` uses Bash. |
+| `tests/skills/pr/test_helper.bash` | #334 | 154 | logic | none | n/a | none: fixture setup for `tests/skills/pr` uses Bash. |
+| `tests/skills/redesign.bash` | #334 | 90 | logic | none | n/a | none: `redesign.bash/redesign` exercises review redesign states in Bash. |
 | `tests/skills/test_content_posts.py` | #757 | 126 | logic | none | `tests/skills/test_content_posts.py` | The scanner uses `pytest` assertions. none: no Go bypass scanner yet. |
 | `tests/test_helper.bash` | #334 | 30 | logic | none | n/a | none: fixture setup for `tests` uses Bash. |
 | `tools/agy_otel_latency.py` | #754 | 80 | logic | none | `tests/tools/test_agy_otel_latency.py` | Excluded from migration: telemetry analysis stays Python. none: `agy_otel_latency` stays Python. |
