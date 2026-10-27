@@ -52,3 +52,19 @@ pr_description_policy() {
   fi
   return "$failed"
 }
+
+# Share the complete label snapshot with the publisher's defensive check.
+pr_description_labels() {
+  local draft=$1 field labels help
+  field=$(pr_field "$draft" labels) || return $?
+  labels=$(pr_sequence "$field") || return $?
+  known_labels=$(dt_gh_repo "query(\$owner:String!,\$name:String!,\$endCursor:String){repository(owner:\$owner,name:\$name){labels(first:100,after:\$endCursor){nodes{name} pageInfo{hasNextPage endCursor}}}}" --paginate --jq '.data.repository.labels.nodes[].name') || {
+    printf 'repository label set could not be read\n' >&2
+    return 1
+  }
+  if [ -n "$_DEVTOOLS_AGENTREPO_BIN" ] &&
+    help=$("$_DEVTOOLS_AGENTREPO_BIN" --help 2>/dev/null) &&
+    printf '%s\n' "$help" | grep -Eq '^[[:space:]]+pr-labels[[:space:]]'; then
+    printf '%s\n' "$labels" | "$_DEVTOOLS_AGENTREPO_BIN" pr-labels --available "$known_labels"
+  fi
+}

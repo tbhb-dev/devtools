@@ -46,6 +46,7 @@ pr_agent_current() {
 pr_checks() {
   local draft=$1 rerun=$2 cmd
   bash "$DT_LIB_DIR/validate-description.sh" "$draft" || return $?
+  pr_description_labels "$draft" || return $?
   if [ "${DEVTOOLS_UNATTENDED:-0}" != 1 ]; then
     dt_gate lint-pr-description "$draft" "$rerun" mise run lint-pr-description
     return $?

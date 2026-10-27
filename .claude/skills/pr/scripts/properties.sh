@@ -34,7 +34,7 @@ step "resolving pull request properties"
 command -v gh >/dev/null 2>&1 || die "gh is not installed"
 dt_gh_login >/dev/null || exit $?
 
-known_labels=$(dt_gh label list --limit 200 --json name --jq '.[].name') || exit $?
+# pr_checks supplied this invocation's complete repository label snapshot.
 while IFS= read -r want; do
   [ -n "$want" ] || continue
   printf '%s\n' "$known_labels" | grep -qxF -- "$want" ||
