@@ -17,11 +17,28 @@ setup() {
 
 	unset GIT_DIR GIT_COMMON_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY
 	unset PRE_COMMIT_FROM_REF PRE_COMMIT_TO_REF GITHUB_ACTIONS CI DEVTOOLS_LEAK_HOOK_CHECK DEVTOOLS_LEAK_BASE DEVTOOLS_LEAK_MODE
-	for name in $(compgen -v O11Y_); do unset "$name"; done
+	for name in $(compgen -e); do
+		[[ $name != *_PRIVATE_STRINGS && $name != DEVTOOLS_PRIVATE_STRINGS_* ]] || unset "$name"
+	done
 
 	export O11Y_PRIVATE_STRINGS="zebra-host-01, /zq/stash/dir, /zq/bin/tsc, quokka-pond, 203.0.113.77, kestrel99, mango-secret"
 
 	work=$(mktemp -d)
+	work=$(cd "$work" && pwd -P)
+	export XDG_CONFIG_HOME="$work/config"
+	unset DEVTOOLS_PRIVATE_STRINGS_REF DEVTOOLS_PRIVATE_STRINGS_TOKEN_COMMAND
+	mkdir -p "$work/.machine-bin"
+	# Keep machine policy independent of the host running the fixtures.
+	cat >"$work/.machine-bin/agentrepo" <<'STUB'
+#!/usr/bin/env bash
+case $3 in
+private_strings_ref) printf '%s\n' "${FIXTURE_REFERENCE-}" ;;
+private_strings_token_command) printf '%s\n' "${FIXTURE_TOKEN_COMMAND-}" ;;
+esac
+STUB
+	chmod +x "$work/.machine-bin/agentrepo"
+	export PATH="$work/.machine-bin:$PATH"
+	unset FIXTURE_REFERENCE FIXTURE_TOKEN_COMMAND
 	cd "$work" || exit 1
 	git init -q -b main .
 	git config user.name tester
@@ -29,11 +46,21 @@ setup() {
 	git config commit.gpgsign false
 	git config tag.gpgsign false
 	git config core.hooksPath /dev/null
-	printf '%s\n' ignored.txt >.gitignore
+	printf '%s\n' ignored.txt .machine-bin/ >.gitignore
 	git add .gitignore
 	git commit -q -m "chore: start"
 	base=$(git rev-parse HEAD)
 	printf '%s\n' '^\.devtools/' '^\.claude/' '^\.agents/' '^\.vale/' '^\.config/mise/conf\.d/' '^tools/check-leaks\.bats$' >.leak-allow
+}
+
+# The scan uses the shared uv pin even in these miniature consumer manifests.
+pin_fixture_uv() {
+	mkdir -p "$1/.config/mise/conf.d"
+	{
+		printf '[tools]\n'
+		awk '/^uv =/ { print }' "$repo_root/.config/mise/conf.d/10-devtools-tools.toml"
+	} >"$1/.config/mise/conf.d/10-tools.toml"
+	cp "$repo_root/.config/mise/mise.lock" "$1/.config/mise/mise.lock"
 }
 
 teardown() {
@@ -72,7 +99,7 @@ run_check() {
 	git add clean.md
 	run_check
 	[ "$status" -eq 0 ]
-	[ -z "$output" ]
+	[[ $output == "check-leaks: private strings source: environment" ]]
 }
 
 @test "literals match regardless of case" {
@@ -437,7 +464,9 @@ run_check() {
 }
 
 @test "with no private values loaded it says so and checks the patterns only" {
-	for name in $(compgen -v O11Y_); do unset "$name"; done
+	for name in $(compgen -e); do
+		[[ $name != *_PRIVATE_STRINGS && $name != DEVTOOLS_PRIVATE_STRINGS_* ]] || unset "$name"
+	done
 	echo "zebra-host-01" >ok.md
 	git add ok.md
 	run_check
@@ -452,7 +481,9 @@ run_check() {
 }
 
 @test "in GitHub Actions the static-only notice is also an annotation" {
-	for name in $(compgen -v O11Y_); do unset "$name"; done
+	for name in $(compgen -e); do
+		[[ $name != *_PRIVATE_STRINGS && $name != DEVTOOLS_PRIVATE_STRINGS_* ]] || unset "$name"
+	done
 	GITHUB_ACTIONS=true run_check
 	[ "$status" -eq 0 ]
 	[[ $output == *"::notice title=leak check::no private values loaded"* ]]
@@ -463,14 +494,16 @@ run_check() {
 	[ "$status" -eq 2 ]
 }
 
-@test "the notice says when mise.local.toml is present but its values did not load" {
-	for name in $(compgen -v O11Y_); do unset "$name"; done
+@test "the notice names the main clone file when it has no lists" {
+	for name in $(compgen -e); do
+		[[ $name != *_PRIVATE_STRINGS && $name != DEVTOOLS_PRIVATE_STRINGS_* ]] || unset "$name"
+	done
 	run_check
 	[[ $output != *"mise.local.toml exists"* ]]
 	: >mise.local.toml
 	run_check
 	[ "$status" -eq 0 ]
-	[[ $output == *"mise.local.toml exists here but its values are not in the environment"* ]]
+	[[ $output == *"private strings source: main clone file (mise.local.toml)"* ]]
 }
 
 # --- merges and type changes -------------------------------------------
@@ -710,6 +743,7 @@ whole_object_check() {
 	command -v mise >/dev/null
 	printf '[task_config]\nincludes = ["%s/.devtools/tasks/leaks.toml"]\n' "$repo_root" >mise.toml
 	export DEVTOOLS_DIR="$repo_root/.devtools"
+	pin_fixture_uv "$work"
 	mise trust -q "$work/mise.toml"
 	echo "fine" >"a file with spaces.md"
 	run mise run devtools:lint-leaks -- "a file with spaces.md"
@@ -898,6 +932,7 @@ hook_repo() {
 	command -v mise >/dev/null
 	mkdir -p .devtools/scripts .devtools/tasks
 	cp "$checker" .devtools/scripts/check-leaks.sh
+	cp "$BATS_TEST_DIRNAME/leak-private-strings.py" .devtools/scripts/
 	cp "$BATS_TEST_DIRNAME/install-pre-push.sh" .devtools/scripts/install-pre-push.sh
 	# Exercise the published setup, including consumers without the leak tasks.
 	cp "$repo_root/.devtools/tasks/"{git-hooks,leaks}.toml .devtools/tasks/
@@ -909,6 +944,7 @@ hook_repo() {
 	cp "$repo_root/.config/mise/mise.lock" mise.lock
 	export MISE_LOCKED=1
 	export DEVTOOLS_DIR="$work/.devtools"
+	pin_fixture_uv "$work"
 	mise trust -q "$work/mise.toml"
 	cat >.pre-commit-config.yaml <<YAML
 ---
@@ -1124,6 +1160,7 @@ v012_wrapper() {
 	sed 's/^\["devtools:/[tasks."devtools:/' <<<"$task" >mise.toml
 	sed -i.bak "s|\$DEVTOOLS_DIR/scripts/check-leaks.sh|$checker|" mise.toml
 	export DEVTOOLS_DIR="$repo_root/.devtools"
+	pin_fixture_uv "$work"
 	mise trust -q "$work/mise.toml"
 	echo ok >zebra-host-01.txt
 	run mise run devtools:lint-leaks -- zebra-host-01.txt
@@ -1559,12 +1596,12 @@ fake() {
 
 @test "working-tree scan finds its helper when invoked by basename" {
 	mkdir -p scripts
-	cp "$checker" "$BATS_TEST_DIRNAME/leak-skip.sh" scripts/
+	cp "$checker" "$BATS_TEST_DIRNAME/leak-skip.sh" "$BATS_TEST_DIRNAME/leak-private-strings.py" scripts/
 	printf 'scripts/\n' >>.gitignore
 	cd scripts
 	run bash check-leaks.sh
 	[ "$status" -eq 0 ]
-	[ -z "$output" ]
+	[[ $output == "check-leaks: private strings source: environment" ]]
 }
 
 # Commit comparison regressions (#636): counts follow paths and entries,
@@ -1590,7 +1627,7 @@ private_base() {
 	run_check --staged
 	[ "$status" -eq 1 ]
 	[[ "$output" == *'existing.txt:1: private literal O11Y_PRIVATE_STRINGS entry 6'* ]]
-	[ "$(printf '%s\n' "$output" | wc -l)" -eq 1 ]
+	[ "$(printf '%s\n' "$output" | grep -c 'private literal')" -eq 1 ]
 }
 
 @test "AC3 line shifts pass but a new occurrence after the shift fails" {
@@ -1698,6 +1735,7 @@ private_base() {
 	private_base
 	printf '[task_config]\nincludes = ["%s/.devtools/tasks/leaks.toml"]\n' "$repo_root" >mise.toml
 	export DEVTOOLS_DIR="$repo_root/.devtools"
+	pin_fixture_uv "$work"
 	mise trust -q "$work/mise.toml"
 	run mise run --quiet devtools:lint-leaks
 	[ "$status" -eq 1 ]
@@ -1776,11 +1814,12 @@ publish_finding() {
 	export O11Y_PRIVATE_STRINGS=unmatched-''fixture-value DEVTOOLS_LEAK_BASE=$base
 	mkdir -p .devtools/scripts
 	cp "$checker" .devtools/scripts/check-leaks.sh
+	cp "$BATS_TEST_DIRNAME/leak-private-strings.py" .devtools/scripts/
 	cp "$BATS_TEST_FILENAME" .devtools/scripts/check-leaks.bats
 	publish_commit 'vendor leak payload' .devtools/scripts/check-leaks.sh .devtools/scripts/check-leaks.bats
 	run_check --publish
 	[ "$status" -eq 0 ]
-	[ -z "$output" ]
+	[[ $output == "check-leaks: private strings source: environment" ]]
 	DEVTOOLS_LEAK_BASE=$(git rev-parse HEAD)
 	printf '\n# Updated payload\n' >>.devtools/scripts/check-leaks.sh
 	cat "$checker" >>.devtools/scripts/check-leaks.sh
@@ -1788,7 +1827,7 @@ publish_finding() {
 	publish_commit 'update leak payload' .devtools/scripts/check-leaks.sh .devtools/scripts/check-leaks.bats
 	run_check --publish
 	[ "$status" -eq 0 ]
-	[ -z "$output" ]
+	[[ $output == "check-leaks: private strings source: environment" ]]
 	DEVTOOLS_LEAK_BASE=$(git rev-parse HEAD)
 	cat "$checker" >>.devtools/scripts/check-leaks.sh
 	printf '%s\n' 'node-1.tail1234.ts.net' >>.devtools/scripts/check-leaks.sh
@@ -1805,7 +1844,7 @@ publish_finding() {
 	publish_commit 'edit a file holding a base value' existing.txt
 	run_check --publish
 	[ "$status" -eq 0 ]
-	[ -z "$output" ]
+	[[ $output == "check-leaks: private strings source: environment" ]]
 	printf 'refs/heads/main %s refs/heads/main %s\n' "$(git rev-parse HEAD)" "$base" >lines
 	DEVTOOLS_LEAK_MODE=publish run bash -c 'bash "$1" --pre-push-hook <"$2"' _ "$checker" lines
 	[ "$status" -eq 0 ]
@@ -2021,6 +2060,7 @@ HOOK
   publish_change existing.txt 'clean\nmore\n'
 	printf '[task_config]\nincludes = ["%s/.devtools/tasks/leaks.toml"]\n' "$repo_root" >mise.toml
 	export DEVTOOLS_DIR="$repo_root/.devtools"
+	pin_fixture_uv "$work"
 	mise trust -q "$work/mise.toml"
 	run mise run --quiet devtools:lint-leaks
 	[ "$status" -eq 1 ]
@@ -2053,7 +2093,7 @@ publish_binary_base() {
   publish_change blob.dat 'kestrel99\x00\x0010.1.2.3 forbidden-fixture changed'
   run_check --publish
   [ "$status" -eq 0 ]
-  [ -z "$output" ]
+	[[ $output == "check-leaks: private strings source: environment" ]]
 }
 @test "AC2 modified binaries reject added occurrences of inherited values" {
   publish_binary_base 'kestrel99\x0010.1.2.3 forbidden-fixture'
@@ -2078,13 +2118,17 @@ publish_overlap() {
   local kind=$1 path=blob.dat changes
   if [[ $kind == literal ]]; then export O11Y_PRIVATE_STRINGS='tart tart'; fi
   publish_binary_base 'clean\nclean\nclean\nclean\ntart tart\x00' 'tart tart'
-  if [[ $kind == rename ]]; then path=renamed.dat; git mv blob.dat "$path"; fi
+	if [[ $kind == rename ]]; then
+		path=renamed.dat
+		git mv blob.dat "$path"
+	fi
   publish_change "$path" 'clean\nclean\nclean\nclean\ntart tart tart\x00'
   if [[ $kind == rename ]]; then
     changes=$(git diff-tree --no-commit-id --name-status -r -M HEAD)
     [[ $changes == R* ]]
   fi
-  if [[ $kind == literal ]]; then publish_finding "$path:binary: private literal"
+	if [[ $kind == literal ]]; then
+		publish_finding "$path:binary: private literal"
   else publish_finding "$path:binary: pattern: repository rule"; fi
   no_value 'tart tart'
 }
@@ -2097,8 +2141,192 @@ publish_overlap() {
 	publish_change blob.dat 'example.ts.net grafana.example.ts.net\x00changed'
 	run_check --publish
 	[ "$status" -eq 0 ]
-	[ -z "$output" ]
+	[[ $output == "check-leaks: private strings source: environment" ]]
 	publish_change blob.dat 'example.ts.net grafana.example.ts.net\x00node-1.tail1234.ts.net'
 	publish_finding 'blob.dat:binary: pattern: tailnet host name'
 	no_value 'node-1.tail1234.ts.net'
+}
+
+# Linked worktrees deliberately cannot inherit the main clone's mise config.
+linked_private_fixture() {
+	unset O11Y_PRIVATE_STRINGS
+	mkdir -p .claude/worktrees
+	git worktree add -q .claude/worktrees/agent -b agent
+	linked="$work/.claude/worktrees/agent"
+	cat >"$linked/mise.toml" <<EOF
+[env]
+DEVTOOLS_DIR = "$BATS_TEST_DIRNAME/.."
+PATH = "$work/.machine-bin:$PATH"
+[task_config]
+includes = ["$BATS_TEST_DIRNAME/../tasks/leaks.toml"]
+EOF
+	pin_fixture_uv "$linked"
+	MISE_CEILING_PATHS="$work/.claude" mise trust "$linked/mise.toml" >/dev/null
+	printf '%s\n' 'kestrel99' >"$linked/leak.md"
+	cd "$linked" || exit 1
+}
+
+run_linked_check() {
+	run env MISE_CEILING_PATHS="$work/.claude" mise run --quiet devtools:lint-leaks
+	no_secrets
+}
+
+@test "AC1 main clone assignments load through mise below its ceiling" {
+	printf '%s\n' '[env]' 'PROJECT_PRIVATE_STRINGS = "kestrel99"' >mise.local.toml
+	linked_private_fixture
+	run_linked_check
+	[ "$status" -eq 1 ]
+	[[ $output == *"private literal PROJECT_PRIVATE_STRINGS"* ]]
+	[[ $output == *"private strings source: main clone file (mise.local.toml)"* ]]
+	mkdir nested
+	cd nested || exit 1
+	run_linked_check
+	[ "$status" -eq 1 ]
+}
+
+machine_private_fixture() {
+	export FIXTURE_REFERENCE=fixture-reference OP_SERVICE_ACCOUNT_TOKEN=fixture-token
+	cat >"$work/.machine-bin/op" <<'STUB'
+#!/usr/bin/env bash
+printf '%s\n' kestrel99
+STUB
+	chmod +x "$work/.machine-bin/op"
+}
+
+@test "AC2 machine reference loads without a main file and precedes it" {
+	linked_private_fixture
+	machine_private_fixture
+	run_linked_check
+	[ "$status" -eq 1 ]
+	[[ $output == *"private literal DEVTOOLS_PRIVATE_STRINGS"* ]]
+	[[ $output == *"private strings source: machine reference (private_strings_ref)"* ]]
+	printf '%s\n' '[env]' 'PROJECT_PRIVATE_STRINGS = "wombat-site"' >"$work/mise.local.toml"
+	run_linked_check
+	[ "$status" -eq 1 ]
+	[[ $output == *"private literal DEVTOOLS_PRIVATE_STRINGS"* ]]
+}
+
+@test "AC2 nonempty exported list precedes machine reference and main file" {
+	linked_private_fixture
+	machine_private_fixture
+	export O11Y_PRIVATE_STRINGS=wombat-site
+	printf '%s\n' '[env]' 'PROJECT_PRIVATE_STRINGS = "kestrel99"' >"$work/mise.local.toml"
+	run_linked_check
+	[ "$status" -eq 0 ]
+	[[ $output == *"private strings source: environment"* ]]
+}
+
+@test "AC3 failed machine reference refuses without values or provider diagnostics" {
+	linked_private_fixture
+	machine_private_fixture
+	printf '%s\n' '#!/usr/bin/env bash' 'echo kestrel99 >&2' 'exit 1' >"$work/.machine-bin/op"
+	run_linked_check
+	[ "$status" -eq 2 ]
+	[[ $output == *"could not load private strings from machine reference (private_strings_ref)"* ]]
+}
+
+@test "AC3 empty exported list refuses a configured reference" {
+	linked_private_fixture
+	machine_private_fixture
+	export O11Y_PRIVATE_STRINGS=' , '
+	run_linked_check
+	[ "$status" -eq 2 ]
+	[[ $output == *"could not load private strings from machine reference (private_strings_ref)"* ]]
+}
+
+@test "AC3 malformed main clone TOML refuses without values" {
+	linked_private_fixture
+	printf '%s\n' '[env]' 'PROJECT_PRIVATE_STRINGS = "kestrel99' >"$work/mise.local.toml"
+	run_linked_check
+	[ "$status" -eq 2 ]
+	[[ $output == *"could not load private strings from main clone file (mise.local.toml)"* ]]
+}
+
+@test "AC3 template-bearing main clone assignments refuse without values" {
+	linked_private_fixture
+	export PRIVATE_LIST=kestrel99
+	local template
+	for template in '{{ env.PRIVATE_LIST }}' '{% if true %}kestrel99{% endif %}' '{# kestrel99 #}kestrel99'; do
+		printf '[env]\nPROJECT_PRIVATE_STRINGS = "%s"\n' "$template" >"$work/mise.local.toml"
+		run_linked_check
+		[ "$status" -eq 2 ]
+		[[ $output == *"could not load private strings from main clone file (mise.local.toml)"* ]]
+		[[ $output == *"the result is incomplete"* ]]
+		no_value "$template"
+		no_value PRIVATE_LIST
+	done
+}
+
+@test "AC3 unreadable main clone file refuses" {
+	linked_private_fixture
+	printf '%s\n' '[env]' 'PROJECT_PRIVATE_STRINGS = "kestrel99"' >"$work/mise.local.toml"
+	chmod 000 "$work/mise.local.toml"
+	run_linked_check
+	chmod 600 "$work/mise.local.toml"
+	[ "$status" -eq 2 ]
+	[[ $output == *"could not load private strings from main clone file (mise.local.toml)"* ]]
+}
+
+@test "AC3 absent configuration retains pattern-only notice" {
+	linked_private_fixture
+	run_linked_check
+	[ "$status" -eq 0 ]
+	[[ $output == *"no private values loaded"* ]]
+}
+
+@test "AC3 main clone assignments are never executed" {
+	linked_private_fixture
+	printf '%s\n' '[env]' 'PROJECT_PRIVATE_STRINGS = { value = "kestrel99" }' >"$work/mise.local.toml"
+	run_linked_check
+	[ "$status" -eq 2 ]
+	[[ $output == *"could not load private strings from main clone file (mise.local.toml)"* ]]
+}
+
+@test "AC3 a consumer without optional agentrepo keeps behavior without configuration" {
+	unset O11Y_PRIVATE_STRINGS
+	pin_fixture_uv "$work"
+	local uv_binary
+	uv_binary=$(mise which uv)
+	rm "$work/.machine-bin/agentrepo"
+	ln -s "$uv_binary" "$work/.machine-bin/uv"
+	PATH="$work/.machine-bin:/usr/bin:/bin" run_check
+	[ "$status" -eq 0 ]
+	[[ $output == *"no private values loaded"* ]]
+}
+
+@test "AC2 machine file lookup works without optional agentrepo" {
+	linked_private_fixture
+	machine_private_fixture
+	local uv_binary
+	uv_binary=$(mise which uv)
+	mkdir -p "$XDG_CONFIG_HOME/devtools"
+	printf '%s\n' 'private_strings_ref = fixture-reference' >"$XDG_CONFIG_HOME/devtools/${work##*/}.conf"
+	rm "$work/.machine-bin/agentrepo"
+	ln -s "$uv_binary" "$work/.machine-bin/uv"
+	PATH="$work/.machine-bin:/usr/bin:/bin" run_check
+	[ "$status" -eq 1 ]
+	[[ $output == *"private strings source: machine reference (private_strings_ref)"* ]]
+}
+
+@test "AC1 provider commands cannot consume the pre-push ref stream" {
+	linked_private_fixture
+	machine_private_fixture
+	cat >"$work/.machine-bin/token-command" <<'STUB'
+#!/usr/bin/env bash
+cat >/dev/null
+printf '%s\n' fixture-token
+STUB
+	cat >"$work/.machine-bin/op" <<'STUB'
+#!/usr/bin/env bash
+cat >/dev/null
+printf '%s\n' kestrel99
+STUB
+	chmod +x "$work/.machine-bin/token-command" "$work/.machine-bin/op"
+	export FIXTURE_TOKEN_COMMAND="$work/.machine-bin/token-command"
+	git add -- leak.md
+	git commit -qm 'test: outgoing literal'
+	printf 'refs/heads/agent %s refs/heads/agent %s\n' "$(git rev-parse HEAD)" "$base" >"$work/push-lines"
+	run_check --pre-push-hook <"$work/push-lines"
+	[ "$status" -eq 1 ]
+	[[ $output == *"private literal DEVTOOLS_PRIVATE_STRINGS"* ]]
 }

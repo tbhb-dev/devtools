@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # check-leaks.sh -- keep private values out of a public repository.
 #
-# Private literals come from exported *_PRIVATE_STRINGS variables.
+# Private literals come from the environment, machine reference, or main clone.
 # Base patterns cover private IPv4 addresses, tailnet names, password-manager
 # references and private-key headers. .leak-patterns adds repository EREs;
 # .leak-allow exempts matching paths from patterns, never private literals.
@@ -110,6 +110,15 @@ add_needle() {
   printf '%s\t%s\n' "$name" "$value" >>"$needles"
   loaded=$((loaded + 1))
 }
+
+script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# The helper emits NUL-delimited assignments, never shell code.
+# Its inputs are files and environment; preserve Git's pre-push ref stream.
+# Keep helper temporaries inside this scan's private directory.
+TMPDIR="$tmp" uv run --script "$script_dir/leak-private-strings.py" >"$tmp/private-lists" </dev/null || die "private strings could not be loaded"
+while IFS= read -r -d '' name && IFS= read -r -d '' value; do
+  export "$name=$value"
+done <"$tmp/private-lists"
 
 # Every exported variable ending in _PRIVATE_STRINGS is a comma-separated
 # list of private literals. mise loads these from gitignored mise.local.toml.
@@ -759,7 +768,6 @@ while (($#)); do
   shift
 done
 
-script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=.devtools/scripts/leak-skip.sh
 if [[ $mode == tree ]]; then source "$script_dir/leak-skip.sh"; fi
 if [[ $mode != files ]]; then
@@ -813,11 +821,6 @@ if [[ -n $config_root && -f $config_root/.leak-patterns ]]; then patterns=$confi
 
 if ((loaded == 0)); then
   msg="no private values loaded (*_PRIVATE_STRINGS unset); only the publishable patterns are checked, so a host name, login or path outside those shapes passes"
-  # On a machine that has the settings file, the values just didn't reach
-  # this process. Say so, because that is a local setup mistake, not CI.
-  if [[ -n $top && -f $top/mise.local.toml ]]; then
-    msg="$msg. mise.local.toml exists here but its values are not in the environment; run the check through mise (mise run devtools:lint-leaks) so it can read them"
-  fi
   echo "check-leaks: $msg" >&2
   if [[ ${GITHUB_ACTIONS-} == true ]]; then
     echo "::notice title=leak check::$msg"
