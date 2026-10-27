@@ -81,6 +81,8 @@ Machine configuration supplies allowed posting identities and private strings fo
 
 ## Pull requests
 
+Preflight and publication refuse more than 800 source lines of code or 2,000 prose lines against the draft's publish base. Split by concern, along commit boundaries, or as a stacked series. Only Renovate bot authors (`app/renovate` or `renovate[bot]`, with `is_bot`) are exempt. The checks measure `chore` titles and other bots. The skills require `agentrepo` v0.23.0 or newer. That release adds `size check`. Install it and the pinned `scc` before adopting these skills. Publication stops until you install that version or newer. The size limit has no override.
+
 Publication checks the description before leak scans, lint, the independent review, and tests. Use `create-pr.sh --check-description` to run only description checks. PR and commit workflows can use gate passes from a clean committed tree while the cache key is unchanged: the tree, command, gate definitions, and tool versions must match. Description gates also bind the draft. Records stay under the Git directory. The scripts print each cached pass they use, and `--rerun-gates` forces fresh checks. Leak scans and independent reviews always run.
 
 Run the `pr` skill. It drafts the description and publishes it after a review, and it routes what follows to three sibling skills. This section only summarizes them.

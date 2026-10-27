@@ -20,6 +20,7 @@ pr_setup() {
   export GH_PR_STATE='{"baseRefName":"main","isDraft":false,"labels":[{"name":"bug"}],"reviewRequests":[],"assignees":[],"milestone":null}'
   : >"$GH_LOG"
   stub_gh
+  stub_size_check
 
   git init --quiet --bare --initial-branch=main "$ORIGIN"
   git init --quiet --initial-branch=main "$REPO"
@@ -152,3 +153,31 @@ refute_grep() {
 
 stamp_file() { printf '%s/agent-skills/pr.stamp' "$(git rev-parse --absolute-git-dir)"; }
 remote_topic() { git ls-remote origin refs/heads/topic | cut -f1; }
+
+# Keep workflow fixtures independent of the installed size capability.
+stub_size_check() {
+  export PR_REAL_AGENTREPO
+  PR_REAL_AGENTREPO=$(command -v agentrepo)
+  export SIZE_LOG="$BATS_TEST_TMPDIR/size.log"
+  : >"$SIZE_LOG"
+  cat >"$BATS_TEST_TMPDIR/bin/agentrepo" <<'STUB'
+#!/usr/bin/env bash
+if [ "$1 $2" = 'size check' ]; then
+  printf '%s\n' "$*" >>"$SIZE_LOG"
+  if [ "${SIZE_MODE:-}" = old ]; then
+    echo 'unknown command "check" for "agentrepo size"' >&2
+    exit 1
+  fi
+  echo '801 code SLOC, 0 prose lines'
+  if [ "${SIZE_MODE:-}" = over ]; then
+    echo 'split by concern, along commit boundaries, or as a stacked series' >&2
+    exit 1
+  fi
+  exit 0
+fi
+exec "$PR_REAL_AGENTREPO" "$@"
+STUB
+  chmod +x "$BATS_TEST_TMPDIR/bin/agentrepo"
+  export _DEVTOOLS_AGENTREPO_BIN="$BATS_TEST_TMPDIR/bin/agentrepo"
+  export _DEVTOOLS_AGENTREPO_CONFIG=true
+}

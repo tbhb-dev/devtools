@@ -144,6 +144,7 @@ if ! git rev-parse --verify --quiet "$base_ref" >/dev/null; then
   base_ref="refs/heads/$default_branch"
 fi
 pr_agent_range "$base_ref"
+agentrepo size check --publish --base "$base_ref" --draft "$DRAFT"
 printf 'comparing against: %s\n' "$base_ref"
 # shellcheck disable=SC2312 # Only formats diagnostic output; no decision uses the status.
 printf '%s vs base:  %s\n' "$branch" "$(ahead_behind HEAD "$base_ref")"
