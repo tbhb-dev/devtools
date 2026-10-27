@@ -90,6 +90,7 @@ func NewCommand() (*cobra.Command, *int) {
 		versionsCommand(code),
 		fuzzCommand(code),
 		mergeCommand(code),
+		skillTokensCommand(code),
 	)
 	return root, code
 }
