@@ -4,6 +4,8 @@ The package includes generated `agent-commit`, `agent-pr`, and `agent-merge-pr` 
 
 ## Consumer cleanup
 
+Sync the shared payload and install its new `aqua:boyter/scc` mise pin before explicitly adopting `agentrepo size` in a workflow.
+
 Move the supported settings and machine authorities before replacing local skills. The generated merge skill requires `uv` for its pinned YAML reader and `agentrepo checks evaluate` for check judgement.
 
 ### Skill limits fallback retirement
