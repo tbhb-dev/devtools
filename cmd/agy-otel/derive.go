@@ -35,7 +35,10 @@ func transcriptTokens(name *string) *tokenCounts {
 	}
 	defer file.Close()
 	info, err := file.Stat()
-	if err != nil {
+	switch {
+	case err != nil:
+		return failure("missing")
+	case info.IsDir():
 		return failure("missing")
 	}
 	offset := max(int64(0), info.Size()-transcriptWindow)
@@ -62,14 +65,10 @@ func transcriptTokens(name *string) *tokenCounts {
 			Out       json.RawMessage `json:"output_tokens"`
 			CacheRead json.RawMessage `json:"cache_read_tokens"`
 		}
-		// Read the type separately so invalid counts still produce a format error.
-		var header struct {
-			Type string `json:"type"`
-		}
-		if json.Unmarshal(line, &header) != nil || header.Type != "PLANNER_RESPONSE" {
+		if json.Unmarshal(line, &response) != nil || response.Type != "PLANNER_RESPONSE" {
 			continue
 		}
-		if json.Unmarshal(line, &response) != nil || !validCount(response.In) || !validCount(response.Out) ||
+		if !validCount(response.In) || !validCount(response.Out) ||
 			!validCount(response.CacheRead) {
 			return failure("format")
 		}
