@@ -1,6 +1,6 @@
 # Shell migration inventory and owners
 
-This inventory tracks [#588](https://github.com/tbhb-dev/devtools/issues/588) and [#754](https://github.com/tbhb-dev/devtools/issues/754). It describes the maintained sources at `2b6c49488566ba1e3b3960e26fdedd0cd786ce8d`, measured on 2026-10-26.
+This inventory tracks [#588](https://github.com/tbhb-dev/devtools/issues/588) and [#754](https://github.com/tbhb-dev/devtools/issues/754). It describes the maintained sources at `f843f764`, measured on 2026-10-26.
 
 ## Scope and counting
 
@@ -93,7 +93,7 @@ Run `uv run pytest tests/tools/test_script_inventory.py` to check the real tree 
 | `packages/agents/source/skills/pr/shared/scripts/publish.sh` | #588 | 226 | logic | `internal/ghpost/run.go` | n/a | Partial: scanned content publication. properties and Git orchestration stay shell. |
 | `packages/agents/source/skills/pr/shared/scripts/review.sh` | #588 | 134 | logic | none | n/a | none: `pr/review` invokes the independent reviewer in Bash. |
 | `packages/agents/source/skills/pr/shared/scripts/scaffold-description.sh` | #588 | 91 | logic | none | n/a | none: `pr/scaffold-description` writes a template scaffold in Bash. |
-| `packages/agents/source/skills/pr/shared/scripts/validate-description.sh` | #718 | 524 | logic | none | n/a | none: `pr/validate-description` checks the draft structure in Bash. |
+| `packages/agents/source/skills/pr/shared/scripts/validate-description.sh` | #718 | 553 | logic | none | n/a | none: `pr/validate-description` checks the draft structure in Bash. |
 | `packages/agents/source/skills/rebase/claude/scripts/guard-rebase.sh` | #722 | 194 | logic | none | n/a | none: `rebase/guard-rebase` rejects unsafe replay commands in Bash. |
 | `packages/agents/source/skills/rebase/shared/scripts/continue-rebase.sh` | #588 | 169 | logic | none | n/a | none: `rebase/continue-rebase` checks staged changes before continuing in Bash. |
 | `packages/agents/source/skills/rebase/shared/scripts/marker-scan.sh` | #714 | 97 | logic | `internal/agentrepo/markers.go` | n/a | Marker scanning implemented. probe and frozen fallback still hold logic. |
@@ -113,7 +113,7 @@ Run `uv run pytest tests/tools/test_script_inventory.py` to check the real tree 
 | `scripts/clear-commit-agentmsg.sh` | #715 | 27 | logic | none | n/a | none: `repository/clear-commit-agentmsg` deletes the used message draft in Bash. |
 | `scripts/cspell-commit-msg.sh` | #715 | 52 | logic | none | n/a | none: `repository/cspell-commit-msg` checks message spelling in Bash. |
 | `scripts/vale-commit-msg.sh` | #715 | 80 | logic | none | n/a | none: `repository/vale-commit-msg` checks message prose in Bash. |
-| `tests/skills/agent-merge-pr/test_helper.bash` | #588 | 58 | logic | none | n/a | none: fixture setup for `tests/skills/agent-merge-pr` uses Bash. |
+| `tests/skills/agent-merge-pr/test_helper.bash` | #588 | 61 | logic | none | n/a | none: fixture setup for `tests/skills/agent-merge-pr` uses Bash. |
 | `tests/skills/agent-pr/test_helper.bash` | #588 | 24 | logic | none | n/a | none: fixture setup for `tests/skills/agent-pr` uses Bash. |
 | `tests/skills/merge-pr/gh-merge.bash` | #588 | 55 | logic | none | n/a | none: `merge-pr/gh-merge` simulates GitHub merging in Bash. |
 | `tests/skills/merge-pr/test_helper.bash` | #588 | 213 | logic | none | n/a | none: fixture setup for `tests/skills/merge-pr` uses Bash. |
@@ -124,7 +124,7 @@ Run `uv run pytest tests/tools/test_script_inventory.py` to check the real tree 
 | `tools/agy_otel_latency.py` | #754 | 80 | logic | none | `tests/tools/test_agy_otel_latency.py` | Excluded from migration: telemetry analysis stays Python. none: `agy_otel_latency` stays Python. |
 | `tools/apm_audit.py` | #754 | 139 | logic | none | `tests/tools/test_apm_audit.py` | Excluded from migration: the Python audit reporter analyzes deployment findings. none: `apm_audit` stays Python. |
 | `tools/check-script-hygiene.sh` | #588 | 172 | logic | none | n/a | none: `repository/check-script-hygiene` checks shell hazards in Bash. |
-| `tools/check-versions.sh` | #716 | 158 | logic | none | n/a | none: `repository/check-versions` compares published version literals in Bash. |
+| `tools/check-versions.sh` | #716 | 4 | thin | `internal/versions/check.go` | n/a | Go checks release literals and local locks. |
 | `tools/fix_prose_replacements.py` | #754 | 256 | logic | none | `tests/tools/test_fix_prose_replacements.py` | Excluded from migration: the helper applies span-checked prose corrections. none: `fix_prose_replacements` stays Python. |
 | `tools/fuzz.sh` | #588 | 4 | thin | none | n/a | none: `repository/fuzz` discovers fuzz targets in Bash. |
 | `tools/generate-skills.sh` | #588 | 172 | logic | none | n/a | none: `repository/generate-skills` renders canonical skill sources in Bash. |
@@ -141,7 +141,7 @@ Run `uv run pytest tests/tools/test_script_inventory.py` to check the real tree 
 | `tools/skill_attribution.py` | #754 | 555 | logic | none | `tests/tools/test_skill_attribution.py` | Excluded from migration: transcript attribution analysis stays Python. none: `skill_attribution` stays Python. |
 | `tools/test-guards.sh` | #588 | 242 | logic | none | n/a | none: `repository/test-guards` exercises registered guard commands in Bash. |
 
-Totals: 107 shell files (7 Bash test helpers included), 15395 shell newlines. 15 Python helpers.
+Totals: 107 shell files (7 Bash test helpers included), 15273 shell newlines. 15 Python helpers.
 
 ## Historical timing baseline
 
