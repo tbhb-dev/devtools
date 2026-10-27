@@ -57,6 +57,8 @@ Publication records the PR number, URL, full head, base, draft state, and push k
 
 ## Unattended merges
 
+The optional `agentrepo config merge-machine KEY [DEFAULT]` reader prepares machine authority for the merge split's piece B. It refuses any set `DEVTOOLS_MERGE_OWNER`, `DEVTOOLS_REQUIRED_REVIEWER`, `DEVTOOLS_REQUIRED_REVIEWER_TYPE`, `DEVTOOLS_DELEGATION_CHECK`, or `DEVTOOLS_GH_LOGIN`, including empty values. It reads machine files with the existing precedence and fallback. No workflow calls this reader until piece B. Existing keys, callers, defaults, and gates keep their behavior.
+
 Run `agent-merge-pr` for unattended squash merges. Its generated entry points use the shared merge scripts, independent review, gates, stamps, and confirmation chain. Machine `gh_login` and `required_reviewer` are mandatory. The required reviewer must approve the exact current head. Configure its GraphQL login without the REST `[bot]` suffix. Optional machine `required_reviewer_type` (`Bot` or `User`) checks the review author type. Leaving it unset preserves login-only matching. A GitHub App installation needs Contents read and write permission for its approval to count, as [#300](https://github.com/tbhb-dev/devtools/issues/300) documents. Only session pre-approval or machine delegation grants `merge`. The skill refuses `--confirmed`.
 
 A `merge-pr` execution without an explicit `--confirmed` runs the same approval, owner, policy, and required-check gates, including when confirmation comes from session pre-approval or machine delegation. Only an operator answer represented by `--confirmed` keeps the attended gate behavior. An empty check rollup is inconclusive and refuses every merge.

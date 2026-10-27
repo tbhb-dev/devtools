@@ -19,7 +19,7 @@ import (
 func configCommand(code *int) *cobra.Command {
 	const maxArgs = 2
 	group := &cobra.Command{Use: "config", Short: "Read machine authority or repository behavior settings"}
-	for _, kind := range []string{"machine", "repository"} {
+	for _, kind := range []string{"machine", "merge-machine", "repository"} {
 		group.AddCommand(&cobra.Command{
 			Use:   kind + " KEY [DEFAULT]",
 			Short: "Print a literal " + kind + " setting",
@@ -38,8 +38,11 @@ func configCommand(code *int) *cobra.Command {
 					fallback = args[1]
 				}
 				read := lookup.Machine
-				if kind == "repository" {
+				switch kind {
+				case "repository":
 					read = lookup.Repository
+				case "merge-machine":
+					read = lookup.MergeMachine
 				}
 				value, err := read(args[0], fallback)
 				if err != nil {
