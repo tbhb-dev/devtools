@@ -2242,6 +2242,21 @@ STUB
 	[[ $output == *"could not load private strings from main clone file (mise.local.toml)"* ]]
 }
 
+@test "AC3 template-bearing main clone assignments refuse without values" {
+	linked_private_fixture
+	export PRIVATE_LIST=kestrel99
+	local template
+	for template in '{{ env.PRIVATE_LIST }}' '{% if true %}kestrel99{% endif %}' '{# kestrel99 #}kestrel99'; do
+		printf '[env]\nPROJECT_PRIVATE_STRINGS = "%s"\n' "$template" >"$work/mise.local.toml"
+		run_linked_check
+		[ "$status" -eq 2 ]
+		[[ $output == *"could not load private strings from main clone file (mise.local.toml)"* ]]
+		[[ $output == *"the result is incomplete"* ]]
+		no_value "$template"
+		no_value PRIVATE_LIST
+	done
+}
+
 @test "AC3 unreadable main clone file refuses" {
 	linked_private_fixture
 	printf '%s\n' '[env]' 'PROJECT_PRIVATE_STRINGS = "kestrel99"' >"$work/mise.local.toml"

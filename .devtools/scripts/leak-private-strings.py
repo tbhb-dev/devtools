@@ -121,6 +121,7 @@ def resolve() -> tuple[dict[str, str], str | None]:
         if any(
             not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", key)
             or not isinstance(value, str)
+            or any(marker in value for marker in ("{{", "{%", "{#"))
             for key, value in values.items()
         ):
             fail(source)
