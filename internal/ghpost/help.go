@@ -33,6 +33,8 @@ Operations and additional flags:
 	pr edit <pr>    --title TEXT --base BRANCH --add-label NAME --remove-label NAME
 	--add-assignee LOGIN --remove-assignee LOGIN --add-reviewer LOGIN
 	--remove-reviewer LOGIN --milestone NAME --remove-milestone
+	issue label <issue>    -R OWNER/REPO --add change:NAME --remove change:NAME
+	pr label <pr>   -R OWNER/REPO --add change:NAME --remove change:NAME
 	pr ready <pr>   --head SHA --dry-run
 	pr close <pr>   --head SHA --comment-file PATH --dry-run
 	pr comment <pr> --edit-last --create-if-none
@@ -49,6 +51,12 @@ PR ready and close require a full 40-hex --head, checked before the write
 and at read-back. Ready requires an open draft; close requires an open PR
 and a nonempty scanned reason file (at most 65536 characters).
 Only these two verbs accept --dry-run; neither accepts --body-file.
+
+Issue and PR label require -R, at least one --add or --remove (each
+repeatable), and read no stdin. Only labels starting with change: are
+accepted, and a comma or newline in a label is refused. A label the
+repository lacks is refused rather than created. Neither verb accepts
+--body-file.
 `
 
 func checkDeps(errOut io.Writer) int {
