@@ -83,7 +83,7 @@ printf 'deployment diagnostic\n' >&2
 exit "$INSTALL_STATUS"
 SH
     chmod +x bin/apm
-    for mode in siblings owned unowned empty missing; do
+    for mode in siblings owned unowned empty zero whitespace missing; do
       for implementation in frozen go wrapper repository; do
         dir="$PWD/$result-$mode-$implementation"
         mkdir -p "$dir"
@@ -97,6 +97,8 @@ SH
             owned) printf '{"%s":{}}\n' "$key" >"$file" ;;
             unowned) printf '{"local":true}\n' >"$file" ;;
             empty) printf '{}\n' >"$file" ;;
+            zero) : >"$file" ;;
+            whitespace) printf ' \t\r\n' >"$file" ;;
           esac
         done
         case $implementation in
@@ -238,5 +240,26 @@ PY
         [ -f .codex/apm-hooks.json ]
       fi
     done
+  done
+}
+
+@test "signal-terminated installation preserves the frozen shell status" {
+  cat >bin/apm <<'SH'
+#!/usr/bin/env bash
+printf 'install\n' >>trace
+kill -TERM "$$"
+SH
+  chmod +x bin/apm
+  for implementation in frozen go; do
+    mkdir "$implementation"
+    cd "$implementation"
+    if [[ $implementation == frozen ]]; then
+      run bash "$ROOT/tests/tools/testdata/apm-sync-frozen.sh"
+    else
+      run "$ROOT/bin/agentrepo" apm-sync
+    fi
+    [ "$status" -eq 143 ]
+    [ "$(cat trace)" = install ]
+    cd "$BATS_TEST_TMPDIR"
   done
 }

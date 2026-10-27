@@ -5,6 +5,7 @@
 package apmsync
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -14,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"syscall"
 )
 
 var errReadSettings = errors.New("read settings")
@@ -50,7 +52,7 @@ func Run(ctx context.Context, root string, in io.Reader, out, stderr io.Writer) 
 	cmd.Stderr = stderr
 	if err := cmd.Run(); err != nil {
 		if exit, ok := errors.AsType[*exec.ExitError](err); ok {
-			return exit.ExitCode()
+			return installerExitCode(exit)
 		}
 		_, _ = fmt.Fprintln(stderr, err)
 		if errors.Is(err, exec.ErrNotFound) {
@@ -62,6 +64,14 @@ func Run(ctx context.Context, root string, in io.Reader, out, stderr io.Writer) 
 		return 1
 	}
 	return 0
+}
+
+func installerExitCode(exit *exec.ExitError) int {
+	const signalExitBase = 128
+	if status, ok := exit.Sys().(syscall.WaitStatus); ok && status.Signaled() {
+		return signalExitBase + int(status.Signal())
+	}
+	return exit.ExitCode()
 }
 
 func reconcile(root string) error {
@@ -115,7 +125,11 @@ func clean(path, key string) error {
 		return fmt.Errorf("%w: %w", errReadSettings, err)
 	}
 	var settings map[string]json.RawMessage
-	if err = json.Unmarshal(data, &settings); err != nil {
+	// The shell accepts an input stream without any JSON values.
+	if len(bytes.Trim(data, " \t\r\n")) != 0 {
+		err = json.Unmarshal(data, &settings)
+	}
+	if err != nil {
 		_ = tmp.Close()
 		return fmt.Errorf("%s: %w", path, err)
 	}

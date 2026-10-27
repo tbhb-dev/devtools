@@ -28,23 +28,25 @@ func TestReconcile(t *testing.T) {
 				{"owned", `{"KEY":{}}`, ""},
 				{"unowned", `{"local":true}`, `{"local":true}`},
 				{"empty", `{}`, ""},
+				{"zero", "", ""},
+				{"whitespace", " \t\r\n", ""},
 				{"missing", "", ""},
 			} {
 				t.Run(fixture.name, func(t *testing.T) {
 					t.Parallel()
-					checkFixture(t, document.path, document.key, fixture.input, fixture.want)
+					checkFixture(t, document.path, document.key, fixture.input, fixture.want, fixture.name != "missing")
 				})
 			}
 		})
 	}
 }
 
-func checkFixture(t *testing.T, document, key, input, want string) {
+func checkFixture(t *testing.T, document, key, input, want string, exists bool) {
 	t.Helper()
 	root := t.TempDir()
 	path := filepath.Join(root, document)
 	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o750))
-	if input != "" {
+	if exists {
 		require.NoError(t, os.WriteFile(path, []byte(strings.ReplaceAll(input, "KEY", key)), 0o600))
 	}
 	for _, harness := range []string{".claude", ".agents", ".codex"} {
