@@ -4,6 +4,8 @@ The package includes generated `agent-commit`, `agent-pr`, and `agent-merge-pr` 
 
 ## Consumer cleanup
 
+Sync the shared payload and install its new `aqua:boyter/scc` mise pin before explicitly adopting `agentrepo size` in a workflow.
+
 Move the supported settings and machine authorities before replacing local skills. The generated merge skill requires `uv` for its pinned YAML reader and `agentrepo checks evaluate` for check judgement.
 
 The shared loader requires `agentrepo` v0.16.0 or newer for release binaries. A source build, which reports `DEV` or a `v0.0.0` pseudo-version, skips the floor. It resolves `mise which agentrepo` from the repository root first, then uses `agentrepo` from `PATH` if mise supplies no executable. Configuration reads and review execution use that binary, as does check judgement. An older binary stops the loader with the found and required versions. When neither source provides `agentrepo`, the shell keeps parsing configuration as before.

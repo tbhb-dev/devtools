@@ -20,6 +20,7 @@ PYTHONUTF
 RLENGTH
 RSTART
 RUSTDOCFLAGS
+SLOC
 Sprintf
 TSSDK
 Tricolon
@@ -48,6 +49,7 @@ bidi
 bidichk
 bodyclose
 boumenot
+boyter
 bsdtar
 buildid
 buildkit
@@ -256,6 +258,7 @@ nolint
 nolintlint
 nolints
 nonamedreturns
+nonblank
 nonbreaking
 noprefix
 nosprintfhostport
@@ -303,6 +306,7 @@ prng
 promlinter
 proofhouse
 protogetter
+prsize
 pycache
 pydocstyle
 pylint
