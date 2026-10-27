@@ -40,22 +40,37 @@ func TestLedger(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, boundary, 100)
 	for name, input := range map[string][]byte{
-		"oversized":       ledger(t, oversized),
-		"duplicate":       ledger(t, append(entries, entries[0])),
-		"case duplicate":  ledger(t, append(entries, fanout.Entry{Repository: "ORG/ACTIVE", Disposition: "active"})),
-		"unknown version": []byte(`{"version":2,"entries":[]}`),
-		"malformed":       []byte(`secret-password`),
-		"unknown field":   []byte(`{"version":1,"entries":[],"secret-password":true}`),
-		"bad repository":  ledger(t, []fanout.Entry{{Repository: "https://secret-password@host/repo", Disposition: "active"}}),
-		"bad disposition": ledger(t, []fanout.Entry{{Repository: "org/repo", Disposition: "secret-password"}}),
-		"null":            []byte(`null`),
-		"missing entries": []byte(`{"version":1}`),
-		"trailing":        append(data, []byte(`{}`)...),
+		"oversized":              ledger(t, oversized),
+		"duplicate":              ledger(t, append(entries, entries[0])),
+		"case duplicate":         ledger(t, append(entries, fanout.Entry{Repository: "ORG/ACTIVE", Disposition: "active"})),
+		"unknown version":        []byte(`{"version":2,"entries":[]}`),
+		"malformed":              []byte(`secret-password`),
+		"unknown field":          []byte(`{"version":1,"entries":[],"secret-password":true}`),
+		"bad repository":         ledger(t, []fanout.Entry{{Repository: "https://secret-password@host/repo", Disposition: "active"}}),
+		"bad disposition":        ledger(t, []fanout.Entry{{Repository: "org/repo", Disposition: "secret-password"}}),
+		"null":                   []byte(`null`),
+		"duplicate version":      []byte(`{"version":2,"version":1,"entries":[]}`),
+		"duplicate entries":      []byte(`{"version":1,"entries":[{"repository":"secret-password"}],"entries":[]}`),
+		"duplicate repository":   []byte(`{"version":1,"entries":[{"repository":"secret-password","repository":"org/repo","disposition":"active"}]}`),
+		"duplicate disposition":  []byte(`{"version":1,"entries":[{"repository":"org/repo","disposition":"active","disposition":"exempt"}]}`),
+		"escaped duplicate":      []byte(`{"version":1,"entries":[{"repository":"org/repo","disposition":"active","\u0064\u0069\u0073\u0070\u006f\u0073\u0069\u0074\u0069\u006f\u006e":"exempt"}]}`),
+		"case duplicate member":  []byte(`{"version":1,"entries":[{"repository":"org/repo","disposition":"active","Disposition":"exempt"}]}`),
+		"unicode case duplicate": []byte(`{"version":1,"entries":[{"repository":"org/repo","disposition":"active","\u0064\u0069\u0073\u0070\u006f\u017f\u0069\u0074\u0069\u006f\u006e":"exempt"}]}`),
+		"null version":           []byte(`{"version":null,"entries":[]}`),
+		"null after version":     []byte(`{"version":1,"version":null,"entries":[]}`),
+		"null repository":        []byte(`{"version":1,"entries":[{"repository":null,"disposition":"active"}]}`),
+		"null after repository":  []byte(`{"version":1,"entries":[{"repository":"org/repo","repository":null,"disposition":"active"}]}`),
+		"null disposition":       []byte(`{"version":1,"entries":[{"repository":"org/repo","disposition":null}]}`),
+		"null after disposition": []byte(`{"version":1,"entries":[{"repository":"org/repo","disposition":"active","disposition":null}]}`),
+		"nil entries":            []byte(`{"version":1,"entries":null}`),
+		"nil entry":              []byte(`{"version":1,"entries":[null]}`),
+		"missing entries":        []byte(`{"version":1}`),
+		"trailing":               append(data, []byte(`{}`)...),
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			refused, refusal := fanout.ValidateLedger(input)
-			require.ErrorIs(t, refusal, fanout.ErrLedger)
+			require.Equal(t, fanout.ErrLedger, refusal)
 			require.Nil(t, refused)
 			require.NotContains(t, refusal.Error(), "secret-password")
 		})
@@ -266,8 +281,17 @@ func TestNoScheduling(t *testing.T) {
 		}, dependency.Path.Value)
 	}
 	ast.Inspect(source, func(node ast.Node) bool {
-		_, polling := node.(*ast.ForStmt)
-		require.False(t, polling, "polling loop")
+		if loop, isLoop := node.(*ast.ForStmt); isLoop {
+			// Decoder.More loops consume a finite snapshot rather than poll.
+			call, ok := loop.Cond.(*ast.CallExpr)
+			require.True(t, ok, "polling loop")
+			selector, ok := call.Fun.(*ast.SelectorExpr)
+			require.True(t, ok, "polling loop")
+			receiver, ok := selector.X.(*ast.Ident)
+			require.True(t, ok, "polling loop")
+			require.Equal(t, "decoder", receiver.Name)
+			require.Equal(t, "More", selector.Sel.Name)
+		}
 		_, background := node.(*ast.GoStmt)
 		require.False(t, background, "background goroutine")
 		call, ok := node.(*ast.CallExpr)

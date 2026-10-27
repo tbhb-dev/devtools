@@ -47,6 +47,9 @@ type Entry struct {
 
 // ValidateLedger accepts only version 1 snapshots. Refusals never echo input.
 func ValidateLedger(data []byte) ([]Entry, error) {
+	if err := checkLedgerJSON(json.NewDecoder(bytes.NewReader(data))); err != nil {
+		return nil, ErrLedger
+	}
 	var snapshot struct {
 		Version int     `json:"version"`
 		Entries []Entry `json:"entries"`
@@ -63,6 +66,50 @@ func ValidateLedger(data []byte) ([]Entry, error) {
 		return nil, err
 	}
 	return snapshot.Entries, nil
+}
+
+// checkLedgerJSON refuses nulls and repeated members before struct decoding can
+// discard them. Member names follow the decoder's case-insensitive matching.
+func checkLedgerJSON(decoder *json.Decoder) error {
+	token, err := decoder.Token()
+	if err != nil || token == nil {
+		return ErrLedger
+	}
+	if token != json.Delim('{') && token != json.Delim('[') {
+		return nil
+	}
+	seen := make(map[string]bool)
+	for decoder.More() {
+		if token == json.Delim('{') {
+			if err = checkLedgerMember(decoder, seen); err != nil {
+				return err
+			}
+		}
+		if err = checkLedgerJSON(decoder); err != nil {
+			return err
+		}
+	}
+	if _, err = decoder.Token(); err != nil {
+		return ErrLedger
+	}
+	return nil
+}
+
+func checkLedgerMember(decoder *json.Decoder, seen map[string]bool) error {
+	member, err := decoder.Token()
+	if err != nil {
+		return ErrLedger
+	}
+	name, ok := member.(string)
+	if !ok {
+		return ErrLedger
+	}
+	name = strings.ToUpper(name)
+	if seen[name] {
+		return ErrLedger
+	}
+	seen[name] = true
+	return nil
 }
 
 func validateEntries(entries []Entry) error {

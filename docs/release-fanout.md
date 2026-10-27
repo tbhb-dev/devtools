@@ -17,7 +17,7 @@ Store the authoritative snapshot at `release/consumers.json` in the release comm
 }
 ```
 
-Provide an entries array with at most 100 entries. Each repository name uses `owner/repository` syntax without credentials. Names must be unique without regard to case. Choose `active`, `inactive`, or `exempt` for each disposition. Unknown versions and fields cause refusal, as do malformed snapshots and invalid or duplicate entries. Refusals return a fixed error without credentials and with no entries. An empty array passes validation but fails adoption.
+Provide an entries array with at most 100 entries. Each repository name uses `owner/repository` syntax without credentials. Names must be unique without regard to case. Choose `active`, `inactive`, or `exempt` for each disposition. Repeated JSON members and null values cause refusal. Unknown versions and fields cause refusal, as do malformed snapshots and invalid or duplicate entries. Refusals return a fixed error without credentials and with no entries. An empty array passes validation but fails adoption.
 
 ## Deadlines and results
 
