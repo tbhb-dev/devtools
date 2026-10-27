@@ -1,7 +1,13 @@
 #!/usr/bin/env bats
 # Extract the shipped task bodies so the tests exercise the consumer payload.
 
+setup_file() {
+  mise exec -- go build -o "$BATS_FILE_TMPDIR/agentrepo" "${BATS_TEST_DIRNAME}/../../cmd/agentrepo"
+}
+
 setup() {
+  export PIN_AGENTREPO="$BATS_FILE_TMPDIR/agentrepo"
+  export DEVTOOLS_DIR="${BATS_TEST_DIRNAME}/../../.devtools"
   TASKS="${BATS_TEST_DIRNAME}/../../.devtools/tasks/pins.toml"
   WORK="${BATS_TEST_TMPDIR}/consumer"
   STUB="${BATS_TEST_TMPDIR}/bin"
@@ -9,6 +15,8 @@ setup() {
   cp -R "${BATS_TEST_DIRNAME}/fixtures/pins/." "$WORK/"
   cp "${BATS_TEST_DIRNAME}/../../.devtools/vendir.yml" "$WORK/vendir.yml"
   extract_task devtools:update-pins > "${BATS_TEST_TMPDIR}/update.sh"
+  extract_task devtools:update-pins-legacy > "${BATS_TEST_TMPDIR}/legacy.sh"
+  export PIN_LEGACY_SCRIPT="${BATS_TEST_TMPDIR}/legacy.sh"
   extract_task devtools:check-pins > "${BATS_TEST_TMPDIR}/check.sh"
   export REAL_GIT
   REAL_GIT=$(command -v git)
@@ -25,7 +33,11 @@ STUB
   cat > "$STUB/mise" <<'STUB'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >> "$MISE_CALLS"
-if [ "$*" = 'run devtools:apm-sync' ]; then
+if [ "$1" = '-q' ] && [ "$3" = 'devtools:update-pins-legacy' ]; then
+  exec env usage_version="$4" bash "$PIN_LEGACY_SCRIPT"
+elif [ "$*" = 'which agentrepo' ]; then
+  printf '%s\n' "$PIN_AGENTREPO"
+elif [ "$*" = 'run devtools:apm-sync' ]; then
   exit "${APM_STATUS:-0}"
 elif [ "$*" = 'tasks ls --all' ]; then
   echo 'devtools:check-pins '
@@ -267,4 +279,55 @@ YAML
   run env usage_version=v0.11.0 bash "${BATS_TEST_TMPDIR}/update.sh"
   [ "$status" -eq 0 ]
   grep -Fq 'gh-post" = "v0.11.0"' mise.toml
+}
+
+@test "wrapper selects the consumer binary and falls back when capability is absent" {
+  cat > "$STUB/selected-agentrepo" <<'STUB'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$SELECTED_CALLS"
+exit 1
+STUB
+  cat > "$STUB/agentrepo" <<'STUB'
+#!/usr/bin/env bash
+echo wrong-binary >&2
+exit 99
+STUB
+  chmod +x "$STUB/selected-agentrepo" "$STUB/agentrepo"
+  export SELECTED_CALLS="$BATS_TEST_TMPDIR/selected-calls"
+  export PIN_AGENTREPO="$STUB/selected-agentrepo"
+  run env usage_version=0.11.0 bash "$BATS_TEST_TMPDIR/update.sh"
+  [ "$status" -eq 0 ]
+  grep -Fxq 'update-pins --help' "$SELECTED_CALLS"
+  [ "$(wc -l < "$SELECTED_CALLS")" -eq 1 ]
+  [[ "$output" != *wrong-binary* ]]
+  grep -Fq 'guard-markdown" = "v0.11.0"' mise.toml
+}
+
+@test "wrapper preserves the argument and never retries a failed Go mutation" {
+  cat > "$STUB/selected-agentrepo" <<'STUB'
+#!/usr/bin/env bash
+[ "$*" != 'update-pins --help' ] || exit 0
+[ "$#" -eq 2 ] || exit 91
+[ "$2" = '0.11.0 custom' ] || exit 92
+printf 'partial mutation\n' > apm.yml
+exit 23
+STUB
+  chmod +x "$STUB/selected-agentrepo"
+  export PIN_AGENTREPO="$STUB/selected-agentrepo"
+  run env usage_version='0.11.0 custom' bash "$BATS_TEST_TMPDIR/update.sh"
+  [ "$status" -eq 23 ]
+  grep -Fxq 'partial mutation' apm.yml
+  ! grep -q 'run devtools:apm-sync' "$MISE_CALLS"
+}
+
+@test "wrapper falls back for a missing selected executable" {
+  export PIN_AGENTREPO="$STUB/missing-agentrepo"
+  run env usage_version=v0.11.0 bash "$BATS_TEST_TMPDIR/update.sh"
+  [ "$status" -eq 0 ]
+  grep -Fq 'guard-markdown" = "v0.11.0"' mise.toml
+}
+
+@test "published update alias retains the version argument and wrapper" {
+  grep -Fxq 'alias = "devtools:update"' "$TASKS"
+  grep -Fq 'exec "$agentrepo_bin" update-pins "$usage_version"' "$BATS_TEST_TMPDIR/update.sh"
 }

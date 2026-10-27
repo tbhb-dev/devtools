@@ -189,6 +189,8 @@ To verify adoption, create a draft at a Vale-scoped path, run `mise run lint-dra
 
 For the next release, run `mise run devtools:update-pins v0.19.0`, replacing the version with the release you are moving to. The task accepts the tag with or without its leading `v`, so `0.19.0` and `v0.19.0` do the same thing. It writes the `v`-prefixed form, which is the spelling `devtools:check-pins` requires. In a new linked worktree, run `mise trust` and `vale sync` first so the ignored Vale styles are present before lint or commit gates run.
 
+The updater uses the consumer-selected `agentrepo update-pins` command when available and retains the shell fallback for older binaries. The Go command stops on a failed rewrite, including the adapted tombi header, and leaves earlier changes for review.
+
 Upgrading to v0.13.0 requires the preceding `commit-lint` declaration. Add it before running `devtools:update-pins`. The update and pin-check tasks now treat it as a required site alongside `guard-markdown`.
 
 It resolves the tag and moves APM, tool, vendir, hook, workflow, and preset pins, along with the adaptation header in `tombi.toml` when present. It then syncs the payload and refreshes configured lock platforms. After installing the tools and reconciling APM, it checks the new pins. The consumer must select `apm.toml` alongside `pins.toml`. It no longer needs to supply an `apm-sync` task. Review and commit the resulting files. Unpinned Renovate presets remain unpinned and cause a disagreement with versioned sites.
