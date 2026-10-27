@@ -92,7 +92,9 @@ func NewCommand() (*cobra.Command, *int) {
 		versionsCommand(code),
 		fuzzCommand(code),
 	)
-	root.AddCommand(sizeCommand())
+	size := sizeCommand()
+	size.AddCommand(sizeCheckCommand())
+	root.AddCommand(size)
 	return root, code
 }
 
@@ -149,7 +151,10 @@ func Run(args []string, in io.Reader, out, stderr io.Writer) int {
 	cmd.SetErr(stderr)
 	if executed, err := cmd.ExecuteC(); err != nil {
 		_, _ = fmt.Fprintln(stderr, err)
-		if executed != nil && executed.Name() == "size" {
+		if executed != nil && (executed.Name() == "size" || executed.CommandPath() == "agentrepo size check") {
+			if errors.Is(err, errSizeLimit) {
+				return 1
+			}
 			return sizeError
 		}
 		return int(checks.Unreadable)

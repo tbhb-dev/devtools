@@ -238,6 +238,8 @@ This skill assumes the shared tbhb toolchain:
 
 Preflight checks each. Where one is missing, tell the operator rather than improvising a substitute.
 
+Preflight and publication refuse more than 800 source lines of code or 2,000 prose lines against the draft's publish base. Split by concern, along commit boundaries, or as a stacked series. Only Renovate bot authors (`app/renovate` or `renovate[bot]`, with `is_bot`) are exempt. The checks measure `chore` titles and other bots. Install `agentrepo` v0.23.0 with `size check` and the pinned `scc` before adopting these skills. Missing size capability stops publication. The size limit has no override.
+
 ## API quota
 
 Identity and explicit readers use GraphQL, which doesn't spend REST core quota. Each checks snapshot uses one GraphQL call. Quota failures return 76. The printed message says which limit applied and what to do next: wait at least a minute after a secondary limit, or read the budget with a GraphQL `rateLimit { remaining resetAt }` query once a primary GraphQL limit has passed. GitHub doesn't report the reset time with the failure. No script looks it up through `/rate_limit`. The original error follows unchanged. Other API failures keep GitHub's error. The watcher returns 2 for ordinary check-read failures. GitHub CLI writes can still spend REST quota resolving or applying labels, milestones, reviewers, and assignees. Scripts never retry writes automatically.

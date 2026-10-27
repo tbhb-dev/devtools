@@ -25,6 +25,8 @@ Missing authority returns 75. Report the hold and preserve the draft. Install th
 5. Run `bash .claude/skills/agent-pr/scripts/publish.sh`. It runs the shared leak, lint, test, review, stamp, identity, and confirmation gates. Session pre-approval or machine delegation must grant `pr`. The account must match machine `gh_login`. The script checks again after delegation and push. Every PR property converges on the reviewed draft.
 6. Report the URL, full head, and draft state from the result. Stop after publication. Merge belongs to `agent-merge-pr` when that skill is available.
 
+Preflight and publication refuse more than 800 source lines of code or 2,000 prose lines against the draft's publish base. Split by concern, along commit boundaries, or as a stacked series. Only Renovate bot authors (`app/renovate` or `renovate[bot]`, with `is_bot`) are exempt. The checks measure `chore` titles and other bots. Install `agentrepo` v0.23.0 with `size check` and the pinned `scc` before adopting these skills. Missing size capability stops publication. The size limit has no override.
+
 Publication normally requires a forward push. Use `--rewrite` only on the operator's explicit authorization for that branch. It leases on the exact known remote commit and refuses when `HEAD` is behind origin or the remote commit wasn't fetched. A failed or uncertain GitHub write requires inspection before retrying.
 
 ## Reviewer and publish access

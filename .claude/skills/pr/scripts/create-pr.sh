@@ -131,6 +131,7 @@ fi
 base_ref=$(pr_base_ref "$base")
 pr_agent_range "$base_ref"
 [ -n "$base_ref" ] || die "the draft's base, ${base}, names no local or origin branch."
+agentrepo size check --publish --base "$base_ref" --draft PR_AGENTDESC.md
 
 check_identity() {
   local want login

@@ -4,6 +4,8 @@ The package includes generated `agent-commit`, `agent-pr`, and `agent-merge-pr` 
 
 ## Consumer cleanup
 
+Preflight and publication refuse more than 800 source lines of code or 2,000 prose lines against the draft's publish base. Split by concern, along commit boundaries, or as a stacked series. Only Renovate bot authors (`app/renovate` or `renovate[bot]`, with `is_bot`) are exempt. The checks measure `chore` titles and other bots. The skills require `agentrepo` v0.23.0 or newer. That release adds `size check`. Install it and the pinned `scc` before adopting these skills. Publication stops until you install that version or newer. The size limit has no override.
+
 Sync the shared payload and install its new `aqua:boyter/scc` mise pin before explicitly adopting `agentrepo size` in a workflow.
 
 Move the supported settings and machine authorities before replacing local skills. The generated merge skill requires `uv` for its pinned YAML reader and `agentrepo checks evaluate` for check judgement.
