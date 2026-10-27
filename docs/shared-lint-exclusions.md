@@ -2,7 +2,7 @@
 
 Consumers can include `.devtools/tasks/lint.toml` in mise's `task_config.includes` and call `devtools:lint-shell`, `devtools:lint-shell-fmt`, and `devtools:lint-markdown-wrap` from their local lint task. These tasks require shellcheck, shfmt, and guard-markdown on PATH, respectively.
 
-The consumer owns tool installation, including guard-markdown.
+The consumer owns tool installation, including guard-markdown. The source selector probes the consumer-selected `agentrepo lint-source-files` capability before running it. Older or absent binaries use the frozen shell selector throughout the N-2 compatibility window. A failure after the Go selector starts propagates without retrying through shell. Both selectors use the existing Python APM deployment filter through uv.
 
 These tasks select tracked and untracked files through Git and skip an empty selection. They apply the repository's ignore rules to untracked files. By default, they skip `vendor/`, `apm_modules/`, and exact dependency `deployed_files` paths from `apm.lock.yaml`, without excluding descendants of its directory entries. This lets the gates check first-party skills and rules under `.claude/`, `.agents/`, and `.codex/`. Without a lockfile, only the vendor and generated-path exclusions apply. Paths containing spaces remain individual arguments. Markdown accepts guard-markdown arguments, including `mise run devtools:lint-markdown-wrap -- --fix`.
 
