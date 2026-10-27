@@ -460,6 +460,7 @@ STUB
   run bash "$SCRIPTS/create-pr.sh" --check-description
   [ "$status" -eq 0 ]
   [ "$(cat "$GATE_LOG")" = lint-pr-description ]
+  [ "$(grep -Ec 'labels\(first:100|^label list ' "$GH_LOG")" -eq 1 ]
   [ ! -f .git/agent-skills/pr.stamp ]
   [ -z "$(remote_topic)" ]
 }
@@ -696,4 +697,27 @@ publication_edit() {
   [ -z "$(remote_topic)" ]
   refute_grep '^devtools:lint-leaks' "$GATE_LOG"
   refute_grep '^pr create ' "$GH_LOG"
+}
+
+@test "check-description accepts a label after the first page" {
+  export GH_LABELS
+  GH_LABELS=$(printf 'label-%s\n' {1..205})
+  sed -i.bak 's/labels: \[enhancement\]/labels: [label-205]/' PR_AGENTDESC.md
+  run bash "$SCRIPTS/create-pr.sh" --check-description
+  [ "$status" -eq 0 ]
+  [ "$(grep -Ec 'labels\(first:100|^label list ' "$GH_LOG")" -eq 1 ]
+  grep -q -- '--paginate' "$GH_LOG"
+}
+
+@test "property validation still rejects labels changed after the shared check" {
+  cat >"$BATS_TEST_TMPDIR/bin/mise" <<'STUB'
+#!/usr/bin/env bash
+if [ "$1 $2" = 'run lint-pr-description' ]; then
+  sed -i.bak 's/labels: \[enhancement\]/labels: [missing]/' PR_AGENTDESC.md
+fi
+STUB
+  run bash "$SCRIPTS/create-pr.sh" --check-description
+  [ "$status" -ne 0 ]
+  [[ "$output" == *'no label named "missing"'* ]]
+  [ "$(grep -Ec 'labels\(first:100|^label list ' "$GH_LOG")" -eq 1 ]
 }

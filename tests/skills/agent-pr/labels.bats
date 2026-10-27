@@ -27,7 +27,7 @@ setup() {
   run bash "$SCRIPTS/check.sh"
   [ "$status" -ne 0 ]
   [[ "$output" == *'labels-empty  the pull request carries no label; preflight printed the repository'* ]]
-  refute_grep '^label list ' "$GH_LOG"
+  refute_grep 'labels(first:100' "$GH_LOG"
 }
 
 @test "AC3 missing labels retain the required-key refusal without reading labels" {
@@ -35,7 +35,7 @@ setup() {
   run bash "$SCRIPTS/check.sh"
   [ "$status" -ne 0 ]
   [[ "$output" == *'frontmatter-missing-key  the frontmatter sets no "labels"'* ]]
-  refute_grep '^label list ' "$GH_LOG"
+  refute_grep 'labels(first:100' "$GH_LOG"
 }
 
 @test "AC4 unreadable label set refuses before lint" {
@@ -49,5 +49,5 @@ setup() {
 @test "AC5 label set is read once for multiple draft labels" {
   replace_text PR_AGENTDESC.md 'labels: [enhancement]' 'labels: [enhancement, bug]'
   bash "$SCRIPTS/check.sh"
-  [ "$(grep -c '^label list ' "$GH_LOG")" -eq 1 ]
+  [ "$(grep -c 'labels(first:100' "$GH_LOG")" -eq 1 ]
 }
