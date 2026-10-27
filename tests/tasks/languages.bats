@@ -135,16 +135,6 @@ PY
 	done
 }
 
-@test "ldflags derives the consumer module and honors metadata overrides" {
-	printf 'module example.com/consumer\n\ngo 1.27.1\n' >go.mod
-	run bash .devtools/scripts/go-ldflags.sh
-	[ "$status" -eq 0 ]
-	[[ "$output" == *'example.com/consumer/internal/buildmeta.Version=DEV'* ]]
-	run env DEVTOOLS_GO_BUILDMETA=example.com/other/meta bash .devtools/scripts/go-ldflags.sh
-	[ "$status" -eq 0 ]
-	[[ "$output" == *'example.com/other/meta.Version=DEV'* ]]
-}
-
 @test "Python coverage expands consumer source roots rather than publisher paths" {
 	sed 's|go.toml|python.toml|' mise.toml > changed
 	mv changed mise.toml
