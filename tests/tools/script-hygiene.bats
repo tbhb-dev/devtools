@@ -66,6 +66,18 @@ compare() {
 	cmp "$BATS_TEST_TMPDIR/files-before" "$BATS_TEST_TMPDIR/files-after"
 }
 
+@test "explicit paths preserve symlink followed by parent traversal" {
+	mkdir -p nested/dir
+	ln -s nested/dir alias
+	printf '# hygiene-exempt: fixture reason\ngh pr view\n' >example.sh
+	printf 'gh pr view\ngit log HEAD\n' >nested/example.sh
+	compare alias/../example.sh
+	[ "$new_status" -eq 1 ]
+	[[ $(cat "$BATS_TEST_TMPDIR/new.out") == *missing-locale-pin* ]]
+	[[ $(cat "$BATS_TEST_TMPDIR/new.out") == *missing-gh-unset* ]]
+	[[ $(cat "$BATS_TEST_TMPDIR/new.out") == *bare-git-output* ]]
+}
+
 @test "discovery and checker failures preserve diagnostics and never report clean" {
 	echo 'echo clean' >example.sh
 	for selection in owned local; do

@@ -121,7 +121,8 @@ func selectFiles(root string, paths []string, out io.Writer) ([]string, int, err
 	for _, path := range paths {
 		full := path
 		if !filepath.IsAbs(path) {
-			full = filepath.Join(root, path)
+			// Keep symlink/.. traversal for the filesystem to resolve.
+			full = root + string(filepath.Separator) + path
 		}
 		info, err := os.Stat(full)
 		if err != nil || !info.Mode().IsRegular() {
