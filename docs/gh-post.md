@@ -58,7 +58,7 @@ gh-post comment edit 456 -R owner/project --kind review --body-file correction.m
 gh-post release edit v1.0.0 -R owner/project --body-file notes.md
 ```
 
-Supported operations are `issue create|comment|edit|label`, `pr create|edit|comment|review|ready|close|label`, `review edit`, `comment edit`, and `release create|edit`. Issue and PR targets are numeric IDs. Comment edits require `--kind issue` for issue comments or `--kind review` for inline review comments. Both use REST `PATCH` endpoints. Release operations translate body input to GitHub's notes-file flag. Creation requires an explicit title for issues and pull requests. New reviews require exactly one of `--approve`, `--comment`, or `--request-changes`.
+Supported operations are `issue create|comment|edit|label|close|reopen`, `pr create|edit|comment|review|ready|close|label`, `review edit`, `comment edit`, and `release create|edit`. Issue and PR targets are numeric IDs. Comment edits require `--kind issue` for issue comments or `--kind review` for inline review comments. Both use REST `PATCH` endpoints. Release operations translate body input to GitHub's notes-file flag. Creation requires an explicit title for issues and pull requests. New reviews require exactly one of `--approve`, `--comment`, or `--request-changes`.
 
 New reviews also require `--commit <40-hex-sha>` and a first body line of `Reviewed head: <sha>` matching that commit. You can wrap the SHA in backticks. Before posting, the command reads the pull request's `headRefOid` through `gh` and refuses a different head with exit 1. Re-read the head and review it again after a push. The command sends JSON fields `commit_id`, `event`, and `body` through `POST /repos/{owner}/{repo}/pulls/{pr}/reviews`. The explicit `commit_id` anchors the review to the examined commit even if a push races the write. Existing scan, identity guard, and audit requirements apply.
 
@@ -67,6 +67,20 @@ Before scanning or contacting GitHub, new reviews and issue comments whose first
 Use `review edit <pr> <review-id>` to replace a submitted pull request review's body. Both IDs must be positive integers. It sends the scanned body as JSON through `PUT /repos/{owner}/{repo}/pulls/{pull_number}/reviews/{review_id}` with the same identity guard and audit record as other posts. It accepts the shared repository and body-file flags. `comment edit --kind review` edits an inline review comment.
 
 Use `-R owner/project` or `--repo owner/project` to select the target. Otherwise the command resolves the checkout's origin remote. Ambient `GH_REPO` and `GH_HOST` don't redirect it. The built-in checks cover local file URLs, home paths with a name segment, GitHub tokens, private-key headers, and secret-manager references. Placeholders such as `/Users/<name>/` and `/home/<name>/` pass. The command matches private literals without regard to case. Findings print only a category and line number, with line numbers local to each text field.
+
+### Change issue state
+
+Use `issue close` with an explicit reason and body file, or `issue reopen` with a body file:
+
+```bash
+gh-post issue close 42 --repo owner/project --reason completed --body-file reason.md
+gh-post issue close 42 --repo owner/project --reason 'not planned' --body-file reason.md
+gh-post issue reopen 42 --repo owner/project --body-file reason.md
+```
+
+Both require `--body-file PATH` or `--body-file -` for stdin and refuse inline bodies. Close requires `--reason completed` or `--reason 'not planned'`. The comment passes the existing scan, identity check and audit path before the state write. The command reads the issue state before posting. An issue already in the requested state produces exit 1 and no comment, state write, or audit record. After a state write, it reads the issue back and records the operation and comment hash in the audit log.
+
+Exit 0 means the comment and state change succeeded and the command recorded the audit entries. Exit 1 means a scan, identity or state refusal, or a read-back mismatch. Exit 2 means invalid arguments, input or configuration, a failed GitHub command, or an audit failure. When a comment fails to post, the command stops before changing state. If the comment posts but the state write fails, inspect GitHub before retrying because the command doesn't retry or undo writes automatically.
 
 ### Change PR state
 
@@ -110,7 +124,7 @@ Support covers repositories whose owner-review label doesn't start with `change:
 | Exit | Meaning |
 | --- | --- |
 | 0 | Posted and recorded in the audit log, or an informational flag, dry run, or label no-op succeeded. |
-| 1 | Refused by a scan, identity, head, PR state, or review first-line rule. Also a read-back mismatch after a state write, and for labels a missing target, a wrong-kind target, or a label the repository lacks. |
+| 1 | Refused by a scan, identity, head, issue or PR state, or review first-line rule. Also a read-back mismatch after a state write, and for labels a missing target, a wrong-kind target, or a label the repository lacks. |
 | 2 | Missing dependency, invalid arguments (including a refused label), configuration or input failure, failed GitHub command, or audit failure. |
 
 Each successful post appends one JSON line to `${XDG_STATE_HOME:-~/.local/state}/devtools/gh-post.log`. It records UTC time, operation, the target URL, and the SHA-256 hash of the body. It never records the body. If the command can't open the audit log, it prevents posting. A failed write or an audit failure after posting needs inspection before retrying, because GitHub may already have accepted the content.
