@@ -89,6 +89,7 @@ func NewCommand() (*cobra.Command, *int) {
 		markersCommand(code),
 		versionsCommand(code),
 		fuzzCommand(code),
+		skillLimitsCommand(code),
 	)
 	return root, code
 }
