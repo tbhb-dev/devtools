@@ -133,6 +133,9 @@ apm = "0.33.0"
 # does not.
 ast-grep = "0.50.0"
 jq = "1.8.2"
+# bats --jobs shells out to a parallel runner, and rush ships a release
+# binary for every platform CI runs.
+rush = "0.11.0"
 shfmt = "3.14.1"
 
 # --- Setup ---
@@ -585,14 +588,15 @@ run = "uv run python tools/agy_otel_latency.py"
 description = "Run the shared leak scanner and hook regression suite"
 run = "bats .devtools/scripts/check-leaks.bats"
 
+# Bats runs one job per file, never within a file. The Go runner derives
+# the job count from CPUs, capped at 8, including HOOKS_JOBS overrides.
+# HOOKS_JOBS=1 preserves a serial run with an ordered trace.
+# The serial-only list and its reasons live in internal/bats/run.go.
+# Bats needs rush for --jobs; [tools] pins it.
 [tasks.test-hooks]
-description = "Run the bats suites for the shell scripts under scripts/ and tools/"
-usage = 'arg "<path>" default="tests"'
+description = "Run the bats suites for the shell scripts under scripts/ and tools/ in parallel"
 # Exercise the binary from this tree, not the released toolchain pin.
-run = [
-  "go build -o bin/agentrepo ./cmd/agentrepo",
-  'env PATH="$PWD/bin:$PATH" bats --recursive $usage_path',
-]
+run = "go run ./cmd/test-hooks"
 
 # Serial by default so a failing run prints a clean, ordered trace; pass
 # `mise run test-py -n auto` to fan the suite across xdist workers.

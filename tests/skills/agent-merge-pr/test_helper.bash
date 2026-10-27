@@ -1,12 +1,15 @@
+agent_setup_file() {
+  local root
+  root=$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)
+  (cd "$root" && go build -o "$BATS_FILE_TMPDIR/agentrepo" ./cmd/agentrepo)
+  (cd "$root" && go build -o "$BATS_FILE_TMPDIR/commit-lint" ./cmd/commit-lint)
+}
+
 # cspell:words noqa
 agent_setup() {
   source "${BATS_TEST_DIRNAME}/../merge-pr/test_helper.bash"
   merge_setup
-  if [ ! -x "$BATS_SUITE_TMPDIR/agentrepo" ] || [ ! -x "$BATS_SUITE_TMPDIR/commit-lint" ]; then
-    (cd "$ROOT" && go build -o "$BATS_SUITE_TMPDIR/agentrepo" ./cmd/agentrepo)
-    (cd "$ROOT" && go build -o "$BATS_SUITE_TMPDIR/commit-lint" ./cmd/commit-lint)
-  fi
-  export PATH="$BATS_SUITE_TMPDIR:$PATH"
+  export PATH="$BATS_FILE_TMPDIR:$PATH"
   export DEVTOOLS_GH_LOGIN=agent DEVTOOLS_REQUIRED_REVIEWER=reviewer
   unset DEVTOOLS_MERGE_OWNER DEVTOOLS_REQUIRED_REVIEWER_TYPE
   AGENT="$ROOT/packages/agents/claude/.apm/skills/agent-merge-pr/scripts"

@@ -1,5 +1,10 @@
 #!/usr/bin/env bats
 # cspell:words ignorecase noqa
+setup_file() {
+  source "${BATS_TEST_DIRNAME}/test_helper.bash"
+  agent_setup_file
+}
+
 setup() {
   source "${BATS_TEST_DIRNAME}/test_helper.bash"
   agent_setup

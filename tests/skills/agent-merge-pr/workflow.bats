@@ -1,4 +1,9 @@
 #!/usr/bin/env bats
+setup_file() {
+  source "${BATS_TEST_DIRNAME}/test_helper.bash"
+  agent_setup_file
+}
+
 setup() {
   source "${BATS_TEST_DIRNAME}/test_helper.bash"
   agent_setup
@@ -25,7 +30,7 @@ setup() {
 @test "unattended merge evaluates checks through the pinned agentrepo" {
   mkdir -p "$BATS_TEST_TMPDIR/stale-bin" "$BATS_TEST_TMPDIR/pinned-bin"
   printf '#!/bin/sh\nif [ "$1" = --version ]; then echo "agentrepo version v0.14.2"; exit 0; fi\necho "$*" >>"$BATS_TEST_TMPDIR/stale-calls"\nexit 1\n' >"$BATS_TEST_TMPDIR/stale-bin/agentrepo"
-  printf '#!/bin/sh\necho "$*" >>"$BATS_TEST_TMPDIR/pinned-calls"\nexec "%s" "$@"\n' "$BATS_SUITE_TMPDIR/agentrepo" >"$BATS_TEST_TMPDIR/pinned-bin/agentrepo"
+  printf '#!/bin/sh\necho "$*" >>"$BATS_TEST_TMPDIR/pinned-calls"\nexec "%s" "$@"\n' "$BATS_FILE_TMPDIR/agentrepo" >"$BATS_TEST_TMPDIR/pinned-bin/agentrepo"
   printf '#!/bin/sh\nif [ "$*" = "which agentrepo" ]; then echo "%s/agentrepo"; exit 0; fi\nexec "%s" "$@"\n' "$BATS_TEST_TMPDIR/pinned-bin" "$(command -v mise)" >"$BATS_TEST_TMPDIR/stale-bin/mise"
   chmod +x "$BATS_TEST_TMPDIR"/stale-bin/* "$BATS_TEST_TMPDIR"/pinned-bin/*
 
