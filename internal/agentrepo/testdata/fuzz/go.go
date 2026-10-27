@@ -57,6 +57,15 @@ func main() {
 	}
 	fmt.Println("target stdout")
 	fmt.Fprintln(os.Stderr, "target stderr")
+	if scenario == "target-signal" {
+		process, err := os.FindProcess(os.Getpid())
+		if err != nil {
+			panic(err)
+		}
+		if err := process.Kill(); err != nil {
+			panic(err)
+		}
+	}
 	if scenario == "target-failure" {
 		os.Exit(23)
 	}

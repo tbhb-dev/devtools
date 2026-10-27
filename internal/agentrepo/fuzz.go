@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"syscall"
 
 	"github.com/spf13/cobra"
 )
@@ -73,6 +74,10 @@ func runFuzz(cmd *cobra.Command, path, duration string) int {
 
 func fuzzExit(err error, stderr io.Writer) int {
 	if exit, ok := errors.AsType[*exec.ExitError](err); ok {
+		if status, isWaitStatus := exit.Sys().(syscall.WaitStatus); isWaitStatus && status.Signaled() {
+			const shellSignalBase = 128
+			return shellSignalBase + int(status.Signal())
+		}
 		return exit.ExitCode()
 	}
 	_, _ = fmt.Fprintln(stderr, err)

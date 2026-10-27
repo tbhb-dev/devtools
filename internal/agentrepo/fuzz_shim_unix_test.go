@@ -6,13 +6,45 @@
 package agentrepo_test
 
 import (
+	"bytes"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/tbhb-dev/devtools/internal/agentrepo"
 )
+
+func TestFuzzGoSignalParity(t *testing.T) {
+	trace := fuzzFixture(t)
+	t.Setenv("FUZZ_TRACE", trace)
+	t.Setenv("FUZZ_SCENARIO", "target-signal")
+	t.Setenv("FUZZ_TIME", "")
+	var out, stderr bytes.Buffer
+	code := agentrepo.Run([]string{"fuzz-go"}, nil, &out, &stderr)
+	actualTrace := fuzzTrace(t, trace)
+
+	require.NoError(t, os.WriteFile(trace, nil, 0o600))
+	shell := exec.CommandContext(t.Context(), "bash", "testdata/fuzz/frozen.sh")
+	var oldOut, oldErr bytes.Buffer
+	shell.Stdout, shell.Stderr = &oldOut, &oldErr
+	var exit *exec.ExitError
+	require.ErrorAs(t, shell.Run(), &exit)
+	require.Equal(t, 137, exit.ExitCode())
+	require.Equal(t, exit.ExitCode(), code)
+	require.Equal(t, oldOut.String(), out.String())
+	require.Equal(t, "target stderr\n", stderr.String())
+	// Bash also reports the killed child's process ID and command on stderr.
+	require.Contains(t, oldErr.String(), stderr.String())
+	require.Equal(t, fuzzTrace(t, trace), actualTrace)
+	require.Equal(t, [][]string{
+		{"list", "./..."},
+		{"test", "-list", "^Fuzz", "example/one"},
+		{"test", "-run=^$", "-fuzz=^FuzzFirst$", "-fuzztime=30s", "example/one"},
+	}, actualTrace, "later targets and packages must never run after a signal")
+}
 
 func TestFuzzGoWrappers(t *testing.T) {
 	root, err := filepath.Abs("../..")
