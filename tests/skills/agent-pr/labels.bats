@@ -51,3 +51,57 @@ setup() {
   bash "$SCRIPTS/check.sh"
   [ "$(grep -c 'labels(first:100' "$GH_LOG")" -eq 1 ]
 }
+
+@test "supported binary without pr-labels retains the frozen shell label check" {
+  export _DEVTOOLS_AGENTREPO_BIN="${BATS_TEST_TMPDIR}/bin/agentrepo-old"
+  export _DEVTOOLS_AGENTREPO_CONFIG=false
+  cat >"$_DEVTOOLS_AGENTREPO_BIN" <<'EOF'
+#!/usr/bin/env bash
+case "$1" in
+--help) printf 'Available Commands:\n  config  Read configuration\n' ;;
+*) exit 1 ;;
+esac
+EOF
+  chmod +x "$_DEVTOOLS_AGENTREPO_BIN"
+  run bash "$ROOT/packages/agents/codex/.apm/skills/pr/scripts/create-pr.sh" --check-description
+  [ "$status" -eq 0 ]
+  [ "$(cat "$GATE_LOG")" = lint-pr-description ]
+  [ "$(grep -c 'labels(first:100' "$GH_LOG")" -eq 1 ]
+
+  replace_text PR_AGENTDESC.md 'labels: [enhancement]' 'labels: [missing]'
+  : >"$GATE_LOG"
+  : >"$GH_LOG"
+  run bash "$ROOT/packages/agents/codex/.apm/skills/pr/scripts/create-pr.sh" --check-description
+  [ "$status" -ne 0 ]
+  [[ "$output" == *'no label named "missing" in this repository. Preflight printed the label set.'* ]]
+  [[ "$output" != *'Available labels:'* ]]
+  [ "$(cat "$GATE_LOG")" = lint-pr-description ]
+  [ "$(grep -c 'labels(first:100' "$GH_LOG")" -eq 1 ]
+}
+
+@test "absent binary retains the frozen shell label check" {
+  export _DEVTOOLS_AGENTREPO_BIN=''
+  export _DEVTOOLS_AGENTREPO_CONFIG=false
+  run bash "$ROOT/packages/agents/codex/.apm/skills/pr/scripts/create-pr.sh" --check-description
+  [ "$status" -eq 0 ]
+
+  replace_text PR_AGENTDESC.md 'labels: [enhancement]' 'labels: [missing]'
+  : >"$GATE_LOG"
+  : >"$GH_LOG"
+  run bash "$ROOT/packages/agents/codex/.apm/skills/pr/scripts/create-pr.sh" --check-description
+  [ "$status" -ne 0 ]
+  [[ "$output" == *'no label named "missing" in this repository. Preflight printed the label set.'* ]]
+  [[ "$output" != *'Available labels:'* ]]
+  [ "$(cat "$GATE_LOG")" = lint-pr-description ]
+  [ "$(grep -c 'labels(first:100' "$GH_LOG")" -eq 1 ]
+}
+
+@test "matching binary rejects unknown labels before the shell property check" {
+  replace_text PR_AGENTDESC.md 'labels: [enhancement]' 'labels: [missing]'
+  run bash "$ROOT/packages/agents/codex/.apm/skills/pr/scripts/create-pr.sh" --check-description
+  [ "$status" -ne 0 ]
+  [[ "$output" == *'no label named "missing" in this repository'* ]]
+  [[ "$output" == *'Available labels:'*$'enhancement\nbug'* ]]
+  [ ! -s "$GATE_LOG" ]
+  [ "$(grep -c 'labels(first:100' "$GH_LOG")" -eq 1 ]
+}
