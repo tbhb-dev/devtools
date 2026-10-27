@@ -62,6 +62,7 @@ constitutional_paths = ^$
 loosening_markers = nolint|shellcheck disable|vale (off|disable)
 gate_config_paths = ^(lint|hooks)\.(yaml|toml)$
 disposable_ignored = ^cache/
+# This repository veto composes with an optional machine veto of the same name.
 merge_ready_cmd =
 ```
 
@@ -95,9 +96,9 @@ Reports print locally unless both `mail_cmd` and `mail_to` are nonempty. The com
 | `owner_paths` | Same key for publication and merge delegation and reporting. Commit migration remains pending |
 | `mail_cmd`, `mail_to`, `mail_from` | Same keys for publication and merge reports. Commit reporting remains pending |
 | `signoff_identity` | Optional machine configuration under `~/.config/devtools/`, required when the Git identity is an agent |
-| `review_cmd`, `review_model`, `review_effort`, `delegation_check`, `gh_login`, `required_reviewer`, `required_reviewer_type`, `merge_owner` | Machine configuration under `~/.config/devtools/` or corresponding `DEVTOOLS_` variables |
+| `review_cmd`, `review_model`, `review_effort`, `delegation_check`, `gh_login`, `required_reviewer`, `required_reviewer_type`, `merge_owner`, `merge_ready_cmd` | Machine configuration under `~/.config/devtools/` or corresponding `DEVTOOLS_` variables |
 | `review_commit_criteria`, `review_pr_criteria`, `review_squash_criteria` | Installed review skills plus the existing trusted repository review policy |
-| `lint_squash_cmd`, `owner_review_label`, `ruleset_dir`, `merge_ready_cmd` | Repository configuration. Readiness can refuse but can't grant authority |
+| `lint_squash_cmd`, `owner_review_label`, `ruleset_dir`, `merge_ready_cmd` | Repository configuration. A repository readiness command composes with the machine command, and either can refuse but neither grants authority |
 | `golden_paths`, `constitutional_paths`, `loosening_markers`, `gate_config_paths`, `disposable_ignored` | Repository configuration. Inspect patterns before migration |
 | `merge_verify_tries` | Retired: shared merge execution reads the result once and never retries the write |
 
@@ -148,7 +149,7 @@ Reports include the rule used: `owner approval` or `App review states Loosens: n
 
 The scan skips full comment lines. It recognizes exclusion keys instead of matching words inside values and ignores suppression text inside quoted values. Non-local APM deployments come from `apm.lock.yaml` at the pinned base commit. Local deployment overrides stay in scope. A missing lockfile means no deployment exemptions. Malformed ownership data refuses the scan. A PR can't grant itself an exemption by editing its lockfile. The scan makes a narrow exception for each of these, without configuration. A `mise.lock` diff that adds at least as many `checksum` lines as it removes doesn't count the removed checksums as removed gates. An inline `//nolint` in a `vendor/**/*.go` file doesn't count as a suppression when `vendor/modules.txt` exists at the base and changes in the same diff, and any other marker on that line still does. Consumers adopt both through a normal pin bump. The scan is a backstop and doesn't replace review.
 
-Required checks come from GitHub's applied branch rules and active ruleset JSON files in `ruleset_dir` at the pinned base. Requirements match names exactly. The merge requires a nonempty list of known required checks and a nonempty rollup. Skipped required checks, unknown states, and missing results refuse the merge. Check judgement uses `agentrepo checks evaluate` instead of another check judge. A configured `merge_ready_cmd` must be an executable path and receives `<repo-root> <pr> <head>`. Its nonzero status blocks, while empty readiness doesn't add a check.
+Required checks come from GitHub's applied branch rules and active ruleset JSON files in `ruleset_dir` at the pinned base. Requirements match names exactly. The merge requires a nonempty list of known required checks and a nonempty rollup. Skipped required checks, unknown states, and missing results refuse the merge. Check judgement uses `agentrepo checks evaluate` instead of another check judge. A configured `merge_ready_cmd` must be an executable path and receives `<repo-root> <pr> <head>`. The repository and machine settings are independent vetoes: when both are nonempty, the repository command runs first and the machine command still runs if the repository command refuses. A nonzero status from either source blocks the merge and identifies the source in the output, whereas an empty setting doesn't add a check.
 
 `merge-pr` also enforces the full merge gates when confirmation comes from session pre-approval or machine delegation. Only an explicit `--confirmed` representing an operator answer keeps the attended behavior. Every execution refuses an empty check rollup as inconclusive.
 

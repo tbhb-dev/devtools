@@ -28,7 +28,7 @@ Install sibling `merge-pr` and `review-squash-message` from the same package. Th
 
 Repository behavior comes from declarative `.agents/agent-skills.conf`.
 
-Authorities come only from machine configuration: `gh_login`, `required_reviewer`, optional `required_reviewer_type`, optional `merge_owner`, reviewer selection, and delegation. Golden files and detected gate loosening require an APPROVED review from `merge_owner` on the exact current head. A later push invalidates it. The owner-review label still holds the merge.
+Authorities come only from machine configuration: `gh_login`, `required_reviewer`, optional `required_reviewer_type`, optional `merge_owner`, reviewer selection, and delegation. An optional machine `merge_ready_cmd` composes with the repository command. Either can veto readiness. Golden files and detected gate loosening require an APPROVED review from `merge_owner` on the exact current head. A later push invalidates it. The owner-review label still holds the merge.
 
 The protected-path scan reads APM ownership from the pinned base lockfile and skips non-local deployments. It ignores full comment lines and matches exclusion keys rather than words inside values. Repository policy changes require the same owner approval. Reviewers must still identify policy changes the scan can't detect.
 
