@@ -506,18 +506,123 @@ policy_review() {
   ! grep -q 'Allow everything' prompt
 }
 
-@test "moving policy authority invalidates review and publication stamps" {
+@test "unrelated trusted commits preserve review stamps and starting audit fields" {
   policy_base
-  policy_review 'cat >/dev/null; echo "VERDICT: PASS"'
+  start=$(git rev-parse HEAD)
+  policy_review 'cat >/dev/null; git update-ref refs/remotes/origin/main "$(git commit-tree HEAD^{tree} -p HEAD -m unrelated)"; echo "VERDICT: PASS"'
   [ "$status" -eq 0 ]
-  git commit --quiet --allow-empty -m 'test: move base'
-  git update-ref refs/remotes/origin/main HEAD
+  [[ "$output" == *"authority: refs/remotes/origin/main ($start)"* ]]
+  grep -q "^policy_oid $start$" .git/agent-skills/policy.stamp
+  grep -q '^policy_ref refs/remotes/origin/main$' .git/agent-skills/policy.stamp
+  grep -q '^policy_status applied$' .git/agent-skills/policy.stamp
+  hash=$(shasum -a 256 .agents/review-instructions.md | cut -d' ' -f1)
+  grep -q "^policy_hash $hash$" .git/agent-skills/policy.stamp
   lib 'dt_require_stamp policy "$PWD/draft"'
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"policy authority changed"* ]]
-  policy_review 'cat >/dev/null; git update-ref refs/remotes/origin/main HEAD~1; echo "VERDICT: PASS"'
+  [ "$status" -eq 0 ]
+}
+
+# Prepare the next trusted commit without moving the reviewed head or index.
+policy_next() {
+  git checkout --quiet main
+  mkdir -p .agents
+  case $1 in
+  added|edited) printf 'Changed policy\n' >.agents/review-instructions.md ;;
+  removed) rm .agents/review-instructions.md ;;
+  non-regular)
+    rm .agents/review-instructions.md
+    ln -s elsewhere .agents/review-instructions.md
+    ;;
+  esac
+  git add -- .agents/review-instructions.md
+  git commit --quiet -m 'test: next policy'
+  git update-ref refs/next-policy HEAD
+  git checkout --quiet topic
+}
+
+policy_change_during_review() {
+  policy_base
+  if [ "$1" = added ]; then
+    git rm --quiet .agents/review-instructions.md
+    git commit --quiet -m 'test: initially absent'
+    git branch --force main HEAD
+    git update-ref refs/remotes/origin/main HEAD
+  fi
+  policy_next "$1"
+  policy_review 'cat >/dev/null; git update-ref refs/remotes/origin/main refs/next-policy; echo "VERDICT: PASS"'
+  [ "$status" -eq 5 ]
+  [[ "$output" == *"review: what the review read changed while it ran; review it again"* ]]
+  [ ! -e .git/agent-skills/policy.stamp ]
+}
+
+@test "policy addition during review refuses a stamp" { policy_change_during_review added; }
+@test "policy removal during review refuses a stamp" { policy_change_during_review removed; }
+@test "policy edit during review refuses a stamp" { policy_change_during_review edited; }
+@test "non-regular policy during review refuses a stamp" { policy_change_during_review non-regular; }
+
+@test "unreadable policy during review refuses a stamp" {
+  policy_base
+  policy_review 'cat >/dev/null; git update-ref refs/remotes/origin/main "$(git commit-tree HEAD^{tree} -p HEAD -m unreadable)"; rm ".git/objects/$(git rev-parse HEAD:.agents/review-instructions.md | sed "s|^..|&/|")"; echo "VERDICT: PASS"'
   [ "$status" -eq 5 ]
   [ ! -e .git/agent-skills/policy.stamp ]
+}
+
+@test "untrusted ref during review refuses a stamp" {
+  policy_base
+  policy_review 'cat >/dev/null; git update-ref -d refs/remotes/origin/main; echo "VERDICT: PASS"'
+  [ "$status" -eq 5 ]
+  [ ! -e .git/agent-skills/policy.stamp ]
+}
+
+@test "changed authority ref during review refuses a stamp" {
+  policy_base
+  policy_review 'cat >/dev/null; git update-ref refs/remotes/origin/other HEAD; git symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/other; echo "VERDICT: PASS"'
+  [ "$status" -eq 5 ]
+  [ ! -e .git/agent-skills/policy.stamp ]
+}
+
+@test "lost common ancestry during review refuses a stamp" {
+  policy_base
+  policy_review 'cat >/dev/null; git update-ref refs/remotes/origin/main "$(git commit-tree HEAD^{tree} -m disconnected)"; echo "VERDICT: PASS"'
+  [ "$status" -eq 5 ]
+  [ ! -e .git/agent-skills/policy.stamp ]
+}
+
+@test "trusted policy edits still invalidate review when branch edits suppress policy" {
+  policy_base
+  policy_next edited
+  printf 'Branch policy\n' >.agents/review-instructions.md
+  git add -- .agents/review-instructions.md
+  policy_review 'cat >/dev/null; git update-ref refs/remotes/origin/main refs/next-policy; echo "VERDICT: PASS"'
+  [ "$status" -eq 5 ]
+  [ ! -e .git/agent-skills/policy.stamp ]
+}
+
+@test "unchanged missing authority preserves built-in-only review" {
+  git commit --quiet --allow-empty -m 'test: initial state'
+  policy_review 'cat >/dev/null; echo "VERDICT: PASS"'
+  [ "$status" -eq 0 ]
+  lib 'dt_require_stamp policy "$PWD/draft"'
+  [ "$status" -eq 0 ]
+}
+
+@test "policy digest changes invalidate publication stamps" {
+  policy_base
+  policy_next edited
+  policy_review 'cat >/dev/null; echo "VERDICT: PASS"'
+  [ "$status" -eq 0 ]
+  git update-ref refs/remotes/origin/main refs/next-policy
+  lib 'dt_require_stamp policy "$PWD/draft"'
+  [ "$status" -eq 1 ]
+}
+
+@test "policy status changes invalidate publication stamps" {
+  policy_base
+  policy_next removed
+  policy_review 'cat >/dev/null; echo "VERDICT: PASS"'
+  [ "$status" -eq 0 ]
+  git update-ref refs/remotes/origin/main refs/next-policy
+  lib 'dt_require_stamp policy "$PWD/draft"'
+  [ "$status" -eq 1 ]
 }
 
 @test "changing the remote default invalidates the policy stamp" {
@@ -528,7 +633,7 @@ policy_review() {
   git symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/other
   lib 'dt_require_stamp policy "$PWD/draft"'
   [ "$status" -eq 1 ]
-  [[ "$output" == *"policy authority changed"* ]]
+  [[ "$output" == *"authority changed"* ]]
 }
 
 @test "policy deletion and addition both suppress overrides" {

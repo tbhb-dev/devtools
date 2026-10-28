@@ -308,6 +308,8 @@ dt_policy_ref() {
 # commits on the branch, beyond the currently staged change.
 dt_review_policy() {
   local inputs=$1 head=$2 tree=$3 path=.agents/review-instructions.md base blob mode
+  DT_POLICY_HEAD=$head
+  DT_POLICY_TREE=$tree
   DT_POLICY_REF=$(dt_policy_ref)
   DT_POLICY_OID=$(gitr rev-parse --verify --quiet "$DT_POLICY_REF^{commit}" || printf 'none\n')
   DT_POLICY_HASH=none
@@ -324,8 +326,8 @@ dt_review_policy() {
       mode=$(gitr ls-tree "$DT_POLICY_OID" -- "$path") || return $?
       [ "${mode%% *}" = 100644 ] ||
         dt_die "Review policy must be a regular non-executable file: $path"
-      gitr cat-file blob "$blob" >"$inputs/review-policy.txt"
-      DT_POLICY_HASH=$(dt_digest "$inputs/review-policy.txt")
+      gitr cat-file blob "$blob" >"$inputs/review-policy.txt" || return $?
+      DT_POLICY_HASH=$(dt_digest "$inputs/review-policy.txt") || return $?
       DT_POLICY_STATUS=applied
     fi
   fi
@@ -333,12 +335,25 @@ dt_review_policy() {
     "$path" "$DT_POLICY_HASH" "$DT_POLICY_STATUS" "$DT_POLICY_REF" "$DT_POLICY_OID" >"$inputs/review-policy-report.txt"
 }
 
-dt_policy_current() {
-  local ref oid
-  ref=$(dt_policy_ref) || return $?
-  oid=$(gitr rev-parse --verify --quiet "${DT_POLICY_REF:-refs/remotes/origin/HEAD}^{commit}" || printf 'none\n') || return $?
-  [ "$ref" = "$DT_POLICY_REF" ] && [ "${DT_POLICY_OID:-none}" = "$oid" ]
-}
+# Re-read with the original reviewed head and tree. Keep this in a subshell
+# so the audit and stamp retain the policy snapshot the reviewer received.
+dt_policy_current() (
+  local ref=$DT_POLICY_REF oid=$DT_POLICY_OID hash=$DT_POLICY_HASH status=$DT_POLICY_STATUS inputs current_ref
+  current_ref=$(dt_policy_ref) || return $?
+  [ "$current_ref" = "$ref" ] || return 1
+  inputs=$(dt_new_inputs policy-current) || return $?
+  trap 'rm -rf "$inputs"' EXIT
+  dt_review_policy "$inputs" "$DT_POLICY_HEAD" "$DT_POLICY_TREE" || return $?
+  if [ "$oid" = none ]; then
+    [ "$DT_POLICY_OID" = none ] || return 1
+  else
+    [ "$DT_POLICY_OID" != none ] || return 1
+    # Also detect trusted text changes when branch edits suppress its use.
+    gitr diff --no-ext-diff --no-textconv --quiet "$oid" "$DT_POLICY_OID" -- .agents/review-instructions.md || return $?
+  fi
+  [ "$DT_POLICY_REF" = "$ref" ] &&
+    [ "$DT_POLICY_HASH" = "$hash" ] && [ "$DT_POLICY_STATUS" = "$status" ]
+)
 
 # dt_review_prompt <criteria-file> <arguments> <inputs-dir>: the review
 # skill's own instructions without their frontmatter, with $ARGUMENTS
@@ -584,7 +599,7 @@ dt_review() {
   fi
   if [ -f "$inputs/review-policy-report.txt" ]; then
     cat "$inputs/review-policy-report.txt"
-    set -- "$@" policy_ref "$DT_POLICY_REF" policy_oid "$DT_POLICY_OID" policy_hash "$DT_POLICY_HASH" policy_status "$DT_POLICY_STATUS"
+    set -- "$@" policy_ref "$DT_POLICY_REF" policy_oid "$DT_POLICY_OID" policy_hash "$DT_POLICY_HASH" policy_status "$DT_POLICY_STATUS" policy_head "$DT_POLICY_HEAD" policy_tree "$DT_POLICY_TREE"
   else
     printf 'Review policy: none applied; sha256: none\n'
   fi
@@ -677,7 +692,7 @@ dt_stamp_value() {
 # dt_require_stamp <kind> <draft> [name value]...: fail unless the stamp
 # covers these exact bytes and every named value still matches.
 dt_require_stamp() {
-  local kind=$1 draft=$2 recorded state digest current_ref current_oid
+  local kind=$1 draft=$2 recorded state digest
   shift 2
   state=$(dt_state_dir) || return $?
   [ -f "$state/$kind.stamp" ] ||
@@ -697,16 +712,16 @@ dt_require_stamp() {
     digest=$(dt_repo_digest) || return $?
     [ "$recorded" = "$digest" ] || dt_die "Repository configuration changed after review. Run the review again."
   fi
-  local policy_ref policy_oid
-  policy_ref=$(dt_stamp_value "$kind" policy_ref) || return $?
-  policy_oid=$(dt_stamp_value "$kind" policy_oid) || return $?
-  if [ -n "$policy_ref" ]; then
-    current_ref=$(dt_policy_ref) || return $?
-    [ "$current_ref" = "$policy_ref" ] ||
-      dt_die "Review policy authority changed after review. Run the review script again."
-    current_oid=$(gitr rev-parse --verify --quiet "$policy_ref^{commit}" || printf 'none\n') || return $?
-    [ "$current_oid" = "$policy_oid" ] ||
-      dt_die "Review policy authority changed after review. Run the review script again."
+  local DT_POLICY_REF DT_POLICY_OID DT_POLICY_HASH DT_POLICY_STATUS DT_POLICY_HEAD DT_POLICY_TREE
+  DT_POLICY_REF=$(dt_stamp_value "$kind" policy_ref) || return $?
+  if [ -n "$DT_POLICY_REF" ]; then
+    DT_POLICY_OID=$(dt_stamp_value "$kind" policy_oid) || return $?
+    DT_POLICY_HASH=$(dt_stamp_value "$kind" policy_hash) || return $?
+    DT_POLICY_STATUS=$(dt_stamp_value "$kind" policy_status) || return $?
+    DT_POLICY_HEAD=$(dt_stamp_value "$kind" policy_head) || return $?
+    DT_POLICY_TREE=$(dt_stamp_value "$kind" policy_tree) || return $?
+    dt_policy_current ||
+      dt_die "Review policy content, status or authority changed after review. Run the review script again."
   fi
 }
 
