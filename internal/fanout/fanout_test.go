@@ -200,6 +200,8 @@ func TestRelease(t *testing.T) {
 	run(realGit, "add", "--", fanout.LedgerPath)
 	t.Setenv("GIT_AUTHOR_NAME", "tbhb-dev-releases[bot]")
 	t.Setenv("GIT_AUTHOR_EMAIL", "340658377+tbhb-dev-releases[bot]@users.noreply.github.com")
+	t.Setenv("GIT_COMMITTER_NAME", "tbhb.dev Agent")
+	t.Setenv("GIT_COMMITTER_EMAIL", "334376894+tbhb-agent@users.noreply.github.com")
 	run(realGit, "-c", "commit.gpgsign=true", "commit", "-qm", "release")
 	commit := run(realGit, "rev-parse", "HEAD")
 	t.Setenv("GIT_COMMITTER_DATE", "2026-01-02T03:04:05Z")
