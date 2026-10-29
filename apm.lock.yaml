@@ -3,14 +3,14 @@ apm_version: 0.33.0
 dependencies:
 - repo_url: _local/agy
   name: devtools-agents-agy
-  version: 0.22.1
+  version: 0.23.0
   package_type: apm_package
   source: local
   local_path: ./packages/agents/agy
   declared_license: Apache-2.0
 - repo_url: _local/claude
   name: devtools-agents-claude
-  version: 0.22.1
+  version: 0.23.0
   package_type: apm_package
   deployed_files:
   - .claude/skills/agent-commit
@@ -303,7 +303,7 @@ dependencies:
   declared_license: Apache-2.0
 - repo_url: _local/codex
   name: devtools-agents-codex
-  version: 0.22.1
+  version: 0.23.0
   package_type: apm_package
   deployed_files:
   - .agents/skills/agent-commit
@@ -576,7 +576,7 @@ dependencies:
   declared_license: Apache-2.0
 - repo_url: _local/common
   name: devtools-agents-common
-  version: 0.22.1
+  version: 0.23.0
   package_type: apm_package
   deployed_files:
   - .agents/rules/worktree-wip.md

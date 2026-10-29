@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file. See [conven
 - - -
 <!-- release -->
 
+## [v0.23.0](https://github.com/tbhb-dev/devtools/compare/f130498bd7383fe02f8b9d21965f555866abd98c..v0.23.0) - 2026-10-29
+
+### Features
+
+- (**fuzz**) move native Go fuzz orchestration to Go (#834) - ([fd7b680](https://github.com/tbhb-dev/devtools/commit/fd7b680432ed2040c6e40626778acdf79dc8e317)) - tbhb.dev Agent
+- (**gh-post**) add issue label and pr label verbs (#675) - ([f843f76](https://github.com/tbhb-dev/devtools/commit/f843f76400b9786d4c033a36a62b771cfcbcee11)) - tbhb.dev Agent
+- (**merge**) check exact-head approval snapshots in Go (#730) - ([f1e9dd2](https://github.com/tbhb-dev/devtools/commit/f1e9dd2ebe65bc98dab7325ee2e9c3cf32b151cf)) - tbhb.dev Agent
+- (**pr**) require compatibility declarations for consumer changes (#774) - ([d555364](https://github.com/tbhb-dev/devtools/commit/d555364c67daf45a3db0506733df1dbe9dd8d734)) - tbhb.dev Agent
+- (**release**) add the fan-out foundation (#778) - ([a26418f](https://github.com/tbhb-dev/devtools/commit/a26418fc8ece094c2e511d737a9fed7faf38f000)) - tbhb.dev Agent
+- (**versions**) port release literal checks to Go (#783) - ([a0347a7](https://github.com/tbhb-dev/devtools/commit/a0347a715fab580ece45edfcb3d13509620459a8)) - tbhb.dev Agent
+
+### Bug Fixes
+
+- (**agents**) preserve reviews across unrelated trusted commits (#786) - ([498347d](https://github.com/tbhb-dev/devtools/commit/498347ddb5cab341694c5f4f70cf2c3ecde7c408)) - tbhb.dev Agent
+- (**commit**) preserve branch history during base updates (#751) - ([f130498](https://github.com/tbhb-dev/devtools/commit/f130498bd7383fe02f8b9d21965f555866abd98c)) - tbhb.dev Agent
+- (**leaks**) load private lists in linked worktrees (#822) - ([47594fb](https://github.com/tbhb-dev/devtools/commit/47594fb58190ab838ad960169968ec29fb5586d1)) - tbhb.dev Agent
+
+- - -
+
+<!-- release -->
+
 ## [v0.22.1](https://github.com/tbhb-dev/devtools/compare/8dfa57102d8b3c4c8ee583e5c2014465fc433b78..v0.22.1) - 2026-10-26
 
 ### Bug Fixes
