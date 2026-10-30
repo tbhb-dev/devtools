@@ -193,6 +193,17 @@ if [ -z "${_DEVTOOLS_AGENTREPO_VERDICT+set}" ]; then
   unset _dt_review_help
 fi
 
+# Probe once before any GitHub call; group help on older binaries exits zero.
+if [ -z "${_DEVTOOLS_AGENTREPO_GITHUB+set}" ]; then
+  _DEVTOOLS_AGENTREPO_GITHUB=false
+  if [ -n "$_DEVTOOLS_AGENTREPO_BIN" ] &&
+    _dt_github_help=$("$_DEVTOOLS_AGENTREPO_BIN" --help 2>/dev/null) &&
+    printf '%s\n' "$_dt_github_help" | grep -Eq '^[[:space:]]+github[[:space:]]'; then
+    _DEVTOOLS_AGENTREPO_GITHUB=true
+  fi
+  unset _dt_github_help
+fi
+
 # Remove the shell fallback under #321 once the minimum agentrepo version
 # on every host and in every consumer supports config.
 # _dt_conf_file <file> <key>: print the key's value, or fail when the
@@ -835,6 +846,7 @@ dt_gh_post() {
   gh-post "$@"
 }
 
+# Remove the GitHub shell fallback under #775 after consumer migration.
 # dt_gh preserves gh's failure status; quota exhaustion has status 76.
 # A rate limit is recognized only from gh's own error lines on stderr after a
 # non-zero exit: a line starting with "gh: " or "GraphQL: " that carries one of
@@ -843,6 +855,10 @@ dt_gh_post() {
 # which can disagree with the budget the failing call hit. Never retry a
 # mutation: its outcome may already have taken effect on GitHub.
 dt_gh() {
+  if [ "$_DEVTOOLS_AGENTREPO_GITHUB" = true ]; then
+    "$_DEVTOOLS_AGENTREPO_BIN" github run "$@"
+    return $?
+  fi
   local err status line arg kind='' graphql=0 msg
   err=$(mktemp) || return 1
   if gh "$@" 2>"$err"; then
@@ -888,6 +904,10 @@ dt_gh() {
 
 # GraphQL has its own quota and does not spend REST core quota.
 dt_gh_login() {
+  if [ "$_DEVTOOLS_AGENTREPO_GITHUB" = true ]; then
+    "$_DEVTOOLS_AGENTREPO_BIN" github login "$@"
+    return $?
+  fi
   local login
   login=$(dt_gh api graphql -f 'query={viewer{login}}' --jq '.data.viewer.login // empty') || return $?
   [ -n "$login" ] && [ "$login" != null ] || {
@@ -899,6 +919,10 @@ dt_gh_login() {
 
 # gh expands owner/repo placeholders from the current repository.
 dt_gh_repo() {
+  if [ "$_DEVTOOLS_AGENTREPO_GITHUB" = true ]; then
+    "$_DEVTOOLS_AGENTREPO_BIN" github repo "$@"
+    return $?
+  fi
   local query=$1
   shift
   dt_gh api graphql -F owner='{owner}' -F name='{repo}' -f "query=$query" "$@"

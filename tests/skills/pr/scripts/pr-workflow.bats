@@ -697,3 +697,20 @@ publication_edit() {
   refute_grep '^devtools:lint-leaks' "$GATE_LOG"
   refute_grep '^pr create ' "$GH_LOG"
 }
+
+@test "publisher keeps permission failures and refuses a successful wrong login (#760)" {
+  bash "$SCRIPTS/review.sh"
+  export DEVTOOLS_GH_LOGIN=expected
+  export GH_VIEWER_ERROR='gh: Resource not accessible (HTTP 403)' GH_ERROR_STATUS=3
+  run bash "$SCRIPTS/create-pr.sh" --confirmed
+  [ "$status" -eq 3 ]
+  [[ "$output" == *"Resource not accessible (HTTP 403)"* ]]
+  [[ "$output" != *"signed in as"* ]]
+  [[ "$output" != *"rate limit:"* ]]
+  [ -z "$(remote_topic)" ]
+  unset GH_VIEWER_ERROR GH_ERROR_STATUS
+  run bash "$SCRIPTS/create-pr.sh" --confirmed
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"gh is signed in as agent, not expected. Nothing was pushed or published."* ]]
+  [ -z "$(remote_topic)" ]
+}

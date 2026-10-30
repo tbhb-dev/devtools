@@ -721,6 +721,7 @@ if [ "${GH_SUCCESS:-0}" = 1 ]; then
   exit 0
 fi
 printf '%s\n' "${GH_ERROR:-HTTP 401: Bad credentials}" >&2
+if [ "${GH_SIGNAL:-}" = INT ]; then kill -INT "$$"; fi
 exit "${GH_STATUS:-4}"
 STUB
   chmod +x "$BATS_TEST_TMPDIR/bin/gh"
@@ -1070,4 +1071,71 @@ STUB
   [ "$status" -eq 0 ]
   "$REAL_AGENTREPO" review verdict --file reply >go-verdict
   cmp shell-verdict go-verdict
+}
+
+@test "GitHub runner and readers have identical shell and Go streams and statuses (#760)" {
+  stub_github
+  local snippet mode expected_status
+  for snippet in 'dt_gh api user' 'dt_gh_login' 'dt_gh_repo "query={repository(owner:\"{owner}\",name:\"{repo}\"){name}}" --jq .data.repository.name'; do
+    for mode in success authentication permission empty null quota signal; do
+      unset GH_SUCCESS GH_STDOUT GH_WARN GH_ERROR GH_STATUS GH_RESULT GH_SIGNAL
+      case $mode in
+      success) export GH_SUCCESS=1 GH_RESULT=agent GH_WARN=warning ;;
+      authentication) export GH_ERROR='gh: Bad credentials (HTTP 401)' GH_STATUS=4 ;;
+      permission) export GH_ERROR='gh: Resource not accessible (HTTP 403)' GH_STATUS=1 ;;
+      empty) export GH_SUCCESS=1 GH_RESULT='' ;;
+      null) export GH_SUCCESS=1 GH_RESULT=null ;;
+      quota) export GH_ERROR='gh: API rate limit exceeded for user ID 1.' GH_STATUS=1 ;;
+      signal) export GH_STDOUT=partial GH_ERROR=terminated GH_SIGNAL=INT ;;
+      esac
+      run bash -c '_DEVTOOLS_AGENTREPO_GITHUB=false; . "$1"; eval "$2" >"$3/shell.out" 2>"$3/shell.err"' _ "$LIB" "$snippet" "$BATS_TEST_TMPDIR"
+      expected_status=$status
+      if [ "$mode" = signal ]; then [ "$expected_status" -eq 130 ]; fi
+      run bash -c '_DEVTOOLS_AGENTREPO_BIN=$REAL_AGENTREPO; _DEVTOOLS_AGENTREPO_GITHUB=true; . "$1"; eval "$2" >"$3/go.out" 2>"$3/go.err"' _ "$LIB" "$snippet" "$BATS_TEST_TMPDIR"
+      [ "$status" -eq "$expected_status" ]
+      cmp "$BATS_TEST_TMPDIR/shell.out" "$BATS_TEST_TMPDIR/go.out"
+      cmp "$BATS_TEST_TMPDIR/shell.err" "$BATS_TEST_TMPDIR/go.err"
+    done
+  done
+}
+
+@test "GitHub replacement absence falls back but supported failures never repeat (#760)" {
+  stub_github
+  cat >"$BATS_TEST_TMPDIR/bin/replacement" <<'STUB'
+#!/bin/sh
+case $1 in
+--help) [ "$REPLACEMENT" = absent ] || printf '  github  Run GitHub calls\n'; exit 0 ;;
+github)
+  printf 'replacement\n' >>"$BATS_TEST_TMPDIR/replacement.calls"
+  [ "$REPLACEMENT" != partial ] || printf 'partial'
+  printf 'replacement failed\n' >&2
+  exit 9 ;;
+esac
+exit 0
+STUB
+  chmod +x "$BATS_TEST_TMPDIR/bin/replacement"
+  local mode snippet
+  for mode in absent failed partial; do
+    export REPLACEMENT=$mode
+    for snippet in 'dt_gh api user' dt_gh_login 'dt_gh_repo query'; do
+      : >"$GH_CALLS"
+      : >"$BATS_TEST_TMPDIR/replacement.calls"
+      run bash -c '_DEVTOOLS_AGENTREPO_BIN=$BATS_TEST_TMPDIR/bin/replacement; . "$1"; eval "$2" >"$BATS_TEST_TMPDIR/out" 2>"$BATS_TEST_TMPDIR/err"' _ "$LIB" "$snippet"
+      if [ "$mode" = absent ]; then
+        [ "$status" -eq 4 ]
+        [ "$(wc -l <"$GH_CALLS")" -eq 1 ]
+        [ ! -s "$BATS_TEST_TMPDIR/replacement.calls" ]
+      else
+        [ "$status" -eq 9 ]
+        [ ! -s "$GH_CALLS" ]
+        [ "$(wc -l <"$BATS_TEST_TMPDIR/replacement.calls")" -eq 1 ]
+        [ "$(cat "$BATS_TEST_TMPDIR/err")" = 'replacement failed' ]
+        if [ "$mode" = partial ]; then
+          [ "$(cat "$BATS_TEST_TMPDIR/out")" = partial ]
+        else
+          [ ! -s "$BATS_TEST_TMPDIR/out" ]
+        fi
+      fi
+    done
+  done
 }
