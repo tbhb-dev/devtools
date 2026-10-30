@@ -11,6 +11,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -21,7 +22,6 @@ import (
 )
 
 func TestDiagnosisShellParityAndReadOnly(t *testing.T) {
-	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 	legacy, pathErr := filepath.Abs("../../packages/agents/source/skills/fix-pr/shared/scripts/diagnose-legacy.sh")
 	require.NoError(t, pathErr)
 	// Exercise the original shell and its frozen compatibility fallback.
@@ -38,7 +38,6 @@ func TestDiagnosisShellParityAndReadOnly(t *testing.T) {
 
 func checkDiagnosisShellParity(t *testing.T, scenario, legacy string) {
 	t.Helper()
-	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 	root := t.TempDir()
 	if scenario == "trailing space" {
 		root = filepath.Join(root, "repository ")
@@ -135,7 +134,7 @@ esac
 	nested := filepath.Join(root, "nested")
 	require.NoError(t, os.Mkdir(nested, 0o700))
 	t.Chdir(nested)
-	before := git("status", "--porcelain") + git("show-ref") + git("ls-files", "--stage")
+	before := diagnosisCheckoutSnapshot(t, root, git)
 	var oldOut, oldErr bytes.Buffer
 	shell := exec.CommandContext(t.Context(), "bash", legacy, "794")
 	shell.Stdout = &oldOut
@@ -146,7 +145,7 @@ esac
 	d := diagnosis{run: diagnosisRunner(t.Context()), out: &out, stderr: &stderr}
 	code := d.diagnose([]string{"794"}, "3")
 	assertDiagnosisParity(t, scenario, oldCode, oldOut.String(), oldErr.String(), code, out.String(), stderr.String())
-	require.Equal(t, before, git("status", "--porcelain")+git("show-ref")+git("ls-files", "--stage"))
+	require.Equal(t, before, diagnosisCheckoutSnapshot(t, root, git))
 	if scenario == "failures" {
 		data, err := os.ReadFile(calls)
 		require.NoError(t, err)
@@ -163,6 +162,34 @@ esac
 	); hardened != code {
 		t.Fatalf("hostile environment changed status: %d != %d", hardened, code)
 	}
+}
+
+func diagnosisCheckoutSnapshot(t *testing.T, root string, git func(...string) string) map[string]string {
+	t.Helper()
+	checkout, err := os.OpenRoot(root)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, checkout.Close()) })
+	head, err := checkout.ReadFile(".git/HEAD")
+	require.NoError(t, err)
+	state := map[string]string{
+		"HEAD":   string(head),
+		"status": git("status", "--porcelain"),
+		"refs":   git("show-ref"),
+		"index":  git("ls-files", "--stage"),
+	}
+	require.NoError(t, fs.WalkDir(checkout.FS(), ".", func(path string, entry fs.DirEntry, err error) error {
+		require.NoError(t, err)
+		if path == ".git" {
+			return fs.SkipDir
+		}
+		if !entry.IsDir() {
+			contents, readErr := checkout.ReadFile(path)
+			require.NoError(t, readErr)
+			state["file:"+path] = string(contents)
+		}
+		return nil
+	}))
+	return state
 }
 
 func assertDiagnosisParity(
