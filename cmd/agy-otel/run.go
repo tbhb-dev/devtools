@@ -21,6 +21,7 @@ const (
 )
 
 type payload struct {
+	Transcript *string `json:"transcriptPath"`
 	Session    *string `json:"conversationId"`
 	Root       *string `json:"rootConversationId"`
 	Parent     *string `json:"parentConversationId"`
@@ -41,24 +42,26 @@ type payload struct {
 }
 
 type record struct {
-	Version     int     `json:"v"`
-	Event       string  `json:"event"`
-	Timestamp   int64   `json:"ts_ms"`
-	Session     *string `json:"session,omitempty"`
-	Root        *string `json:"root,omitempty"`
-	Parent      *string `json:"parent,omitempty"`
-	Model       *string `json:"model,omitempty"`
-	Agent       *string `json:"agent,omitempty"`
-	Exec        *string `json:"exec,omitempty"`
-	Step        *int64  `json:"step,omitempty"`
-	Invocation  *int64  `json:"invocation,omitempty"`
-	Execution   *int64  `json:"execution,omitempty"`
-	Tool        *string `json:"tool,omitempty"`
-	ArgsBytes   *int    `json:"args_bytes,omitempty"`
-	ResultBytes *int    `json:"result_bytes,omitempty"`
-	Error       *bool   `json:"error,omitempty"`
-	Termination *string `json:"termination,omitempty"`
-	Idle        *bool   `json:"idle,omitempty"`
+	Tokens      *tokenCounts `json:"tokens,omitempty"`
+	VCSAttempts []string     `json:"vcs_attempts,omitempty"`
+	Version     int          `json:"v"`
+	Event       string       `json:"event"`
+	Timestamp   int64        `json:"ts_ms"`
+	Session     *string      `json:"session,omitempty"`
+	Root        *string      `json:"root,omitempty"`
+	Parent      *string      `json:"parent,omitempty"`
+	Model       *string      `json:"model,omitempty"`
+	Agent       *string      `json:"agent,omitempty"`
+	Exec        *string      `json:"exec,omitempty"`
+	Step        *int64       `json:"step,omitempty"`
+	Invocation  *int64       `json:"invocation,omitempty"`
+	Execution   *int64       `json:"execution,omitempty"`
+	Tool        *string      `json:"tool,omitempty"`
+	ArgsBytes   *int         `json:"args_bytes,omitempty"`
+	ResultBytes *int         `json:"result_bytes,omitempty"`
+	Error       *bool        `json:"error,omitempty"`
+	Termination *string      `json:"termination,omitempty"`
+	Idle        *bool        `json:"idle,omitempty"`
 }
 
 // Run deliberately has no output or failure status: hooks must never influence agy.
@@ -146,6 +149,17 @@ func (p payload) record(event string, timestamp int64) record {
 	if len(p.Error) != 0 {
 		set := string(p.Error) != "null"
 		r.Error = &set
+	}
+	if event == "PostInvocation" {
+		r.Tokens = transcriptTokens(p.Transcript)
+	}
+	if event == "PostToolUse" && p.ToolCall != nil && p.ToolCall.Name != nil && *p.ToolCall.Name == "run_command" {
+		var args struct {
+			CommandLine string `json:"CommandLine"`
+		}
+		if json.Unmarshal(p.ToolCall.Args, &args) == nil {
+			r.VCSAttempts = commandAttempts(args.CommandLine)
+		}
 	}
 	return r
 }
