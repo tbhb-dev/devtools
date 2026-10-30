@@ -1,6 +1,6 @@
 # Shell migration inventory and owners
 
-This inventory tracks [#588](https://github.com/tbhb-dev/devtools/issues/588) and [#754](https://github.com/tbhb-dev/devtools/issues/754). It describes the maintained sources at `f843f764`, measured on 2026-10-26.
+This inventory tracks [#588](https://github.com/tbhb-dev/devtools/issues/588) and [#754](https://github.com/tbhb-dev/devtools/issues/754). It describes the maintained sources at `20a5da4b`, measured on 2026-11-01.
 
 ## Scope and counting
 
@@ -24,16 +24,18 @@ Run `uv run pytest tests/tools/test_script_inventory.py` to check the real tree 
 | `.claude/skills/review-release-version/scripts/context.sh` | #588 | 181 | logic | none | n/a | none: `review-release-version/context` gathers workflow context in Bash. |
 | `.devtools/scripts/apm-sync.sh` | #588 | 22 | logic | none | n/a | none: `payload/apm-sync` synchronizes hook registrations in Bash. |
 | `.devtools/scripts/apm_audit.py` | #754 | 139 | logic | none | none | Excluded from migration: APM audit reporting stays Python. none: no `pytest` directly exercises this deployed copy. |
-| `.devtools/scripts/check-leaks.sh` | #588 | 878 | logic | none | n/a | none: `payload/check-leaks` scans Git content for sensitive strings in Bash. |
+| `.devtools/scripts/check-leaks.sh` | #588 | 881 | logic | none | n/a | none: `payload/check-leaks` scans Git content for sensitive strings in Bash. |
 | `.devtools/scripts/check_curl_fail.py` | #754 | 152 | logic | none | `tests/devtools/test_check_curl_fail.py` | Excluded from migration: curl option analysis stays Python. none: `check_curl_fail` stays Python. |
 | `.devtools/scripts/filter-apm-deployed.py` | #754 | 34 | logic | none | none | Excluded from migration: APM file-list filtering stays Python. none: no direct Python coverage for this filter. |
 | `.devtools/scripts/filter-govulncheck-sarif.sh` | #588 | 8 | logic | none | n/a | none: `payload/filter-govulncheck-sarif` filters vulnerability output in Bash. |
 | `.devtools/scripts/fix_prose_replacements.py` | #754 | 256 | logic | none | none | Excluded from migration: prose replacement stays Python. none: `pytest` targets the repository copy, not this deployed copy. |
-| `.devtools/scripts/fuzz.sh` | #588 | 32 | logic | none | n/a | none: `payload/fuzz` discovers fuzz targets in Bash. |
+| `.devtools/scripts/fuzz.sh` | #588 | 12 | logic | `internal/agentrepo/fuzz.go` | n/a | Partial: native fuzz execution uses Go. Bash retains capability detection and the N-2 fallback. |
 | `.devtools/scripts/go-ldflags.sh` | #588 | 31 | logic | none | n/a | none: `payload/go-ldflags` builds version flags in Bash. |
 | `.devtools/scripts/gomodscan.sh` | #588 | 62 | logic | none | n/a | none: `payload/gomodscan` scans module dependencies in Bash. |
 | `.devtools/scripts/install-pre-push.sh` | #588 | 119 | logic | `internal/commitlint/git.go` | n/a | Partial: outgoing commit checks. installer and input replay stay shell. |
+| `.devtools/scripts/leak-private-strings.py` | #754 | 149 | logic | none | none | Excluded from migration: private-list resolution stays Python. none: the Bats suite `.devtools/scripts/check-leaks.bats` covers this helper. No `pytest` suite covers it. |
 | `.devtools/scripts/leak-skip.sh` | #588 | 16 | logic | none | n/a | none: `payload/leak-skip` reads scanner exclusions in Bash. |
+| `.devtools/scripts/legacy/fuzz.sh` | #754 | 32 | logic | `internal/agentrepo/fuzz.go` | n/a | Excluded from migration: frozen N-2 fallback for the migrated fuzz runner. Go runs the native fuzz targets. |
 | `.devtools/scripts/lint-commit-msg.sh` | #588 | 80 | logic | `internal/commitlint/identities.go` | n/a | Partial: sign-off validation. preview orchestration stays shell. |
 | `.devtools/scripts/lint-draft.sh` | #717 | 120 | logic | none | n/a | none: `payload/lint-draft` sequences prose tools in Bash. |
 | `.devtools/scripts/lint-go-arch.py` | #754 | 60 | logic | none | none | Excluded from migration: architecture exclusion configuration stays Python. none: architecture filtering lacks Python tests. |
@@ -42,7 +44,7 @@ Run `uv run pytest tests/tools/test_script_inventory.py` to check the real tree 
 | `.devtools/scripts/rust.sh` | #588 | 97 | logic | none | n/a | none: `payload/rust` orchestrates Rust tasks in Bash. |
 | `packages/agents/source/lib/agent.sh` | #588 | 173 | logic | `internal/config/repository.go` | n/a | Partial: repository configuration. review bounds and reporting stay shell. |
 | `packages/agents/source/lib/gates.py` | #713 | 117 | logic | none | none | Pass-cache fingerprinting and gate execution. none: gate execution has no Go replacement. No `pytest` suite covers this cache helper. |
-| `packages/agents/source/lib/lib.sh` | #588 | 902 | logic | `internal/config/config.go`. `internal/review/verdict.go`. `internal/review/run.go`. `internal/commitlint/identities.go` | n/a | Partial: configuration, verdicts, reviewer execution and sign-off checks. remaining shared orchestration stays under the epic. |
+| `packages/agents/source/lib/lib.sh` | #588 | 937 | logic | `internal/config/config.go`. `internal/review/verdict.go`. `internal/review/run.go`. `internal/commitlint/identities.go` | n/a | Partial: configuration, verdicts, reviewer execution and sign-off checks. remaining shared orchestration stays under the epic. |
 | `packages/agents/source/lib/signing.sh` | #764 | 93 | logic | none | n/a | none: verification of landed commits stays shell. Go provides signing without commit-state verification. |
 | `packages/agents/source/lib/worktree-ready.sh` | #755 | 42 | logic | none | n/a | none: `repository/worktree-ready` worktree ready in Bash. |
 | `packages/agents/source/skills/agent-commit/shared/scripts/commit.sh` | #588 | 6 | thin | none | n/a | none: `agent-commit/commit` commits reviewed changes in Bash. |
@@ -65,7 +67,8 @@ Run `uv run pytest tests/tools/test_script_inventory.py` to check the real tree 
 | `packages/agents/source/skills/commit/shared/scripts/preflight.sh` | #588 | 338 | logic | `internal/commitlint/identities.go` | n/a | Partial: sign-off validation via the shared library. prerequisite checks and reporting stay shell. |
 | `packages/agents/source/skills/commit/shared/scripts/review.sh` | #588 | 163 | logic | `internal/review/run.go`. `internal/review/verdict.go` | n/a | Partial: the Go code runs the reviewer and parses its verdict through the shared library. shell snapshots the staged tree and binds the commit stamp. |
 | `packages/agents/source/skills/fix-pr/claude/scripts/guard-fix.sh` | #588 | 79 | logic | none | n/a | none: `fix-pr/guard-fix` restricts remediation writes in Bash. |
-| `packages/agents/source/skills/fix-pr/shared/scripts/diagnose.sh` | #588 | 162 | logic | none | n/a | none: `fix-pr/diagnose` reads failing Actions logs in Bash. |
+| `packages/agents/source/skills/fix-pr/shared/scripts/diagnose-legacy.sh` | #794 | 162 | logic | `internal/agentrepo/diagnose.go` | n/a | Frozen N-2 fallback for the Go diagnosis command. |
+| `packages/agents/source/skills/fix-pr/shared/scripts/diagnose.sh` | #588 | 12 | logic | `internal/agentrepo/diagnose.go` | n/a | Go reports failing checks and local reproducers. the shell entry point remains available. |
 | `packages/agents/source/skills/fix-pr/shared/scripts/populate-description.sh` | #588 | 108 | logic | none | n/a | none: the shell copies the existing PR body for remediation. |
 | `packages/agents/source/skills/fix-prose/claude/scripts/arm-guard.sh` | #588 | 74 | logic | none | n/a | none: `fix-prose/arm-guard` records the target file in Bash. |
 | `packages/agents/source/skills/fix-prose/claude/scripts/guard-target.sh` | #588 | 130 | logic | none | n/a | none: `fix-prose/guard-target` confines edits to that target in Bash. |
@@ -74,7 +77,7 @@ Run `uv run pytest tests/tools/test_script_inventory.py` to check the real tree 
 | `packages/agents/source/skills/fix-prose/shared/scripts/preflight.sh` | #588 | 129 | logic | none | n/a | none: `fix-prose/preflight` checks prerequisites in Bash. |
 | `packages/agents/source/skills/merge-pr/claude/scripts/guard-merge.sh` | #721 | 75 | logic | none | n/a | none: `merge-pr/guard-merge` restricts merge commands in Bash. |
 | `packages/agents/source/skills/merge-pr/shared/scripts/lint-squash-msg.sh` | #588 | 37 | logic | none | n/a | none: `merge-pr/lint-squash-msg` runs message lint in Bash. |
-| `packages/agents/source/skills/merge-pr/shared/scripts/merge-agent.sh` | #761 | 235 | logic | `internal/checks/checks.go`. `internal/config/repository.go`. `internal/ghpost/run.go` | n/a | Partial: check evaluation plus repository configuration and scanned posting. approval selection belongs to this owner. |
+| `packages/agents/source/skills/merge-pr/shared/scripts/merge-agent.sh` | #761 | 224 | logic | `internal/checks/checks.go`. `internal/config/repository.go`. `internal/ghpost/run.go`. `internal/mergepolicy/approval.go` | n/a | Partial: check evaluation, exact-head approval, repository configuration, and scanned posting. shell coordinates merge policy. |
 | `packages/agents/source/skills/merge-pr/shared/scripts/merge-policy.py` | #588 | 816 | logic | none | none | Merge policy inspection. none: check evaluation is separate behavior, not a policy counterpart. Bats exercises policy behavior. No Python suite covers this helper. |
 | `packages/agents/source/skills/merge-pr/shared/scripts/populate-description.sh` | #588 | 108 | logic | none | n/a | none: shell extracts briefing material before a squash. |
 | `packages/agents/source/skills/merge-pr/shared/scripts/preflight.sh` | #723 | 224 | logic | none | n/a | none: `merge-pr/preflight` checks prerequisites in Bash. |
@@ -108,6 +111,7 @@ Run `uv run pytest tests/tools/test_script_inventory.py` to check the real tree 
 | `packages/agents/source/skills/resolve-rebase-conflicts/shared/scripts/take-side.sh` | #588 | 115 | logic | none | n/a | none: `resolve-rebase-conflicts/take-side` selects a whole-file resolution in Bash. |
 | `packages/agents/source/skills/watch-pr/claude/scripts/guard-watch.sh` | #588 | 65 | logic | none | n/a | none: `watch-pr/guard-watch` restricts watcher commands in Bash. |
 | `packages/agents/source/skills/watch-pr/shared/scripts/watch-checks.sh` | #588 | 187 | logic | none | n/a | none: `watch-pr/watch-checks` streams check transitions in Bash. |
+| `packages/agents/source/skills/watch-pr/shared/scripts/watch.sh` | #977 | 11 | logic | `internal/agentrepo/watch.go` | n/a | The capability probe selects Go watching or the frozen shell fallback. |
 | `packages/agents/source/skills/write-pr-description/shared/scripts/context.sh` | #588 | 172 | logic | none | n/a | none: `write-pr-description/context` gathers workflow context in Bash. |
 | `packages/agents/source/skills/write-prose-fix/shared/scripts/context.sh` | #588 | 150 | logic | none | n/a | none: `write-prose-fix/context` gathers workflow context in Bash. |
 | `scripts/clear-commit-agentmsg.sh` | #715 | 27 | logic | none | n/a | none: `repository/clear-commit-agentmsg` deletes the used message draft in Bash. |
@@ -126,8 +130,8 @@ Run `uv run pytest tests/tools/test_script_inventory.py` to check the real tree 
 | `tools/check-script-hygiene.sh` | #588 | 172 | logic | none | n/a | none: `repository/check-script-hygiene` checks shell hazards in Bash. |
 | `tools/check-versions.sh` | #716 | 4 | thin | `internal/versions/check.go` | n/a | Go checks release literals and local locks. |
 | `tools/fix_prose_replacements.py` | #754 | 256 | logic | none | `tests/tools/test_fix_prose_replacements.py` | Excluded from migration: the helper applies span-checked prose corrections. none: `fix_prose_replacements` stays Python. |
-| `tools/fuzz.sh` | #588 | 4 | thin | none | n/a | none: `repository/fuzz` discovers fuzz targets in Bash. |
-| `tools/generate-skills.sh` | #588 | 172 | logic | none | n/a | none: `repository/generate-skills` renders canonical skill sources in Bash. |
+| `tools/fuzz.sh` | #588 | 4 | thin | `internal/agentrepo/fuzz.go` | n/a | The shell forwards arguments to the payload adapter for the Go fuzz runner. |
+| `tools/generate-skills.sh` | #588 | 172 | logic | `internal/skills/generate.go` | n/a | Go renders and checks skill output. the shell generator remains the current entry point. |
 | `tools/go-ldflags.sh` | #588 | 4 | thin | none | n/a | none: `repository/go-ldflags` builds version flags in Bash. |
 | `tools/lint-draft.sh` | #717 | 120 | logic | none | n/a | none: a duplicate shell copy coordinates draft lint. |
 | `tools/lint-types.sh` | #588 | 4 | thin | none | n/a | none: `repository/lint-types` selects Python typing roots in Bash. |
@@ -136,12 +140,13 @@ Run `uv run pytest tests/tools/test_script_inventory.py` to check the real tree 
 | `tools/release-readiness.sh` | #588 | 183 | logic | none | n/a | none: `repository/release-readiness` checks release prerequisites in Bash. |
 | `tools/release-verify.sh` | #588 | 237 | logic | none | n/a | none: `repository/release-verify` verifies release artifacts in Bash. |
 | `tools/script_lines.py` | #754 | 37 | logic | none | `tests/tools/test_script_lines.py` | Excluded from migration: source-line measurement stays Python. none: `script_lines` stays Python. |
+| `tools/skill-limits-legacy.sh` | #847 | 154 | logic | `internal/skills/check.go` | n/a | Frozen comparison and N-2 fallback for the Go skill limits checker. |
 | `tools/skill-limits.sh` | #588 | 154 | logic | none | n/a | none: `repository/skill-limits` checks platform manifest bounds in Bash. |
-| `tools/skill-tokens.sh` | #951 | 284 | logic | `internal/tokens/tokens.go`. `internal/agentrepo/skill_tokens.go` | n/a | Go task active. Shell and comparison fixtures retire in [#951](https://github.com/tbhb-dev/devtools/issues/951). |
+| `tools/skill-tokens.sh` | #951 | 284 | logic | `internal/tokens/measure.go` | n/a | Go task active. Shell and comparison fixtures retire in [#951](https://github.com/tbhb-dev/devtools/issues/951). |
 | `tools/skill_attribution.py` | #754 | 555 | logic | none | `tests/tools/test_skill_attribution.py` | Excluded from migration: transcript attribution analysis stays Python. none: `skill_attribution` stays Python. |
 | `tools/test-guards.sh` | #588 | 242 | logic | none | n/a | none: `repository/test-guards` exercises registered guard commands in Bash. |
 
-Totals: 107 shell files (7 Bash test helpers included), 15273 shell newlines. 15 Python helpers.
+Totals: 111 shell files (7 Bash test helpers included), 15489 shell newlines. 16 Python helpers.
 
 ## Historical timing baseline
 
