@@ -17,6 +17,7 @@ import (
 const (
 	maxCommentCharacters = 65536
 	stateOpen            = "OPEN"
+	stateClosed          = "CLOSED"
 )
 
 var (
@@ -63,7 +64,7 @@ func (r *request) readPRState(ctx context.Context) (prState, error) {
 	var state prState
 	if err != nil || json.Unmarshal(data, &state) != nil || state.ID == "" || state.IsDraft == nil ||
 		state.Head == "" || !strings.EqualFold(state.URL, "https://github.com/"+r.repo+"/pull/"+r.operand) ||
-		!slices.Contains([]string{stateOpen, "CLOSED", "MERGED"}, state.State) {
+		!slices.Contains([]string{stateOpen, stateClosed, "MERGED"}, state.State) {
 		return prState{}, errEnvironment
 	}
 	return state, nil
@@ -170,7 +171,7 @@ func (r *request) readBackPR(ctx context.Context, body []byte, writeErr error, l
 		}
 		return exitEnvironment
 	}
-	if r.operation == prClose && state.State != "CLOSED" ||
+	if r.operation == prClose && state.State != stateClosed ||
 		r.operation == prReady && (state.State != stateOpen || *state.IsDraft) {
 		fmt.Fprintln(errOut, "gh-post: PR read-back contradicts requested state; do not retry or undo automatically")
 		return 1

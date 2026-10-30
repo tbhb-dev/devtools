@@ -1047,3 +1047,161 @@ func TestPRStateAC10MutationFailure(t *testing.T) {
 		})
 	}
 }
+
+func setupIssueState(t *testing.T, state string) string {
+	t.Helper()
+	dir := setup(t)
+	t.Setenv("FIXTURE", dir)
+	t.Setenv("COMMENT_STATUS", "0")
+	t.Setenv("MUTATE_STATUS", "0")
+	write(t, filepath.Join(dir, "issue-state"), state)
+	write(t, filepath.Join(dir, "body"), "Public explanation.\n")
+	write(t, filepath.Join(dir, "gh"), `#!/bin/sh
+printf '%s\n' "$*" >> "$CALLS"
+case "$*" in
+	'api user --jq .login') echo "${LOGIN:-agent}" ;;
+	'issue view 12 --repo owner/repo --json state,url')
+		printf '{"state":"%s","url":"https://github.com/owner/repo/issues/12"}' "$(cat "$FIXTURE/issue-state")" ;;
+	'issue comment 12 --repo owner/repo --body-file -')
+		cat > "$PAYLOAD"
+		echo https://github.com/owner/repo/issues/12#issuecomment-1
+		exit "$COMMENT_STATUS" ;;
+	'issue close 12 --repo owner/repo --reason completed'|'issue close 12 --repo owner/repo --reason not planned')
+		[ "$MUTATE_STATUS" = 0 ] || exit "$MUTATE_STATUS"
+		echo CLOSED > "$FIXTURE/issue-state"
+		printf '%s' "$7" > "$FIXTURE/reason" ;;
+	'issue reopen 12 --repo owner/repo')
+		[ "$MUTATE_STATUS" = 0 ] || exit "$MUTATE_STATUS"
+		echo OPEN > "$FIXTURE/issue-state" ;;
+	*) exit 99 ;;
+esac
+`)
+	return dir
+}
+
+func issueStateArgs(dir, verb string) []string {
+	args := []string{"issue", verb, "12", "--repo", "owner/repo", "--body-file", filepath.Join(dir, "body")}
+	if verb == "close" {
+		args = append(args, "--reason", "completed")
+	}
+	return args
+}
+
+func TestIssueStateAC1AC2(t *testing.T) {
+	for _, tt := range []struct{ verb, initial, want, reason string }{
+		{"close", "OPEN", "CLOSED", "completed"},
+		{"close", "OPEN", "CLOSED", "not planned"},
+		{"reopen", "CLOSED", "OPEN", ""},
+	} {
+		t.Run(tt.verb+tt.reason, func(t *testing.T) {
+			dir := setupIssueState(t, tt.initial)
+			args := issueStateArgs(dir, tt.verb)
+			if tt.reason != "" {
+				args[len(args)-1] = tt.reason
+			}
+			code, out, errOut := run(t, "unused", args...)
+			require.Equal(t, 0, code, errOut)
+			require.Equal(t, "https://github.com/owner/repo/issues/12\n", out)
+			require.Equal(t, tt.want, strings.TrimSpace(fileText(t, filepath.Join(dir, "issue-state"))))
+			require.Equal(t, tt.reason, fileText(t, filepath.Join(dir, "reason")))
+			require.Equal(t, "Public explanation.\n", fileText(t, filepath.Join(dir, "payload")))
+			var records []auditRecord
+			for line := range strings.SplitSeq(strings.TrimSpace(fileText(t, filepath.Join(dir, "state", "devtools", "gh-post.log"))), "\n") {
+				var record auditRecord
+				require.NoError(t, json.Unmarshal([]byte(line), &record))
+				records = append(records, record)
+			}
+			require.Equal(t, "issue "+tt.verb, records[len(records)-1].Operation)
+			hash := sha256.Sum256([]byte("Public explanation.\n"))
+			require.Equal(t, hex.EncodeToString(hash[:]), records[len(records)-1].SHA256)
+		})
+	}
+}
+
+func TestIssueStateAC3(t *testing.T) {
+	for _, verb := range []string{"close", "reopen"} {
+		for _, refusal := range []string{"inline", "missing-file", "private", "identity", "reason"} {
+			t.Run(verb+refusal, func(t *testing.T) {
+				dir := setupIssueState(t, "OPEN")
+				args := issueStateArgs(dir, verb)
+				switch refusal {
+				case "inline":
+					args = append(args, "--body", "inline")
+				case "missing-file":
+					args = append(args[:5], args[7:]...)
+				case "private":
+					t.Setenv("DEVTOOLS_PRIVATE_STRINGS", "Public explanation")
+				case "identity":
+					t.Setenv("LOGIN", "stranger")
+				case "reason":
+					if verb == "close" {
+						args[len(args)-1] = "invalid"
+					} else {
+						args = append(args, "--reason", "invalid")
+					}
+				}
+				code, _, errOut := run(t, "Public explanation.\n", args...)
+				require.NotZero(t, code, errOut)
+				require.NotContains(t, fileText(t, filepath.Join(dir, "calls")), "issue ")
+				require.NoFileExists(t, filepath.Join(dir, "payload"))
+				require.Empty(t, fileText(t, filepath.Join(dir, "state", "devtools", "gh-post.log")))
+			})
+		}
+	}
+}
+
+func TestIssueStateAC4(t *testing.T) {
+	for verb, state := range map[string]string{"close": "CLOSED", "reopen": "OPEN"} {
+		t.Run(verb, func(t *testing.T) {
+			dir := setupIssueState(t, state)
+			code, _, errOut := run(t, "", issueStateArgs(dir, verb)...)
+			require.Equal(t, 1, code, errOut)
+			require.Contains(t, errOut, "issue is already "+strings.ToLower(state))
+			require.NotContains(t, fileText(t, filepath.Join(dir, "calls")), "issue "+verb)
+			require.NoFileExists(t, filepath.Join(dir, "payload"))
+			require.Empty(t, fileText(t, filepath.Join(dir, "state", "devtools", "gh-post.log")))
+		})
+	}
+}
+
+func TestIssueStateAC5(t *testing.T) {
+	t.Parallel()
+	guide, err := os.ReadFile("../../docs/gh-post.md")
+	require.NoError(t, err)
+	for _, text := range []string{usage, string(guide)} {
+		for _, form := range []string{"issue close", "issue reopen", "--reason", "completed", "not planned", "--body-file", "Exit 0", "Exit 1", "Exit 2"} {
+			require.Contains(t, text, form)
+		}
+	}
+}
+
+func TestIssueStateFailures(t *testing.T) {
+	for verb, initial := range map[string]string{"close": "OPEN", "reopen": "CLOSED"} {
+		for _, failure := range []string{"read", "comment", "mutation"} {
+			t.Run(verb+failure, func(t *testing.T) {
+				dir := setupIssueState(t, initial)
+				switch failure {
+				case "read":
+					write(t, filepath.Join(dir, "issue-state"), "unknown")
+				case "comment":
+					t.Setenv("COMMENT_STATUS", "1")
+				case "mutation":
+					t.Setenv("MUTATE_STATUS", "1")
+				}
+				code, out, errOut := run(t, "", issueStateArgs(dir, verb)...)
+				require.Equal(t, 2, code, errOut)
+				require.Empty(t, out)
+				if failure == "mutation" {
+					require.Contains(t, errOut, "comment was posted; issue state write failed")
+					require.Contains(
+						t,
+						fileText(t, filepath.Join(dir, "state", "devtools", "gh-post.log")),
+						"issue comment",
+					)
+				} else {
+					require.NotContains(t, fileText(t, filepath.Join(dir, "calls")), "issue "+verb)
+				}
+			})
+		}
+	}
+}

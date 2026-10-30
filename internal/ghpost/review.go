@@ -43,7 +43,7 @@ func (r *request) completeBody(body []byte) error {
 			last = line
 		}
 	}
-	refinement := r.operation == "issue comment" && strings.HasPrefix(first, "Refinement:")
+	refinement := r.operation == issueComment && strings.HasPrefix(first, "Refinement:")
 	if !refinement && r.operation != prReview {
 		return nil
 	}

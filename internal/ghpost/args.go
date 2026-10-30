@@ -11,7 +11,7 @@ import (
 )
 
 var errUsage = errors.New(
-	"expected issue create|comment|edit|label, pr create|edit|comment|review|ready|close|label, comment edit, review edit, or release create|edit; use only supported flags and file input",
+	"expected issue create|comment|edit|label|close|reopen, pr create|edit|comment|review|ready|close|label, comment edit, review edit, or release create|edit; use only supported flags and file input",
 )
 
 type request struct {
@@ -20,6 +20,7 @@ type request struct {
 	bodyFile    string
 	operand     string
 	reviewID    string
+	reason      string
 	kind        string
 	commit      string
 	head        string
@@ -39,7 +40,11 @@ const (
 	prClose        = "pr close"
 	issueLabel     = "issue label"
 	prLabel        = "pr label"
+	issueVerb      = "issue"
+	issueComment   = "issue comment"
 	issueCreate    = "issue create"
+	issueClose     = "issue close"
+	issueReopen    = "issue reopen"
 	prCreate       = "pr create"
 	commentEdit    = "comment edit"
 	reviewEdit     = "review edit"
@@ -107,22 +112,15 @@ func (r *request) addValue(key, value string) error {
 	}
 	switch key {
 	case "-R", repoFlag:
-		if r.repo != "" {
-			return errUsage
-		}
-		r.repo = value
+		return setOnce(&r.repo, value)
 	case bodyFileFlag:
-		if r.bodyFile != "" {
-			return errUsage
-		}
-		r.bodyFile = value
+		return setOnce(&r.bodyFile, value)
 	case "--commit", headFlag:
 		return r.addRevision(key, value)
 	case "--comment-file":
-		if r.commentFile != "" {
-			return errUsage
-		}
-		r.commentFile = value
+		return setOnce(&r.commentFile, value)
+	case "--reason":
+		return setOnce(&r.reason, value)
 	case "--kind":
 		r.kind = value
 	case addFlag, removeFlag:
@@ -131,6 +129,14 @@ func (r *request) addValue(key, value string) error {
 		r.flags = append(r.flags, key, value)
 		r.text = append(r.text, value)
 	}
+	return nil
+}
+
+func setOnce(field *string, value string) error {
+	if *field != "" {
+		return errUsage
+	}
+	*field = value
 	return nil
 }
 
@@ -155,6 +161,9 @@ func allowed(operation string) (map[string]bool, map[string]bool, bool) {
 	values := strings.Fields("-R --repo --body-file")
 	var switches []string
 	switch operation {
+	case issueClose:
+		values = append(values, "--reason")
+	case issueReopen:
 	case issueCreate:
 		values = append(values, strings.Fields("--title --label --assignee --milestone")...)
 	case "issue edit":
@@ -163,7 +172,7 @@ func allowed(operation string) (map[string]bool, map[string]bool, bool) {
 			strings.Fields("--title --add-label --remove-label --add-assignee --remove-assignee --milestone")...,
 		)
 		switches = []string{"--remove-milestone"}
-	case "issue comment", "pr comment":
+	case issueComment, "pr comment":
 		switches = []string{"--edit-last", "--create-if-none"}
 	case prCreate:
 		values = append(values, strings.Fields("--title --base --head --label --assignee --reviewer --milestone")...)
@@ -197,6 +206,10 @@ func allowed(operation string) (map[string]bool, map[string]bool, bool) {
 	default:
 		return labelFlags(operation)
 	}
+	return flagSets(values, switches)
+}
+
+func flagSets(values, switches []string) (map[string]bool, map[string]bool, bool) {
 	v, s := map[string]bool{}, map[string]bool{}
 	for _, k := range values {
 		v[k] = true
@@ -211,7 +224,7 @@ func (r *request) validate() error {
 	if err := r.validateOperands(); err != nil {
 		return err
 	}
-	if r.operation == commentEdit && r.kind != "issue" && r.kind != "review" {
+	if r.operation == commentEdit && r.kind != issueVerb && r.kind != "review" {
 		return errUsage
 	}
 	if r.operation == prReview && (len(r.flags) != 1 || r.commit == "") {
@@ -247,5 +260,17 @@ func (r *request) validateOperands() error {
 	if r.isLabelChange() {
 		return r.validateLabels()
 	}
+	return r.validateIssueInput()
+}
+
+func (r *request) validateIssueInput() error {
+	if r.isIssueStateChange() && r.bodyFile == "" ||
+		r.operation == issueClose && r.reason != "completed" && r.reason != "not planned" {
+		return errUsage
+	}
 	return nil
+}
+
+func (r *request) isIssueStateChange() bool {
+	return r.operation == issueClose || r.operation == issueReopen
 }

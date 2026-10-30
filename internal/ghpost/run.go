@@ -196,6 +196,9 @@ func post(ctx context.Context, r request, body []byte, identities string, out, e
 		return exitEnvironment
 	}
 	defer log.Close()
+	if r.isIssueStateChange() {
+		return r.changeIssueState(ctx, body, log, out, errOut)
+	}
 	if r.isPRStateChange() {
 		return r.changePRState(ctx, body, login, log, out, errOut)
 	}
@@ -279,7 +282,7 @@ func (r *request) targetURL(ctx context.Context, output string) string {
 	}
 	// Review and release edits can be silent on success. Read the target URL.
 	kind := strings.Fields(r.operation)[0]
-	if kind == "issue" || kind == "pr" || kind == "release" {
+	if kind == issueVerb || kind == "pr" || kind == "release" {
 		data, err := gh(
 			ctx,
 			[]string{kind, viewVerb, r.operand, repoFlag, r.repo, jsonFlag, "url", jqFlag, ".url"},
