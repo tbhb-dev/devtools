@@ -36,6 +36,14 @@ Pin the harness package containing the updated rebase skills and run `apm instal
 
 `agentrepo markers scan` now scans rebase conflict markers in Go and accepts an empty path as a support probe (`agentrepo markers scan ''`), without reading any files. The shell fallback keeps older binaries working. Consumers use their existing configuration. Remove the fallback in a later release after [issue 333](https://github.com/tbhb-dev/devtools/issues/333) and [issue 544](https://github.com/tbhb-dev/devtools/issues/544) land and the N-2 compatibility window passes.
 
+## Pull request watching
+
+Pin the harness package containing `agentrepo checks watch` and run `apm install`. Consumers keep their configuration. After `agentrepo checks watch --help` succeeds and its usage identifies the watcher, the existing `watch-checks.sh` entry point forwards arguments to Go and returns its output and status unchanged, including operational failures.
+
+Without a supporting binary, the entry point runs the frozen shell watcher. Keep Git and authenticated `gh` available for either path, plus `jq` for the fallback. The probe accesses neither Git nor GitHub.
+
+Settings remain `PR_CHECKS_INTERVAL`, `PR_CHECKS_TIMEOUT`, and `PR_CHECKS_APPEAR_TIMEOUT`. Appearance and settling have separate budgets. Statuses stay success (0), failed checks (1), inconclusive or read error (2), and quota exhaustion (76). Retire the frozen fallback only after [issue 333](https://github.com/tbhb-dev/devtools/issues/333) and [issue 544](https://github.com/tbhb-dev/devtools/issues/544) land and the N-2 compatibility window passes.
+
 ## Repository configuration
 
 The file accepts `key = value` lines, blank lines, and full-line comments. Its reader never sources it as shell. Unknown keys, duplicates, and symlinks fail. Commands execute only at their configured gate. Other values remain data. Review stamps bind the configuration bytes. Commit the repository configuration before reviewing a branch.
