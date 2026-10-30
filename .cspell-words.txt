@@ -69,7 +69,9 @@ codeowners
 codeql
 codespell
 commitlint
+compgen
 complexipy
+compopt
 containedctx
 contextcheck
 contexttemplate
@@ -136,6 +138,7 @@ funlen
 fuzztime
 getconf
 getline
+getopts
 getset
 ghapp
 ghassignees
@@ -221,6 +224,7 @@ lpop
 lstrip
 makezero
 malscan
+mapfile
 maratori
 matrixed
 mattn
@@ -288,6 +292,7 @@ pipeable
 pipefail
 pipx
 pkgsite
+popd
 postflight
 prealloc
 preapproval
@@ -304,6 +309,7 @@ prng
 promlinter
 proofhouse
 protogetter
+pushd
 pycache
 pydocstyle
 pylint
@@ -311,6 +317,7 @@ pylock
 pyproject
 pyrefly
 pytest
+readarray
 recompiles
 recvcheck
 regen
@@ -353,9 +360,11 @@ sed
 setext
 setnx
 sgconfig
+shellallow
 shellcheck
 shfmt
 shlex
+shopt
 sidechain
 signingkey
 sigstore

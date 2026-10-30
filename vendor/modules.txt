@@ -342,3 +342,7 @@ golang.org/x/vuln/scan
 # gopkg.in/yaml.v3 v3.0.1
 ## explicit
 gopkg.in/yaml.v3
+# mvdan.cc/sh/v3 v3.14.1
+## explicit; go 1.26.0
+mvdan.cc/sh/v3/fileutil
+mvdan.cc/sh/v3/syntax
