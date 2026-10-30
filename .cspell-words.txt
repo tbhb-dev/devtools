@@ -314,6 +314,7 @@ pytest
 recompiles
 recvcheck
 regen
+releaseassets
 relint
 relitigates
 relpath
@@ -416,6 +417,7 @@ tostring
 touchid
 tparallel
 trimpath
+typeflag
 typesscopes
 unconvert
 undercounts

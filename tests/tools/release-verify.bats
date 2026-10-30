@@ -127,3 +127,63 @@ publish() {
   [ "$status" -eq 1 ]
   [[ $output == *"no tag given and none reachable from HEAD"* ]]
 }
+
+asset_tag() {
+	mkdir -p internal/releaseassets
+	printf '%s\n' '{"platforms":["linux/amd64"],"binaries":["agentrepo"]}' >internal/releaseassets/inventory.json
+	git add -- internal/releaseassets/inventory.json
+	git commit --quiet -m "define release inventory"
+	git tag -a v1.2.3 -m v1.2.3
+	publish v1.2.3
+	mkdir -p "$BATS_TEST_TMPDIR/bin"
+	cat >"$BATS_TEST_TMPDIR/bin/gh" <<'SH'
+#!/bin/bash
+if [[ $1 == release ]]; then exit "${DOWNLOAD_STATUS:-0}"; fi
+printf 'true valid\n'
+SH
+	cat >"$BATS_TEST_TMPDIR/bin/go" <<'SH'
+#!/bin/bash
+printf '%s\n' "$@" >"$BATS_TEST_TMPDIR/verify-args"
+cat "${@: -1}" >"$BATS_TEST_TMPDIR/verified-inventory"
+exit "${VERIFY_STATUS:-0}"
+SH
+	chmod +x "$BATS_TEST_TMPDIR/bin/gh" "$BATS_TEST_TMPDIR/bin/go"
+	export PATH="$BATS_TEST_TMPDIR/bin:$PATH"
+}
+
+@test "asset verifier uses the requested tag inventory and preserves signature checks" {
+	asset_tag
+	printf '%s\n' '{"working_tree":"different"}' >internal/releaseassets/inventory.json
+	run "$SCRIPT" v1.2.3
+	[ "$status" -eq 1 ]
+	[[ $output == *"OK    release archives, inventory, metadata, and checksums match v1.2.3"* ]]
+	[[ $output == *"FAIL  the release commit carries a signature"* ]]
+	grep -q '"binaries":\["agentrepo"\]' "$BATS_TEST_TMPDIR/verified-inventory"
+	! grep -q working_tree "$BATS_TEST_TMPDIR/verified-inventory"
+	grep -qx "$(git rev-parse HEAD)" "$BATS_TEST_TMPDIR/verify-args"
+}
+
+@test "missing asset downloads fail without invoking the evidence verifier" {
+	asset_tag
+	export DOWNLOAD_STATUS=23
+	run "$SCRIPT" v1.2.3
+	[ "$status" -eq 1 ]
+	[[ $output == *"FAIL  release archives, inventory, metadata, and checksums match v1.2.3"* ]]
+	[ ! -e "$BATS_TEST_TMPDIR/verify-args" ]
+}
+
+@test "failed evidence verification fails the release" {
+	asset_tag
+	export VERIFY_STATUS=23
+	run "$SCRIPT" v1.2.3
+	[ "$status" -eq 1 ]
+	[[ $output == *"FAIL  release archives, inventory, metadata, and checksums match v1.2.3"* ]]
+}
+
+@test "historical annotated tags retain their tag-only contract" {
+	git tag -a v1.2.3 -m v1.2.3
+	publish v1.2.3
+	run "$SCRIPT" v1.2.3
+	[[ $output == *"INFO  v1.2.3 predates the asset-bearing release contract"* ]]
+	[[ $output != *"release archives, inventory, metadata, and checksums"* ]]
+}

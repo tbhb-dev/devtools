@@ -202,7 +202,7 @@ Then say the tag, the run it came from, and what verification concluded, line by
 
 Clean up even where the release failed or the operator stopped early. The clone is a temporary directory and a pointer file inside this repository's git directory, and the next run reuses a leftover one, which would then release against a branch state fetched at some earlier time.
 
-The tag is the whole release. Consumers resolve the ref directly through apm, the Go module proxy, a `.pre-commit-config.yaml` rev, or a workflow pin, so this repository publishes the tag alone. A GitHub Release object, release assets, and built artifacts are all absent by design, which is the correct state rather than a gap, so don't go looking for them.
+Releases whose tagged tree contains `internal/releaseassets/inventory.json` publish a GitHub Release with platform archives, `release.json`, and `SHA256SUMS`. The signed tag and GitHub-signed commit remain required. Earlier tags keep their historical tag-only contract. Never backfill assets or move an older tag. See [the asset contract](../../../../docs/release-assets.md) for the boundary, inventory, layout, retry behavior, and verification. Source installation remains available for development.
 
 ## Never
 
