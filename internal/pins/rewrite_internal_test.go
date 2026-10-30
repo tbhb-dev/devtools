@@ -69,3 +69,17 @@ func TestUpdateRewriteSites(t *testing.T) {
 		}
 	}
 }
+
+func TestUpdateKeepsOtherToolHosts(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	body := `"go:github-com/tbhb-dev/devtools/cmd/guard-markdown" = "v0.10.0"` + "\n"
+	write(t, dir, "mise.toml", body)
+	u := updater{dir: dir}
+	if err := u.rewrite("v0.11.0", "bbbbbbbb"); err != nil {
+		t.Fatal(err)
+	}
+	if got := read(t, dir, "mise.toml"); got != body {
+		t.Errorf("got %q, want %q", got, body)
+	}
+}

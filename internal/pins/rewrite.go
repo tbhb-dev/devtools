@@ -89,7 +89,7 @@ func (u *updater) rewrite(version, sha string) error {
 		}},
 	}
 	for _, tool := range []string{guardTool, "commit-lint", "gh-post", "agentrepo"} {
-		pattern := `^("go:github.com/tbhb-dev/devtools/cmd/` + tool + `"[[:blank:]]*=[[:blank:]]*)"[^"]*"`
+		pattern := `^("go:github\.com/tbhb-dev/devtools/cmd/` + tool + `"[[:blank:]]*=[[:blank:]]*)"[^"]*"`
 		edits = append(edits, replacement{"mise.toml", substitute(pattern, `${1}"`+version+`"`)})
 	}
 	workflows, err := u.workflowEdits(version, sha)
