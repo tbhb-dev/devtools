@@ -32,7 +32,11 @@
 # from the lint-commit-msg recipe).
 set -euo pipefail
 
-msg_file=$1
+msg_file=${1:-}
+if [ -z "${msg_file}" ]; then
+  echo "cspell-commit-msg: the commit-message file path is required as the first argument" >&2
+  exit 2
+fi
 config=${DEVTOOLS_CSPELL_CONFIG:-.cspell.jsonc}
 virtual_dir=.
 if [ -n "${DEVTOOLS_CSPELL_CONFIG:-}" ]; then
