@@ -315,7 +315,7 @@ func TestDiagnosisReproducers(t *testing.T) {
 		{"lint", "mise run lint"},
 		{"race", "mise run devtools:test-go-race"},
 		{"cover", "mise run devtools:cover-go-check"},
-		{"test,test (linux),test (macos),test (windows)", "mise run test"},
+		{"test,test (linux),test (macos),test (windows)", "mise run test-full"},
 		{"vendor", "mise run devtools:vendor-check"},
 		{"vuln", "mise run devtools:vuln"},
 		{"gitleaks,secret", "mise run devtools:gitleaks"},
@@ -325,7 +325,7 @@ func TestDiagnosisReproducers(t *testing.T) {
 		{"vale shell test", "mise run lint-prose"},
 		{"shell lint", "mise run devtools:lint-shell && mise run devtools:lint-shell-fmt"},
 		{"lint race", "mise run lint"},
-		{"test vendor", "mise run test"},
+		{"test vendor", "mise run test-full"},
 	} {
 		for pattern := range strings.SplitSeq(tc.patterns, ",") {
 			for _, job := range []string{pattern, strings.ToUpper(pattern)} {

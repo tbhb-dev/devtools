@@ -190,6 +190,7 @@ codeIndent
 collectFindings
 complexipy
 configs
+conftest
 cooldown
 cooldowns?
 coreutils
@@ -314,6 +315,7 @@ subtree[s]?
 superset
 tabWidth
 tbhb
+testaffected
 toolchain
 uniqueid
 untracked

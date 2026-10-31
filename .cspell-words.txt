@@ -75,6 +75,7 @@ commitlint
 compgen
 complexipy
 compopt
+conftest
 containedctx
 contextcheck
 contexttemplate
@@ -408,6 +409,7 @@ teammate
 teammates
 tera
 testableexamples
+testaffected
 testcoverage
 testdata
 testifylint

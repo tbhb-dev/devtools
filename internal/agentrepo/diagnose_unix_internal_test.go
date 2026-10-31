@@ -209,6 +209,12 @@ func assertDiagnosisParity(
 		return
 	}
 	require.Equal(t, oldCode, code)
+	if scenario == "failures" {
+		// The frozen fallback keeps its old hint until retirement.
+		require.Contains(t, oldOut, "reproduce:  mise run test\n")
+		require.Contains(t, out, "reproduce:  mise run test-full\n")
+		oldOut = strings.Replace(oldOut, "reproduce:  mise run test\n", "reproduce:  mise run test-full\n", 1)
+	}
 	require.Equal(t, oldOut, out)
 	require.Equal(t, oldErr, stderr)
 }
