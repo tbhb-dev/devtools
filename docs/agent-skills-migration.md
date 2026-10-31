@@ -169,3 +169,9 @@ The remaining issue 241 work is commit-specific owner-path delegation and extern
 Exit status 0 means a readable, nonempty check set has no selected failure state. It doesn't mean every check passed. Known failures return 1. Missing, malformed, empty, or unreadable PR/check data returns 2. Unavailable logs for known failures keep the cancellation notice and status 1.
 
 Pin the harness package containing this change and run `apm install`. The existing `fix-pr/scripts/diagnose.sh` entry point probes the Go command's help before forwarding arguments, output, and status. An absent binary or unsupported subcommand uses the frozen `diagnose-legacy.sh` throughout the N-2 window. A supported invocation that fails never falls back. The frozen fallback retains the old shell behavior, including its successful result on unreadable or empty checks. Install a supporting binary to get the inconclusive-data refusal.
+
+## Pull request watching
+
+Pin the harness package containing this change and run `apm install`. The `watch-pr/scripts/watch.sh` entry point probes `agentrepo checks watch --help` for the watch usage text before forwarding arguments, output, and status. Install a supporting `agentrepo` binary to use Go watching. An absent binary or unsupported subcommand runs the unchanged `watch-checks.sh` throughout the N-2 window, and consumers that call `watch-checks.sh` by name keep the shell behavior. A supported invocation returning 1, 2, or 76 never falls back.
+
+Existing consumer settings and invocation syntax keep working. Fallback retirement waits for [binary delivery (#333)](https://github.com/tbhb-dev/devtools/issues/333) and [consumer installation (#544)](https://github.com/tbhb-dev/devtools/issues/544).

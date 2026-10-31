@@ -15,7 +15,7 @@ Wait for the checks on a pull request to settle, then say what happened. This sk
 Use the pull request number in the task, or omit it for the current branch's open pull request. Start one blocking command:
 
 ```bash
-bash .agents/skills/watch-pr/scripts/watch-checks.sh <number>
+bash .agents/skills/watch-pr/scripts/watch.sh <number>
 ```
 
 Set the execution yield to at most 30 seconds. If it returns a running session, continue it with `write_stdin` using empty input and a wait of up to 300 seconds. Keep waiting on that same session. Don't start another watcher or poll `gh pr checks` between waits. Send a concise progress update at least once a minute while checks remain pending.
