@@ -36,6 +36,12 @@ setup() {
     /^\[/ { copy = ($0 == "[tasks.run]" || $0 == "[tasks.check-versions]") }
     copy { print }
   ' "$SOURCE/mise.toml" >mise.toml
+  awk '
+    /^\[/ { copy = ($0 == "[\"devtools:build\"]") }
+    copy && /^\[/ { print "[tasks.\"devtools:build\"]"; next }
+    copy { print }
+  ' "$SOURCE/.devtools/tasks/go.toml" >>mise.toml
+  printf '\n[env]\nDEVTOOLS_DIR = "{{ config_root }}/.devtools"\n' >>mise.toml
   # Keep nested mise runs on the pinned Go rather than the runner's Go,
   # whose first toolchain download would break the silence assertion.
   awk '$1 == "go" && $2 == "=" { print "[tools]"; print }' \

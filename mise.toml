@@ -193,13 +193,13 @@ run = "mise run devtools:install"
 # arrives as a shell positional in a shebang body.
 [tasks.run]
 description = "Run one binary by name, e.g. `mise run run agentrepo version`"
+depends = ["devtools:build"]
 run = '''
 #!/usr/bin/env bash
 set -euo pipefail
 bin=$1
 shift
-ldflags=$(bash tools/go-ldflags.sh)
-go run -ldflags "$ldflags" "./cmd/$bin" "$@"
+exec "./bin/$bin" "$@"
 '''
 
 [tasks.clean]
