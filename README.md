@@ -59,6 +59,7 @@ Each tool under [`cmd/`](cmd/) builds as a standalone binary:
 - `agentstore` stores shared agent state.
 - `agentcontext` assembles shared agent context.
 - `guard-markdown` refuses Markdown whose paragraphs span more than one line.
+- `shell-allowlist` checks shell commands against the vendored allow list and reports migration counts with `--summary`.
 - [`commit-lint`](docs/commit-lint.md) checks Conventional Commits and attribution trailers.
 - [`gh-post`](docs/gh-post.md) scans GitHub content before posting under an allowed identity.
 - [`ssh-sign`](docs/agent-signing.md) signs agent commits through a dedicated SSH agent.
@@ -226,6 +227,10 @@ Copy the needed templates from [`.devtools/config`](.devtools/config) to the pro
 | `.devtools/scripts/go-ldflags.sh` | No edits: set the module or metadata package through env if the defaults differ from your layout. `tools/go-ldflags.sh` in this repo forwards to it. |
 
 The payload's `lint.toml` supplies `devtools:lint-shell`, `devtools:lint-workflows`, and `devtools:lint-curl`. Call the shell and curl tasks from the consumer's combined lint task. The shell task enables shellcheck's `check-extra-masked-returns` rule (SC2312), and the workflow task enables it in workflow shell blocks. SC2312 flags command substitutions and other command uses that hide a failure status. Capture output separately and check the command's status before testing its output. SC2155 remains enabled for declarations that mask failures. For a harmless case, put `# shellcheck disable=SC2312 # diagnostic formatting cannot change the failed verdict` immediately before the affected command and replace the reason with the actual justification.
+
+After syncing the payload, install the shell checker with `go install github.com/tbhb-dev/devtools/cmd/shell-allowlist@latest`. With `.devtools/tasks/lint.toml` included, add `mise run devtools:lint-shell-allowlist` to the consumer's lint task. The task checks scripts changed since the merge base with `origin/main`, using `.devtools/shell-allowlist.toml` without changing its commands.
+
+Run `shell-allowlist --summary` from the repository root to report total and per-script violation counts as Markdown. It selects all tracked and untracked `.sh`, `.bash`, and `.bats` files through Git, respecting ignore rules for untracked files and including generated copies and fixtures. Analysis errors appear separately from violations, including Bats syntax the Bash parser can't analyze. Summary mode always exits zero so migration reporting can run without gating changes. The CI summary job belongs to a separate pull request.
 
 `devtools:lint-curl` rejects curl calls without `--fail`, `-f` (including short-option bundles), or `--fail-with-body`, including bodies piped, captured, or written to a file. It accepts `-w '%{http_code}'` or `--write-out '%{http_code}'` when it recognizes a comparison of the result. An intentional error-body check can use `# lint-curl: allow the test asserts on the HTTP error body` immediately before the curl command's starting line. Replace the reason with the actual justification. The reason is mandatory, and the comment exempts only the first curl call on that next line. The shared baseline pins uv to run the included Python checker.
 

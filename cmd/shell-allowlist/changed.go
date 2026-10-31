@@ -26,8 +26,8 @@ func changedFiles(base string) ([]string, error) {
 		return nil, err
 	}
 	var paths []string
-	for path := range strings.SplitSeq(changed+untracked, "\x00") {
-		if !strings.HasSuffix(path, ".sh") && !strings.HasSuffix(path, ".bash") {
+	for _, path := range scriptPaths(changed + untracked) {
+		if strings.HasSuffix(path, ".bats") {
 			continue
 		}
 		if strings.HasPrefix(path, "vendor/") || strings.HasPrefix(path, "tests/fixtures/") ||
@@ -37,6 +37,16 @@ func changedFiles(base string) ([]string, error) {
 		paths = append(paths, path)
 	}
 	return paths, nil
+}
+
+func scriptPaths(files string) []string {
+	var paths []string
+	for path := range strings.SplitSeq(files, "\x00") {
+		if strings.HasSuffix(path, ".sh") || strings.HasSuffix(path, ".bash") || strings.HasSuffix(path, ".bats") {
+			paths = append(paths, path)
+		}
+	}
+	return paths
 }
 
 func generatedSkillCopy(path string) bool {
