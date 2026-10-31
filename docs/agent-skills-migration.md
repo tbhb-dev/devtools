@@ -6,6 +6,10 @@ The package includes generated `agent-commit`, `agent-pr`, and `agent-merge-pr` 
 
 Move the supported settings and machine authorities before replacing local skills. The generated merge skill requires `uv` for its pinned YAML reader and `agentrepo checks evaluate` for check judgement.
 
+### Skill limits fallback retirement
+
+After the N-2 window, the follow-on Feature [issue 847](https://github.com/tbhb-dev/devtools/issues/847) removes `tools/skill-limits-legacy.sh` and the capability probe in `tools/skill-limits.sh`. Consumers get at least two releases of warning, counted from the first release containing this notice, and the note doesn't set a removal version.
+
 The shared loader requires `agentrepo` v0.16.0 or newer for release binaries. A source build, which reports `DEV` or a `v0.0.0` pseudo-version, skips the floor. It resolves `mise which agentrepo` from the repository root first, then uses `agentrepo` from `PATH` if mise supplies no executable. Configuration reads and review execution use that binary, as does check judgement. An older binary stops the loader with the found and required versions. When neither source provides `agentrepo`, the shell keeps parsing configuration as before.
 
 For avirt and the other existing consumers, pin the harness package containing the replacement skill, then install it. Remove each replaced local skill's APM dependency and `apm.yml`. Delete its local scripts and Bats suite under `.agents/skills/agent-commit/`, `.agents/skills/agent-pr/`, `.agents/skills/agent-merge-pr/`, and their `.claude/skills/` counterparts as applicable, allowing APM to deploy the generated copies. In avirt, remove the replaced commit, publication, and merge suites from `test-skills`. Remove that task and its call from `check` only when no consumer tests remain. Other consumers remove the same replaced suites from their test tasks. devtools runs the shared regression coverage through `mise run test`. Consumers keep tests for their own hooks and repository settings.
