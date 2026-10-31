@@ -156,6 +156,7 @@ dependencies:
   - .claude/skills/watch-pr/scripts/lib.sh
   - .claude/skills/watch-pr/scripts/signing.sh
   - .claude/skills/watch-pr/scripts/watch-checks.sh
+  - .claude/skills/watch-pr/scripts/watch.sh
   - .claude/skills/watch-pr/tokens.json
   - .claude/skills/write-pr-description
   - .claude/skills/write-pr-description/SKILL.md
@@ -286,14 +287,15 @@ dependencies:
     .claude/skills/review-prose-fix/tokens.json: sha256:fb0d8b54f324ef0f76f532750e93602f2758e504165330589f3913c8053c62b9
     .claude/skills/review-squash-message/SKILL.md: sha256:d97e401c96dd974b5b7dd1a37f26800a51c83f7697fdc9a4157affe347140794
     .claude/skills/review-squash-message/tokens.json: sha256:ff65234b981cb601e5341a9af8f3744c240731f26b6f2b302082806ce87615df
-    .claude/skills/watch-pr/SKILL.md: sha256:66c36e1832c8756fa23b674c626cad4ce65a1d0fc458faadf7631b3ee7a0fb6b
+    .claude/skills/watch-pr/SKILL.md: sha256:b2c38eadc9443423b432123808bf911d085ec2a65e752c62f2f69bbc4ab75e09
     .claude/skills/watch-pr/scripts/agent.sh: sha256:3f424af5be51d697b2612f3cc50d28d2106e914bea3c5a7391e9316f9f157706
     .claude/skills/watch-pr/scripts/gates.py: sha256:f49d8d33c3b5d4d0cf7f0b8c06cfe61ae72e6215b78d3e1e83fe931a5a03a3a1
     .claude/skills/watch-pr/scripts/guard-watch.sh: sha256:6fc489a3c60f9b669fa9290d871532ddf0dbae056f4ce50a7335238030fccba8
     .claude/skills/watch-pr/scripts/lib.sh: sha256:423a4e4c70dc86b8657a9305c81c47ad3f575e576952375f988fafcd1801bec8
     .claude/skills/watch-pr/scripts/signing.sh: sha256:b5396163111f7ceb1203bff90c7cb30f39109de4a4710e0e1a92584abc44f50f
     .claude/skills/watch-pr/scripts/watch-checks.sh: sha256:9f33edd96a1faebb4fecd5096eb54584287e05a51c2bb2f2fd2f469725b0d45c
-    .claude/skills/watch-pr/tokens.json: sha256:30a72aeb231a866f9a087c9b3a58619d23ebb038f4f636875a6ef6373018cc72
+    .claude/skills/watch-pr/scripts/watch.sh: sha256:68250bb4b4a24bb87ce4ac26889cc082a3779fb6dffb5c0dbe0932ee2c9f6559
+    .claude/skills/watch-pr/tokens.json: sha256:efd04e7ce8e62f9ece90ca8303452969e046b8e2e1d022dba3b82e62c9672680
     .claude/skills/write-pr-description/SKILL.md: sha256:ea0cab28f7c5966f4ce4ea4ae732ca7b4ea2b35b4c9feef18c9c07871b0e5795
     .claude/skills/write-pr-description/scripts/context.sh: sha256:5b29e3fa84457f21b97d6dff94a75b7a21cd6200a574c18efc708580d134299a
     .claude/skills/write-pr-description/tokens.json: sha256:f970f1647c51853f0b4274b60d4a0e51413e04f47d6ebba73e0cd4b758b3d40b
@@ -441,6 +443,7 @@ dependencies:
   - .agents/skills/watch-pr/scripts/lib.sh
   - .agents/skills/watch-pr/scripts/signing.sh
   - .agents/skills/watch-pr/scripts/watch-checks.sh
+  - .agents/skills/watch-pr/scripts/watch.sh
   - .agents/skills/watch-pr/tokens.json
   - .agents/skills/write-pr-description
   - .agents/skills/write-pr-description/SKILL.md
@@ -562,13 +565,14 @@ dependencies:
     .agents/skills/review-prose-fix/tokens.json: sha256:b52245abd00490eaae06992de849e854cf4a2f0212de9a51102495afbf02bd77
     .agents/skills/review-squash-message/SKILL.md: sha256:32959f0fe2ad50cbf57dca7b02036442eab50a0b7428684c3f7a7c94a018bca4
     .agents/skills/review-squash-message/tokens.json: sha256:fe69cebe32898c98fc7b0254adb4b3005ff11de58400f94f4ea33385cc3743f7
-    .agents/skills/watch-pr/SKILL.md: sha256:53bcdc2355b3a524f5da09a5c2b6a7073d01fe5a9bb06e96989601b8f7014f2c
+    .agents/skills/watch-pr/SKILL.md: sha256:a05928083a9804cc6fab8f840b739b5ebd3ed32dffbdf55ba38efa35d8c4158e
     .agents/skills/watch-pr/scripts/agent.sh: sha256:3f424af5be51d697b2612f3cc50d28d2106e914bea3c5a7391e9316f9f157706
     .agents/skills/watch-pr/scripts/gates.py: sha256:f49d8d33c3b5d4d0cf7f0b8c06cfe61ae72e6215b78d3e1e83fe931a5a03a3a1
     .agents/skills/watch-pr/scripts/lib.sh: sha256:423a4e4c70dc86b8657a9305c81c47ad3f575e576952375f988fafcd1801bec8
     .agents/skills/watch-pr/scripts/signing.sh: sha256:b5396163111f7ceb1203bff90c7cb30f39109de4a4710e0e1a92584abc44f50f
     .agents/skills/watch-pr/scripts/watch-checks.sh: sha256:9f33edd96a1faebb4fecd5096eb54584287e05a51c2bb2f2fd2f469725b0d45c
-    .agents/skills/watch-pr/tokens.json: sha256:bde5842a797fca439a922668f83b3a45de2015d503358730441ea5b51b5b9f5d
+    .agents/skills/watch-pr/scripts/watch.sh: sha256:68250bb4b4a24bb87ce4ac26889cc082a3779fb6dffb5c0dbe0932ee2c9f6559
+    .agents/skills/watch-pr/tokens.json: sha256:d7220826bb6051007bb32b9599b1539e3c150eb8f25f44757a10688bafc53c4a
     .agents/skills/write-pr-description/SKILL.md: sha256:1040334a70181d824829100c891e49ecd41bb6bdea71eb675ff2c724d933ac35
     .agents/skills/write-pr-description/scripts/context.sh: sha256:5b29e3fa84457f21b97d6dff94a75b7a21cd6200a574c18efc708580d134299a
     .agents/skills/write-pr-description/tokens.json: sha256:d4827b186ea5932a2ae64d75b581252866afece36f09fff58c283ae6c0dd0ed0
@@ -1752,7 +1756,7 @@ deployments:
   owners:
   - ./packages/agents/codex
   active_owner: ./packages/agents/codex
-  content_hash: sha256:53bcdc2355b3a524f5da09a5c2b6a7073d01fe5a9bb06e96989601b8f7014f2c
+  content_hash: sha256:a05928083a9804cc6fab8f840b739b5ebd3ed32dffbdf55ba38efa35d8c4158e
 - kind: project-relative
   target: antigravity
   value: .agents/skills/watch-pr/scripts/agent.sh
@@ -1800,13 +1804,22 @@ deployments:
   content_hash: sha256:9f33edd96a1faebb4fecd5096eb54584287e05a51c2bb2f2fd2f469725b0d45c
 - kind: project-relative
   target: antigravity
+  value: .agents/skills/watch-pr/scripts/watch.sh
+  runtime: null
+  scope: project
+  owners:
+  - ./packages/agents/codex
+  active_owner: ./packages/agents/codex
+  content_hash: sha256:68250bb4b4a24bb87ce4ac26889cc082a3779fb6dffb5c0dbe0932ee2c9f6559
+- kind: project-relative
+  target: antigravity
   value: .agents/skills/watch-pr/tokens.json
   runtime: null
   scope: project
   owners:
   - ./packages/agents/codex
   active_owner: ./packages/agents/codex
-  content_hash: sha256:bde5842a797fca439a922668f83b3a45de2015d503358730441ea5b51b5b9f5d
+  content_hash: sha256:d7220826bb6051007bb32b9599b1539e3c150eb8f25f44757a10688bafc53c4a
 - kind: project-relative
   target: antigravity
   value: .agents/skills/write-pr-description
@@ -3120,7 +3133,7 @@ deployments:
   owners:
   - ./packages/agents/claude
   active_owner: ./packages/agents/claude
-  content_hash: sha256:66c36e1832c8756fa23b674c626cad4ce65a1d0fc458faadf7631b3ee7a0fb6b
+  content_hash: sha256:b2c38eadc9443423b432123808bf911d085ec2a65e752c62f2f69bbc4ab75e09
 - kind: project-relative
   target: claude
   value: .claude/skills/watch-pr/scripts/agent.sh
@@ -3177,13 +3190,22 @@ deployments:
   content_hash: sha256:9f33edd96a1faebb4fecd5096eb54584287e05a51c2bb2f2fd2f469725b0d45c
 - kind: project-relative
   target: claude
+  value: .claude/skills/watch-pr/scripts/watch.sh
+  runtime: null
+  scope: project
+  owners:
+  - ./packages/agents/claude
+  active_owner: ./packages/agents/claude
+  content_hash: sha256:68250bb4b4a24bb87ce4ac26889cc082a3779fb6dffb5c0dbe0932ee2c9f6559
+- kind: project-relative
+  target: claude
   value: .claude/skills/watch-pr/tokens.json
   runtime: null
   scope: project
   owners:
   - ./packages/agents/claude
   active_owner: ./packages/agents/claude
-  content_hash: sha256:30a72aeb231a866f9a087c9b3a58619d23ebb038f4f636875a6ef6373018cc72
+  content_hash: sha256:efd04e7ce8e62f9ece90ca8303452969e046b8e2e1d022dba3b82e62c9672680
 - kind: project-relative
   target: claude
   value: .claude/skills/write-pr-description

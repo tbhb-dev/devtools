@@ -29,7 +29,7 @@ Arm the watcher through the `Monitor` tool, which turns each line the script pri
 
 ```text
 Monitor({
-  command: "bash .claude/skills/watch-pr/scripts/watch-checks.sh <number>",
+  command: "bash .claude/skills/watch-pr/scripts/watch.sh <number>",
   description: "checks on pull request <number>",
   timeout_ms: 1800000,
   persistent: false,
