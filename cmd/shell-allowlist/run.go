@@ -14,8 +14,17 @@ import (
 	"mvdan.cc/sh/v3/syntax"
 )
 
-// Run checks only the given paths, using the allow list in the current directory.
+// Run checks the given paths, or the scripts changed since a base ref when the arguments start with the changed-files flag.
 func Run(args []string, out io.Writer) int {
+	if len(args) == 2 && args[0] == "--changed" {
+		//nolint:gosec // G602: the length guard above guarantees both arguments exist.
+		paths, err := changedFiles(args[1])
+		if err != nil {
+			fmt.Fprintln(out, err)
+			return 1
+		}
+		args = paths
+	}
 	data, err := os.ReadFile(".devtools/shell-allowlist.toml")
 	if err != nil {
 		fmt.Fprintln(out, err)
