@@ -89,6 +89,7 @@ func NewCommand() (*cobra.Command, *int) {
 		markersCommand(code),
 		versionsCommand(code),
 		fuzzCommand(code),
+		lintTypesCommand(code),
 		mergeCommand(code),
 		skillTokensCommand(code),
 		postCommand(code),

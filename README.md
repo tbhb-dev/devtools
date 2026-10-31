@@ -63,6 +63,8 @@ Each tool under [`cmd/`](cmd/) builds as a standalone binary:
 - [`gh-post`](docs/gh-post.md) scans GitHub content before posting under an allowed identity.
 - [`ssh-sign`](docs/agent-signing.md) signs agent commits through a dedicated SSH agent.
 
+`agentrepo lint-types` adds the existing `uv run pyrefly check` adapter to the Go CLI. It preserves the shell adapter's output, exit status, locale override, ignored arguments, and hidden worktree exemption. Run `agentrepo help lint-types` for help. Consumer tasks and shell entry points keep using the existing adapter and don't require a binary upgrade, preserving N-2 compatibility.
+
 Install one directly:
 
 ```bash
