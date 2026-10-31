@@ -285,6 +285,10 @@ run = "mise run devtools:lint-go-arch"
 description = "Lint every non-vendored *.sh git can see via shellcheck"
 run = "mise run devtools:lint-shell"
 
+[tasks.lint-shell-allowlist]
+description = "Check whole shell scripts changed since the merge base with origin/main"
+run = "go run ./cmd/shell-allowlist --changed origin/main"
+
 # Aggregates the Go gates, the Python gates, prose (vale), spelling
 # (cspell), Markdown (rumdl), config / JS / TS (biome), YAML (ryl),
 # TOML (tombi), this config's own formatting, and the .editorconfig whitespace contract. An
@@ -305,6 +309,7 @@ run = [
   "mise run devtools:lint-yaml",
   "mise run devtools:lint-toml",
   "mise run lint-shell",
+  "mise run lint-shell-allowlist",
   "mise run devtools:lint-curl",
   "mise run lint-shell-fmt",
   "mise run devtools:lint-mise",
