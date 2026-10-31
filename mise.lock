@@ -52,6 +52,10 @@ checksum_source = "mise-versions"
 url = "https://github.com/ast-grep/ast-grep/releases/download/0.51.0/app-x86_64-pc-windows-msvc.zip"
 url_api = "https://api.github.com/repos/ast-grep/ast-grep/releases/assets/644255645"
 
+[[tools."go:github.com/tbhb-dev/devtools/cmd/agentrepo"]]
+version = "0.23.0"
+backend = "go:github.com/tbhb-dev/devtools/cmd/agentrepo"
+
 [[tools.jq]]
 version = "1.8.2"
 backend = "aqua:jqlang/jq"

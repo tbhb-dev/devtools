@@ -132,6 +132,7 @@ apm = "0.33.0"
 # hygiene gate is repo-local; the skills it checks deploy, the checker
 # does not.
 ast-grep = "0.51.0"
+"go:github.com/tbhb-dev/devtools/cmd/agentrepo" = "0.23.0"
 jq = "1.8.2"
 # bats --jobs shells out to a parallel runner, and rush ships a release
 # binary for every platform CI runs.
