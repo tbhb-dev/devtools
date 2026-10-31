@@ -112,7 +112,7 @@ Decision keys: G0 means Go shared internals under #174. G1 means a Go command in
 
 | Script | source lines of code | Callers | Bats coverage / runtime reference | Decision and reason |
 | --- | ---: | --- | --- | --- |
-| `tools/skill-tokens.sh` | 188 | skill-tokens task | B09 | P: file collection and token report assembly are offline processing. |
+| `tools/skill-tokens.sh` | 188 | frozen comparison tests | B09 | Go task active. Shell and comparison fixtures retire in [#951](https://github.com/tbhb-dev/devtools/issues/951). |
 | `tools/generate-skills.sh` | 112 | generate-skills and check-generated-skills tasks. CI | B32 | P: template expansion and directory comparison fit standard-library processing. |
 | `tools/skill-limits.sh` | 99 | lint-skills task | None | P: parse manifest fields and report limits in process. |
 | `tools/check-versions.sh` | 85 | check-versions task. CI | B31 | P: compare release literals as text without shell regular expression differences. |

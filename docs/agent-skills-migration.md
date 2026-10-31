@@ -175,3 +175,7 @@ Pin the harness package containing this change and run `apm install`. The existi
 Pin the harness package containing this change and run `apm install`. The `watch-pr/scripts/watch.sh` entry point probes `agentrepo checks watch --help` for the watch usage text before forwarding arguments, output, and status. Install a supporting `agentrepo` binary to use Go watching. An absent binary or unsupported subcommand runs the unchanged `watch-checks.sh` throughout the N-2 window, and consumers that call `watch-checks.sh` by name keep the shell behavior. A supported invocation returning 1, 2, or 76 never falls back.
 
 Existing consumer settings and invocation syntax keep working. Fallback retirement waits for [binary delivery (#333)](https://github.com/tbhb-dev/devtools/issues/333) and [consumer installation (#544)](https://github.com/tbhb-dev/devtools/issues/544).
+
+## Skill token measurement task
+
+The repository's `skill-tokens` task runs `go run ./cmd/agentrepo skill-tokens` from the checkout. Arguments, environment settings and token records keep their existing format. Consumers don't need to change anything or upgrade an installed binary, because nothing in the tracked tree calls the internal `tools/skill-tokens.sh` file. The frozen shell and comparison fixtures remain until [#951](https://github.com/tbhb-dev/devtools/issues/951).

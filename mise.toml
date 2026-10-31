@@ -485,7 +485,7 @@ run = "bash tools/generate-skills.sh --check"
 # the token-counting API.
 [tasks.skill-tokens]
 description = "Measure skill token costs against the real tokenizer"
-run = "bash tools/skill-tokens.sh"
+run = "go run ./cmd/agentrepo skill-tokens"
 
 # The two draft gates whose bodies are byte-identical across repos come
 # whole from the skill-contract templates: name, interface, and body.
