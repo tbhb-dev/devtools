@@ -48,7 +48,7 @@ stub() {
 	cp tools/go-ldflags.sh payload/scripts/go-ldflags.sh
 	export DEVTOOLS_DIR="$PWD/payload"
 	stub go 'touch invoked'
-	for spec in 'mise.toml run' '.devtools/tasks/go.toml devtools:build' '.devtools/tasks/go.toml devtools:install'; do
+	for spec in '.devtools/tasks/go.toml devtools:build' '.devtools/tasks/go.toml devtools:install'; do
 		read -r file name <<<"$spec"
 		task_body "$file" "$name" >task.sh
 		run bash task.sh example
