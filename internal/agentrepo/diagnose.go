@@ -307,7 +307,7 @@ func diagnosisReproducer(name string) string {
 		{"lint", "mise run lint"},
 		{"race", "mise run devtools:test-go-race"},
 		{"cover", "mise run devtools:cover-go-check"},
-		{"test", "mise run test"},
+		{"test", "mise run test-full"},
 		{"vendor", "mise run devtools:vendor-check"},
 		{"vuln", "mise run devtools:vuln"},
 		{"gitleaks|secret", "mise run devtools:gitleaks"},
