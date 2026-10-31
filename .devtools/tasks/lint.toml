@@ -147,6 +147,10 @@ fi
 description = "Lint owned shell scripts via shellcheck"
 run = "mise run devtools:lint-source-files -- shell"
 
+["devtools:lint-shell-allowlist"]
+description = "Check changed shell scripts against the command allow list"
+run = "shell-allowlist --changed origin/main"
+
 ["devtools:lint-shell-fmt"]
 description = "Check owned shell script formatting via shfmt"
 run = "mise run devtools:lint-source-files -- shell-fmt"

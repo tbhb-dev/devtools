@@ -9,15 +9,16 @@ import (
 	"os"
 	"strings"
 
-	"github.com/pelletier/go-toml/v2"
 	"mvdan.cc/sh/v3/expand"
 	"mvdan.cc/sh/v3/syntax"
 )
 
 // Run checks the given paths, or the scripts changed since a base ref when the arguments start with the changed-files flag.
 func Run(args []string, out io.Writer) int {
+	if len(args) == 1 && args[0] == "--summary" {
+		return summary(out)
+	}
 	if len(args) == 2 && args[0] == "--changed" {
-		//nolint:gosec // G602: the length guard above guarantees both arguments exist.
 		paths, err := changedFiles(args[1])
 		if err != nil {
 			fmt.Fprintln(out, err)
@@ -25,21 +26,10 @@ func Run(args []string, out io.Writer) int {
 		}
 		args = paths
 	}
-	data, err := os.ReadFile(".devtools/shell-allowlist.toml")
+	allowed, err := readAllowlist()
 	if err != nil {
 		fmt.Fprintln(out, err)
 		return 1
-	}
-	var config struct {
-		Commands []string `toml:"commands"`
-	}
-	if err = toml.Unmarshal(data, &config); err != nil {
-		fmt.Fprintln(out, ".devtools/shell-allowlist.toml: invalid allow list")
-		return 1
-	}
-	allowed := make(map[string]bool, len(config.Commands))
-	for _, command := range config.Commands {
-		allowed[command] = true
 	}
 	status := 0
 	for _, path := range args {
@@ -51,19 +41,24 @@ func Run(args []string, out io.Writer) int {
 }
 
 func checkFile(path string, allowed map[string]bool, out io.Writer) bool {
+	violations, failed := scanFile(path, allowed, out)
+	return violations == 0 && !failed
+}
+
+func scanFile(path string, allowed map[string]bool, out io.Writer) (int, bool) {
 	//nolint:gosec // G703: reading the caller's exact file paths is this command's purpose.
 	data, err := os.ReadFile(path)
 	if err != nil {
 		fmt.Fprintln(out, err)
-		return false
+		return 0, true
 	}
 	tree, err := syntax.NewParser().Parse(strings.NewReader(string(data)), path)
 	if err != nil {
 		// Parser errors can quote source text. Keep command arguments out of diagnostics.
 		fmt.Fprintf(out, "%s: invalid shell syntax\n", path)
-		return false
+		return 0, true
 	}
-	clean := true
+	violations := 0
 	catHeredocs := make(map[*syntax.Redirect]bool)
 	syntax.Walk(tree, func(node syntax.Node) bool {
 		switch node := node.(type) {
@@ -79,12 +74,12 @@ func checkFile(path string, allowed map[string]bool, out io.Writer) bool {
 			return node.Hdoc == nil || !catHeredocs[node]
 		case *syntax.CallExpr:
 			if !checkCall(path, node, allowed, out) {
-				clean = false
+				violations++
 			}
 		}
 		return true
 	})
-	return clean
+	return violations, false
 }
 
 func checkCall(path string, call *syntax.CallExpr, allowed map[string]bool, out io.Writer) bool {
