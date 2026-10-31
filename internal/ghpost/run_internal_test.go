@@ -16,6 +16,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/stretchr/testify/require"
 )
@@ -95,6 +96,282 @@ func TestPostAndAudit(t *testing.T) {
 		_, err = time.Parse(time.RFC3339Nano, record.Time)
 		require.NoError(t, err)
 		require.NotContains(t, line, body)
+	}
+}
+
+func TestWriteFailureStderr(t *testing.T) {
+	const failure = "gh-post: gh write failed; check GitHub before retrying\n"
+	const body = "Public post body"
+	for _, tt := range []struct {
+		name, stderr, want, mode string
+	}{
+		{"AC1", "validation failed\n", "validation failed\n", ""},
+		{"AC2", strings.Repeat("x", 5000), strings.Repeat("x", 2000) + "\n", ""},
+		{"AC3", body + " rejected " + body, " rejected \n", ""},
+		{"AC3 cap boundary", strings.Repeat("x", 1995) + body + strings.Repeat(" y", 5), strings.Repeat("x", 1995) + strings.Repeat(" y", 2) + " \n", ""},
+		{"AC4", "", "", ""},
+		{"AC5", "permission denied", "permission denied\n", ""},
+		{"secret scan", "failure\n" + "ghp_" + strings.Repeat("a", 30), "gh-post: secret line 2\n", ""},
+		{"secret across cap", strings.Repeat(" ", maxWriteErrorBytes-10) + "ghp_" + strings.Repeat("a", 30), "gh-post: secret line 1\n", ""},
+		{"private scan", "failure\nhidden-literal", "gh-post: private-string line 2\n", ""},
+		{"secrets only", "hidden-literal", "hidden-literal\n", "secrets-only"},
+		{"secrets only token", "ghp_" + strings.Repeat("a", 30), "gh-post: secret line 1\n", "secrets-only"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := setup(t)
+			t.Setenv("DEVTOOLS_PRIVATE_STRINGS", "hidden-literal")
+			t.Setenv("DEVTOOLS_SCAN_MODE", tt.mode)
+			t.Setenv("WRITE_STDERR", tt.stderr)
+			write(t, filepath.Join(dir, "gh"), `#!/bin/sh
+printf '%s\n' "$*" >> "$CALLS"
+case "$*" in
+	'api user --jq .login') echo agent; exit 0 ;;
+esac
+cat > "$PAYLOAD"
+printf '%s' "$WRITE_STDERR" >&2
+exit 17
+`)
+			audit := filepath.Join(dir, "state", "devtools", "gh-post.log")
+			write(t, audit, "existing record\n")
+			code, out, errOut := run(t, body, "pr", "comment", "12", "-R", "owner/repo")
+			require.Equal(t, exitEnvironment, code)
+			require.Empty(t, out)
+			require.Equal(t, "existing record\n", fileText(t, audit))
+			require.NotContains(t, errOut, body)
+			require.Equal(t, failure+tt.want, errOut)
+		})
+	}
+}
+
+func TestWriteFailureStdout(t *testing.T) {
+	const body = "Public \"post\"\n<&>"
+	encoded, err := json.Marshal(body)
+	require.NoError(t, err)
+	escaped := string(encoded[1 : len(encoded)-1])
+	const prefix = "gh-post: gh write failed; check GitHub before retrying\ngh: Unprocessable Entity (HTTP 422)\n"
+	for _, tt := range []struct{ name, stdout, want, mode string }{
+		{"fields", `{"message":"Unprocessable Entity","errors":["Review can not be created"],"documentation_url":"omit","status":"422"}`, `{"message":"Unprocessable Entity","errors":["Review can not be created"]}` + "\n", ""},
+		{"secret", `{"message":"ghp_` + strings.Repeat("a", 30) + `"}`, "gh-post: secret line 1\n", ""},
+		{"secret across cap", `{"message":"` + strings.Repeat(" ", maxWriteErrorBytes-20) + "ghp_" + strings.Repeat("a", 30) + `"}`, "gh-post: secret line 1\n", ""},
+		{"private", `{"errors":["hidden-literal"]}`, "gh-post: private-string line 1\n", ""},
+		{"secrets only", "hidden-literal", "hidden-literal\n", "secrets-only"},
+		{"secrets only token", "ghp_" + strings.Repeat("a", 30), "gh-post: secret line 1\n", "secrets-only"},
+		{"echo raw and escaped", "echo " + body + " " + escaped, "echo  \n", ""},
+		{"echo JSON", `{"message":` + string(encoded) + `}`, `{"message":""}` + "\n", ""},
+		{"cap", strings.Repeat("x", 1999) + "界tail", strings.Repeat("x", 1999) + "\n", ""},
+		{"cap boundary", strings.Repeat("x", 1997) + "界tail", strings.Repeat("x", 1997) + "界\n", ""},
+		{"empty", "", "", ""},
+		{"other fields", `{"status":"422","documentation_url":"omit"}`, "", ""},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := setup(t)
+			t.Setenv("DEVTOOLS_PRIVATE_STRINGS", "hidden-literal")
+			t.Setenv("DEVTOOLS_SCAN_MODE", tt.mode)
+			t.Setenv("WRITE_STDOUT", tt.stdout)
+			write(t, filepath.Join(dir, "gh"), `#!/bin/sh
+case "$*" in
+	'api user --jq .login') echo agent; exit 0 ;;
+esac
+cat > "$PAYLOAD"
+printf '%s\n' 'gh: Unprocessable Entity (HTTP 422)' >&2
+printf '%s' "$WRITE_STDOUT"
+exit 1
+`)
+			audit := filepath.Join(dir, "state", "devtools", "gh-post.log")
+			write(t, audit, "existing record\n")
+			code, out, errOut := run(t, body, "pr", "comment", "12", "-R", "owner/repo")
+			require.Equal(t, exitEnvironment, code)
+			require.Empty(t, out)
+			require.Equal(t, "existing record\n", fileText(t, audit))
+			require.NotContains(t, errOut, body)
+			require.NotContains(t, errOut, escaped)
+			require.True(t, utf8.ValidString(errOut))
+			require.Equal(t, prefix+tt.want, errOut)
+		})
+	}
+}
+
+func TestWriteErrorBodyEscapes(t *testing.T) {
+	const body = "<> & /\n界"
+	for _, tt := range []struct{ name, encoded string }{
+		{"literal characters", `<> & /\n界`},
+		{"lowercase hex", `\u003c\u003e \u0026 \/\n\u754c`},
+		{"uppercase hex", `\u003C\u003E \u0026 \/\u000A\u754C`},
+		{"mixed escapes", `<\u003e & /\u000a界`},
+	} {
+		for _, stream := range []string{"stderr", "stdout"} {
+			t.Run(tt.name+"/"+stream, func(t *testing.T) {
+				text := `{"message":{"` + tt.encoded + `":["before ` + tt.encoded + ` after",{"nested":"` + tt.encoded + `"},9007199254740993,true,null]}}`
+				require.True(t, json.Valid([]byte(text)))
+				if stream == "stdout" {
+					text = errorBody([]byte(text))
+				}
+				var out bytes.Buffer
+				r := request{}
+				r.printWriteError(text, []byte(body), &out)
+				require.JSONEq(
+					t,
+					`{"message":{"":["before  after",{"nested":""},9007199254740993,true,null]}}`+"\n",
+					out.String(),
+				)
+				require.Contains(t, out.String(), "9007199254740993")
+			})
+		}
+	}
+	t.Run("raw newline", func(t *testing.T) {
+		var out bytes.Buffer
+		r := request{}
+		r.printWriteError("before "+body+" after", []byte(body), &out)
+		require.Equal(t, "before  after\n", out.String())
+	})
+}
+
+func TestWriteErrorBodySpellings(t *testing.T) {
+	for _, tt := range []struct {
+		name, body string
+		variants   []string
+	}{
+		{"reviewer", "<x>\n", []string{`<x>\n`, `<\u0078>\n`, `\u003cx\u003e\u000a`, `\u003Cx\u003E\u000A`, `\\u003cx\\u003e\\n`, `<x>\\\\n`}},
+		{"quotes and backslashes", "\"\\/", []string{`\"\\\/`, `\u0022\u005c\u002f`, `\\\"\\\\/`}},
+		{"controls", "\b\f\r\t", []string{`\b\f\r\t`, `\u0008\u000C\u000d\u0009`, "\b\\f\r\\t"}},
+		{"unicode", "界😀", []string{`\u754c\ud83d\ude00`, `\u754C\uD83D\uDE00`, `界\\uD83d\\uDe00`}},
+		{"whitespace", " \t\n", []string{` \t\n`, `\u0020\u0009\u000A`}},
+		{"empty", "", nil},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			spellings := append([]string{tt.body}, tt.variants...)
+			for _, escapeHTML := range []bool{false, true} {
+				var encoded bytes.Buffer
+				encoder := json.NewEncoder(&encoded)
+				encoder.SetEscapeHTML(escapeHTML)
+				require.NoError(t, encoder.Encode(tt.body))
+				quoted := strings.TrimSuffix(encoded.String(), "\n")
+				spelling := quoted[1 : len(quoted)-1]
+				layered, err := json.Marshal(spelling)
+				require.NoError(t, err)
+				spellings = append(spellings, spelling, string(layered[1:len(layered)-1]))
+			}
+			for _, spelling := range spellings {
+				for _, wrapper := range []struct{ before, after string }{{`echo "`, `"`}, {`["`, `"]`}} {
+					var out bytes.Buffer
+					r := request{}
+					text := wrapper.before + spelling + wrapper.after
+					r.printWriteError(text+text, []byte(tt.body), &out)
+					require.Equal(
+						t, wrapper.before+wrapper.after+wrapper.before+wrapper.after+"\n", out.String(), "%q", spelling,
+					)
+				}
+			}
+		})
+	}
+}
+
+func runWriteFailure(t *testing.T, body, stdout, stderr string) string {
+	t.Helper()
+	dir := setup(t)
+	t.Setenv("WRITE_STDOUT", stdout)
+	t.Setenv("WRITE_STDERR", stderr)
+	write(t, filepath.Join(dir, "gh"), `#!/bin/sh
+case "$*" in
+	'api user --jq .login') echo agent; exit 0 ;;
+esac
+cat > "$PAYLOAD"
+printf '%s' "$WRITE_STDOUT"
+printf '%s' "$WRITE_STDERR" >&2
+exit 17
+`)
+	audit := filepath.Join(dir, "state", "devtools", "gh-post.log")
+	write(t, audit, "existing record\n")
+	code, out, errOut := run(t, body, "pr", "comment", "12", "-R", "owner/repo")
+	require.Equal(t, exitEnvironment, code)
+	require.Empty(t, out)
+	require.Equal(t, "existing record\n", fileText(t, audit))
+	require.True(t, strings.HasPrefix(errOut, "gh-post: gh write failed; check GitHub before retrying\n"))
+	return errOut
+}
+
+func TestWriteFailureEscapedBodyStreams(t *testing.T) {
+	const failure = "gh-post: gh write failed; check GitHub before retrying\n"
+	for _, stream := range []struct {
+		name, before, after string
+		stdout              bool
+	}{
+		{"prefixed stderr", `echo "`, `"`, false},
+		{"stdout array", `["`, `"]`, true},
+		{"stdout string", `"`, `"`, true},
+		{"stdout number adjacent", `422 `, ` rejected`, true},
+		{"errors strings", `{"errors":["`, `"]}`, true},
+		{"errors objects", `{"errors":[{"message":"`, `"}]}`, true},
+		{"message", `{"message":"`, `"}`, true},
+	} {
+		for _, encoding := range []struct{ name, body, text string }{
+			{"reviewer repro", "<x>\n", `<x>\n`},
+			{"raw", "<x>/😀", "<x>/😀"},
+			{"short escapes", "<x>/😀", `<x>\/😀`},
+			{"lowercase unicode", "<x>/😀", `\u003c\u0078\u003e\u002f\ud83d\ude00`},
+			{"uppercase unicode", "<x>/😀", `\u003C\u0078\u003E\u002F\uD83D\uDE00`},
+			{"surrogate pair", "<x>/😀", `<x>/\ud83d\ude00`},
+			{"stacked backslashes", "<x>\n😀", `\\u003cx\\u003e\\\\n\\uD83d\\uDe00`},
+		} {
+			t.Run(stream.name+"/"+encoding.name, func(t *testing.T) {
+				text := stream.before + encoding.text + stream.after
+				stdout, stderr := "", text
+				if stream.stdout {
+					stdout, stderr = text, ""
+				}
+				got := runWriteFailure(t, encoding.body, stdout, stderr)
+				require.NotContains(t, got, encoding.body)
+				require.NotContains(t, got, encoding.text)
+				require.Equal(t, failure+stream.before+stream.after+"\n", got)
+			})
+		}
+	}
+}
+
+func TestWriteFailurePartialBodyUnchanged(t *testing.T) {
+	const body = "Public post body"
+	const failure = "gh-post: gh write failed; check GitHub before retrying\n"
+	for _, tt := range []struct{ name, text string }{
+		{"prefix", "Public post"},
+		{"suffix", "post body"},
+		{"middle", "lic post bo"},
+		{"changed character", "Public lost body"},
+		{"GitHub message", "gh: Public post rejected: Resource not accessible by integration (HTTP 403)"},
+	} {
+		for _, stream := range []string{"stderr", "stdout", "object"} {
+			t.Run(tt.name+"/"+stream, func(t *testing.T) {
+				text := tt.text
+				if stream == "object" {
+					text = `{"message":"` + text + `"}`
+				}
+				stdout, stderr := "", text
+				if stream != "stderr" {
+					stdout, stderr = text, ""
+				}
+				require.Equal(t, failure+text+"\n", runWriteFailure(t, body, stdout, stderr))
+			})
+		}
+	}
+}
+
+func TestWriteFailureShortBody(t *testing.T) {
+	const failure = "gh-post: gh write failed; check GitHub before retrying\n"
+	for _, body := range []string{"x", "xy", "xyz"} {
+		for _, stream := range []string{"stderr", "stdout", "object"} {
+			t.Run(body+"/"+stream, func(t *testing.T) {
+				text, want := "echo "+body+" "+body, "echo  "
+				if stream == "object" {
+					text, want = `{"message":"`+body+` `+body+`"}`, `{"message":" "}`
+				}
+				stdout, stderr := "", text
+				if stream != "stderr" {
+					stdout, stderr = text, ""
+				}
+				got := runWriteFailure(t, body, stdout, stderr)
+				require.NotContains(t, got, body)
+				require.Equal(t, failure+want+"\n", got)
+			})
+		}
 	}
 }
 

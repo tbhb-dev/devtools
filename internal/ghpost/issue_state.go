@@ -20,7 +20,7 @@ type issueState struct {
 func (r *request) readIssueState(ctx context.Context) (issueState, error) {
 	data, err := gh(ctx, []string{
 		issueVerb, viewVerb, r.operand, repoFlag, r.repo, jsonFlag, "state,url",
-	}, nil)
+	})
 	var state issueState
 	if err != nil || json.Unmarshal(data, &state) != nil ||
 		!slices.Contains([]string{stateOpen, stateClosed}, state.State) ||
@@ -44,7 +44,10 @@ func (r *request) changeIssueState(ctx context.Context, body []byte, log, out, e
 		fmt.Fprintln(errOut, "gh-post: issue is already "+strings.ToLower(wanted))
 		return 1
 	}
-	comment := request{operation: issueComment, repo: r.repo, operand: r.operand}
+	comment := request{
+		operation: issueComment, repo: r.repo, operand: r.operand,
+		private: r.private, secretsOnly: r.secretsOnly,
+	}
 	if code := postContent(ctx, comment, body, log, io.Discard, errOut); code != 0 {
 		return code
 	}
@@ -52,7 +55,7 @@ func (r *request) changeIssueState(ctx context.Context, body []byte, log, out, e
 	if r.operation == issueClose {
 		args = append(args, "--reason", r.reason)
 	}
-	if _, err = gh(ctx, args, nil); err != nil {
+	if _, err = gh(ctx, args); err != nil {
 		fmt.Fprintln(errOut, "gh-post: comment was posted; issue state write failed; check GitHub before retrying")
 		return exitEnvironment
 	}

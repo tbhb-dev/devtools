@@ -15,15 +15,19 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"unicode/utf16"
+	"unicode/utf8"
 )
 
 const (
 	exitEnvironment = 2
-	apiCommand      = "api"
-	jqFlag          = "--jq"
-	jsonFlag        = "--json"
-	methodFlag      = "--method"
-	viewVerb        = "view"
+	// maxWriteErrorBytes bounds the GitHub error text echoed after a failed write.
+	maxWriteErrorBytes = 2000
+	apiCommand         = "api"
+	jqFlag             = "--jq"
+	jsonFlag           = "--json"
+	methodFlag         = "--method"
+	viewVerb           = "view"
 )
 
 var errEnvironment = errors.New("cannot resolve repository, read input, or execute gh")
@@ -79,6 +83,8 @@ func Run(ctx context.Context, args []string, in io.Reader, out, errOut io.Writer
 	if refused {
 		return 1
 	}
+	r.private = private
+	r.secretsOnly = config["scan_mode"] == secretsOnlyMode
 	return post(ctx, r, body, config["post_identities"], out, errOut)
 }
 
@@ -128,8 +134,8 @@ func resolveRepo(ctx context.Context, repo string) (string, error) {
 	return repo, nil
 }
 
-func gh(ctx context.Context, args []string, input []byte) ([]byte, error) {
-	data, _, err := ghRun(ctx, args, input)
+func gh(ctx context.Context, args []string) ([]byte, error) {
+	data, _, err := ghRun(ctx, args, nil)
 	return data, err
 }
 
@@ -142,7 +148,7 @@ func ghRun(ctx context.Context, args []string, input []byte) ([]byte, string, er
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	if err := cmd.Run(); err != nil {
-		return nil, stderr.String(), errEnvironment
+		return stdout.Bytes(), stderr.String(), errEnvironment
 	}
 	return stdout.Bytes(), stderr.String(), nil
 }
@@ -165,12 +171,11 @@ func identityAllowed(ctx context.Context, allowlist string) (string, bool, error
 	if len(identities) == 0 {
 		return "", false, nil
 	}
-	data, err := gh(ctx, []string{apiCommand, "user", jqFlag, ".login"}, nil)
+	data, err := gh(ctx, []string{apiCommand, "user", jqFlag, ".login"})
 	if err != nil {
 		data, err = gh(
 			ctx,
 			[]string{apiCommand, "graphql", "-f", "query={viewer{login}}", jqFlag, ".data.viewer.login"},
-			nil,
 		)
 	}
 	if err != nil {
@@ -219,9 +224,11 @@ func postContent(ctx context.Context, r request, body []byte, log, out, errOut i
 			return code
 		}
 	}
-	data, err := gh(ctx, args, input)
+	data, stderr, err := ghRun(ctx, args, input)
 	if err != nil {
 		fmt.Fprintln(errOut, "gh-post: gh write failed; check GitHub before retrying")
+		r.printWriteError(stderr, body, errOut)
+		r.printWriteError(errorBody(data), body, errOut)
 		return exitEnvironment
 	}
 	target := r.targetURL(ctx, string(data))
@@ -231,6 +238,71 @@ func postContent(ctx context.Context, r request, body []byte, log, out, errOut i
 	}
 	fmt.Fprintln(out, target)
 	return 0
+}
+
+func errorBody(data []byte) string {
+	var fields struct {
+		Message json.RawMessage `json:"message,omitempty"`
+		Errors  json.RawMessage `json:"errors,omitempty"`
+	}
+	if strings.HasPrefix(strings.TrimSpace(string(data)), "{") && json.Unmarshal(data, &fields) == nil {
+		if fields.Message == nil && fields.Errors == nil {
+			return ""
+		}
+		if encoded, err := json.Marshal(fields); err == nil {
+			data = encoded
+		}
+	}
+	return string(data)
+}
+
+func (r *request) printWriteError(text string, body []byte, errOut io.Writer) {
+	if len(body) > 0 {
+		text = removeErrorBody(text, string(body))
+	}
+	findings := Scan(text, r.private, r.secretsOnly)
+	for _, finding := range findings {
+		fmt.Fprintf(errOut, "gh-post: %s line %d\n", finding.Category, finding.Line)
+	}
+	if len(findings) > 0 {
+		return
+	}
+	if len(text) > maxWriteErrorBytes {
+		end := maxWriteErrorBytes
+		for !utf8.RuneStart(text[end]) {
+			end--
+		}
+		text = text[:end]
+	}
+	if text != "" {
+		fmt.Fprint(errOut, text)
+		if !strings.HasSuffix(text, "\n") {
+			fmt.Fprintln(errOut)
+		}
+	}
+}
+
+func removeErrorBody(text, body string) string {
+	if body == "" {
+		return text
+	}
+	var pattern strings.Builder
+	for _, char := range body {
+		pattern.WriteString(`(?:(?i:`)
+		if utf16.RuneLen(char) > 1 {
+			high, low := utf16.EncodeRune(char)
+			fmt.Fprintf(&pattern, `\\+u%04x\\+u%04x`, high, low)
+		} else {
+			fmt.Fprintf(&pattern, `\\+u%04x`, char)
+		}
+		pattern.WriteString(`)|`)
+		if index := strings.IndexRune("\b\f\n\r\t\"\\/", char); index >= 0 {
+			escape := []string{"b", "f", "n", "r", "t", `"`, `\`, `/`}[index]
+			pattern.WriteString(`\\+` + regexp.QuoteMeta(escape) + `|`)
+		}
+		pattern.WriteString(regexp.QuoteMeta(string(char)) + `)`)
+	}
+	return regexp.MustCompile(pattern.String()).ReplaceAllString(text, "")
 }
 
 func (r *request) command(body []byte) ([]string, []byte, error) {
@@ -286,7 +358,6 @@ func (r *request) targetURL(ctx context.Context, output string) string {
 		data, err := gh(
 			ctx,
 			[]string{kind, viewVerb, r.operand, repoFlag, r.repo, jsonFlag, "url", jqFlag, ".url"},
-			nil,
 		)
 		if err == nil && strings.HasPrefix(strings.TrimSpace(string(data)), prefix) {
 			return strings.TrimSpace(string(data))

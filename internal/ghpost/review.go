@@ -79,7 +79,7 @@ func (r *request) checkReviewHead(ctx context.Context, errOut io.Writer) int {
 	data, err := gh(ctx, []string{
 		"pr", viewVerb, r.operand, repoFlag, r.repo,
 		jsonFlag, "headRefOid", jqFlag, ".headRefOid",
-	}, nil)
+	})
 	if err != nil {
 		fmt.Fprintln(errOut, "gh-post: cannot read PR head")
 		return exitEnvironment

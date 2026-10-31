@@ -194,8 +194,10 @@ func (r *request) changeLabels(ctx context.Context, log, out, errOut io.Writer) 
 	for _, name := range remove {
 		args = append(args, "--remove-label", name)
 	}
-	if _, err := gh(ctx, args, nil); err != nil {
+	if data, stderr, err := ghRun(ctx, args, nil); err != nil {
 		fmt.Fprintln(errOut, "gh-post: gh write failed; check GitHub before retrying")
+		r.printWriteError(stderr, nil, errOut)
+		r.printWriteError(errorBody(data), nil, errOut)
 		return exitEnvironment
 	}
 	if err := appendAudit(log, r.operation, url, nil); err != nil {
