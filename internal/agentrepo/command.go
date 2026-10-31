@@ -81,7 +81,7 @@ func NewCommand() (*cobra.Command, *int) {
 	evaluate.Flags().StringVar(&base, "base", "", "Base commit the pull request merges into")
 	evaluate.Flags().
 		StringVar(&mergeBase, "merge-base", "", "Merge base of the base commit and the head; empty when unknown")
-	group.AddCommand(evaluate, diagnoseCommand(code))
+	group.AddCommand(evaluate, diagnoseCommand(code), watchCommand(code))
 	root.AddCommand(
 		group,
 		reviewCommand(code),
