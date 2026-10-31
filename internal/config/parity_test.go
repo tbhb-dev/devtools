@@ -279,7 +279,7 @@ exec "$CONFIG_BINARY" "$@"
 	}
 	log := filepath.Join(bin, "calls")
 	env := append(isolatedEnv(f), "PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"),
-		"CONFIG_SUPPORT="+support, "CONFIG_BINARY="+binary, "CONFIG_LOG="+log)
+		"CONFIG_SUPPORT="+support, "CONFIG_BINARY="+binary, "CONFIG_LOG="+log, "_DEVTOOLS_AGENTREPO_GITHUB=false")
 	lib, err := filepath.Abs("../../packages/agents/codex/.apm/skills/commit/scripts/lib.sh")
 	if err != nil {
 		t.Fatal(err)
