@@ -39,6 +39,18 @@
     ":enablePreCommit",
   ],
 
+  // Every pull request carries exactly one `change:` label, and a
+  // dependency update is `change:deps`. Renovate opens its own pull
+  // requests, so the pr skills never get a chance to add it.
+  //
+  // `labels` is not mergeable: a consumer that sets its own `labels`
+  // replaces this list rather than extending it. `addLabels` is
+  // mergeable and Renovate unions it with `labels`, so the second entry
+  // keeps `change:deps` on every pull request even then. A consumer's own
+  // `labels` still append to it.
+  labels: ["change:deps"],
+  addLabels: ["change:deps"],
+
   // Open and update PRs on Sundays only. Keeps weekday review queues
   // focused on human-authored work; pairs with the weekday cron in each
   // repo's renovate.yaml which still runs for vulnerability alerts (those
