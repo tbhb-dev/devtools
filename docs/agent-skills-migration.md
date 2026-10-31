@@ -161,3 +161,11 @@ Existing lint, review, stamps, and the `merge` confirmation chain serve these sc
 Before merging, execution changes the base of dependent pull requests only for a same-repository head. Execution never retries a GitHub write automatically. It verifies the resulting merge commit and its message before cleanup. An unknown outcome or message mismatch preserves evidence. Remote deletion leases on the reviewed head, fork branches stay, and local removal preserves the current worktree, non-agent worktrees, changed branches, dirty trees, and ignored files outside `disposable_ignored`. Reports keep the full merge commit and any owner override, even if later cleanup is incomplete.
 
 The remaining issue 241 work is commit-specific owner-path delegation and external commit reporting. Consumers requiring those behaviors keep their local commit copy until its replacement supports them.
+
+## Pull request failure diagnosis
+
+`agentrepo checks diagnose [pull-request-number]` reports PR identity, checkout context, failing checks, suggested local tasks, and bounded failing-step logs. Without a number it selects the current branch's open PR. It reads each workflow run's log once and never retries requests or executes suggested tasks. `FIX_PR_LOG_LINES` sets the log tail length. The default is 80.
+
+Exit status 0 means a readable, nonempty check set has no selected failure state. It doesn't mean every check passed. Known failures return 1. Missing, malformed, empty, or unreadable PR/check data returns 2. Unavailable logs for known failures keep the cancellation notice and status 1.
+
+Pin the harness package containing this change and run `apm install`. The existing `fix-pr/scripts/diagnose.sh` entry point probes the Go command's help before forwarding arguments, output, and status. An absent binary or unsupported subcommand uses the frozen `diagnose-legacy.sh` throughout the N-2 window. A supported invocation that fails never falls back. The frozen fallback retains the old shell behavior, including its successful result on unreadable or empty checks. Install a supporting binary to get the inconclusive-data refusal.
