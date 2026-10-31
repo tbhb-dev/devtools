@@ -6,6 +6,7 @@ package agentrepo
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/tbhb-dev/devtools/internal/buildmeta"
 	"github.com/tbhb-dev/devtools/internal/checks"
+	"github.com/tbhb-dev/devtools/internal/prsize"
 )
 
 // NewCommand creates the command and its evaluation exit status.
@@ -92,7 +94,52 @@ func NewCommand() (*cobra.Command, *int) {
 		mergeCommand(code),
 		skillTokensCommand(code),
 	)
+	root.AddCommand(sizeCommand())
 	return root, code
+}
+
+var errSizeFormat = errors.New("size format must be text or json")
+
+const sizeError = 2
+
+func sizeCommand() *cobra.Command {
+	var base, head, format string
+	cmd := &cobra.Command{
+		Use:   "size",
+		Short: "Measure changed code and prose SLOC from the merge base",
+		Long:  "Measure added and removed code with scc and nonblank prose lines. Excludes lockfiles, deployed skills, vendor, fixtures and CHANGELOG.md; .devtools is excluded in consumers. Limits: soft above 400 code or 1000 prose, hard above 800 code or 2000 prose. Levels exit 0; usage and environment errors exit 2. Hunk fragments lose surrounding comment context.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if format != "text" && format != "json" {
+				return fmt.Errorf("%w: %q", errSizeFormat, format)
+			}
+			r, err := prsize.Measure(cmd.Context(), "", base, head)
+			if err != nil {
+				return fmt.Errorf("size: %w", err)
+			}
+			if format == "json" {
+				return json.NewEncoder(cmd.OutOrStdout()).Encode(r)
+			}
+			cmd.Printf(
+				"code: %d\nprose: %d\nlevel: %s\nsoft: %d code / %d prose\nhard: %d code / %d prose\n",
+				r.Code,
+				r.Prose,
+				r.Level,
+				r.Soft.Code,
+				r.Soft.Prose,
+				r.Hard.Code,
+				r.Hard.Prose,
+			)
+			for _, excluded := range r.Excluded {
+				cmd.Printf("excluded: %s (%d raw lines)\n", excluded.Path, excluded.Raw)
+			}
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&base, "base", "", "Base ref (default origin/<default branch>)")
+	cmd.Flags().StringVar(&head, "head", "HEAD", "Head ref")
+	cmd.Flags().StringVar(&format, "format", "text", "Output format: text or json")
+	return cmd
 }
 
 // Run executes the command and returns its process exit code.
@@ -102,8 +149,11 @@ func Run(args []string, in io.Reader, out, stderr io.Writer) int {
 	cmd.SetIn(in)
 	cmd.SetOut(out)
 	cmd.SetErr(stderr)
-	if err := cmd.Execute(); err != nil {
+	if executed, err := cmd.ExecuteC(); err != nil {
 		_, _ = fmt.Fprintln(stderr, err)
+		if executed != nil && executed.Name() == "size" {
+			return sizeError
+		}
 		return int(checks.Unreadable)
 	}
 	return *code
