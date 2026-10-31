@@ -17,9 +17,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestMain also provides a portable GitHub CLI fixture under the `gh` executable name.
+// TestMain also supplies the portable GitHub CLI fixture, a no-op sleep,
+// and a subprocess entry point for command parity tests.
 func TestMain(m *testing.M) {
-	if strings.TrimSuffix(filepath.Base(os.Args[0]), ".exe") == "gh" {
+	switch strings.TrimSuffix(filepath.Base(os.Args[0]), ".exe") {
+	case "watch-command":
+		os.Exit(Run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr))
+	case "sleep":
+		os.Exit(0)
+	case "gh":
 		os.Exit(watchFixtureGH())
 	}
 	os.Exit(m.Run())
@@ -54,6 +60,9 @@ func watchFixtureGH() int {
 	case "pr list":
 		fmt.Fprintln(os.Stdout, "7")
 	case "pr checks":
+		if os.Getenv("WATCH_ORACLE_RESPONSES") != "" {
+			return watchOracleResponse()
+		}
 		if os.Getenv("WATCH_FIXTURE_FAILURE") != "" {
 			fmt.Fprintln(os.Stderr, "HTTP 401: Bad credentials")
 			return 1
