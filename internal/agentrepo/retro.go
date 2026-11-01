@@ -22,6 +22,13 @@ func retroCommand(code *int) *cobra.Command {
 				*code = retro.New(cmd.Context(), skill, args, cmd.OutOrStdout(), cmd.ErrOrStderr())
 			},
 		},
+		&cobra.Command{
+			Use:   "preflight [path-or-id]",
+			Short: "Resolve a transcript, scaffold its retro, and print its profile",
+			Run: func(cmd *cobra.Command, args []string) {
+				*code = retro.Preflight(cmd.Context(), skill, args, cmd.OutOrStdout(), cmd.ErrOrStderr())
+			},
+		},
 	)
 	return group
 }
