@@ -392,10 +392,12 @@ func testRerunFailedDurability(t *testing.T) {
 	require.Equal(t, 1, strings.Count(fileText(t, filepath.Join(dir, "calls")), "POST"))
 	events = append(events, "POST")
 	expected := []string{"create", "sync file"}
-	for path := filepath.Join(stateDir, "gh-post-reruns", "owner", "repo", "123"); ; path = filepath.Dir(path) {
-		expected = append(expected, "sync "+path)
-		if filepath.Dir(path) == path {
-			break
+	if dirSyncSupported {
+		for path := filepath.Join(stateDir, "gh-post-reruns", "owner", "repo", "123"); ; path = filepath.Dir(path) {
+			expected = append(expected, "sync "+path)
+			if filepath.Dir(path) == path {
+				break
+			}
 		}
 	}
 	require.Equal(t, append(expected, "POST"), events)
@@ -403,7 +405,11 @@ func testRerunFailedDurability(t *testing.T) {
 
 func testRerunFailedSyncFailures(t *testing.T) {
 	t.Helper()
-	for _, failure := range []string{"1", "123", "repo", "owner", "gh-post-reruns", "devtools", "state"} {
+	failures := []string{"1"}
+	if dirSyncSupported {
+		failures = append(failures, "123", "repo", "owner", "gh-post-reruns", "devtools", "state")
+	}
+	for _, failure := range failures {
 		t.Run("sync-"+failure, func(t *testing.T) {
 			dir := setupRerun(t)
 			stateDir := filepath.Join(dir, "state", "devtools")

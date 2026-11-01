@@ -137,6 +137,8 @@ An eligible request sends one POST to `/repos/{owner}/{repo}/actions/runs/{run_i
 
 Before the POST, the command atomically creates and syncs a receipt under `${XDG_STATE_HOME:-~/.local/state}/devtools/gh-post-reruns/{owner}/{repo}/{run_id}/{run_attempt}`. It stores repository names in lowercase. Processes sharing that directory can't reserve the same attempt twice. A duplicate exits 1 without a POST. Once a later attempt completes with an eligible conclusion, the command can reserve it independently.
 
+Windows doesn't allow syncing a directory handle, so the receipt file's own sync is the strongest durability available there.
+
 Keep these receipts. They remain after success, failure, interruption, or audit failure. Removing one removes its duplicate protection.
 
 Before writing to GitHub, the command appends and syncs an audit record with UTC time, operation `run rerun-failed`, canonical run URL, `run_attempt`, and outcome `reserved`. This records intent, including requests that GitHub never receives. Audit fields omit body text and credentials. A reservation or audit failure prevents the POST and exits 2.

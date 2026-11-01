@@ -138,17 +138,8 @@ func (r *request) reserveRerun(dir string, attempt uint64, syncFile func(*os.Fil
 	// Persist the receipt name and each directory entry created by MkdirAll,
 	// including ancestors created during audit setup, before any POST.
 	for {
-		parent, openErr := os.Open(dir)
-		if openErr != nil {
-			return fmt.Errorf("open reservation directory: %w", openErr)
-		}
-		syncErr := syncFile(parent)
-		closeErr := parent.Close()
-		if syncErr != nil {
-			return fmt.Errorf("sync reservation directory: %w", syncErr)
-		}
-		if closeErr != nil {
-			return fmt.Errorf("close reservation directory: %w", closeErr)
+		if err = syncDir(dir, syncFile); err != nil {
+			return fmt.Errorf("sync reservation directory: %w", err)
 		}
 		if filepath.Dir(dir) == dir {
 			break
