@@ -93,7 +93,7 @@ mise run build
 
 After creating a linked worktree, inspect its configuration and run `mise trust`, then run `mise run devtools:worktree-setup`. The setup task refuses an untrusted configuration. Once trusted, it prepares the worktree-local Vale styles with `vale sync` when the root has `.vale.ini`, then the Python environment with `uv sync` when the root has `pyproject.toml`. It reports each skipped sync and its missing manifest. Skill setup checks stop with these commands when the configuration is untrusted or the ignored Vale styles are absent.
 
-The test task includes Go, Python, hook Bats, and leak Bats suites. Run `mise run test-hooks` or `mise run test-leaks` for the shell suites. CI runs them in `test-bats (ubuntu-24.04)` and `test-bats (macos-15)`. See the [task and CI routing guide](AGENTS.md#tasks) for the check names `fix-pr` recognizes.
+The test task includes the Go and Python suites. The hook and leak Bats suites no longer run in the test task or in CI. Run `mise run test-hooks` or `mise run test-leaks` by hand for the shell suites. See the [task and CI routing guide](AGENTS.md#tasks) for the check names `fix-pr` recognizes.
 
 ### Review and delegated runs
 

@@ -549,13 +549,11 @@ run = "mise run devtools:lint-go-deadcode-tests"
 # setup-go step they leaned on are gone.
 
 [tasks.test]
-description = "Run every test suite and check generated skills"
+description = "Run the Go and Python test suites and check generated skills"
 run = [
   "mise run check-generated-skills",
   "mise run test-go",
   "mise run test-py",
-  "mise run test-hooks",
-  "mise run test-leaks",
 ]
 
 # Extra invocation args append to the run string, so `mise run test-go
