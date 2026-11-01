@@ -66,10 +66,20 @@ func (f proseFixture) git(t *testing.T, args ...string) {
 	c := exec.CommandContext(t.Context(), "git")
 	c.Args = append(c.Args, "-c", "core.hooksPath="+os.DevNull, "-c", "commit.gpgsign=false")
 	c.Args = append(c.Args, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.com")
+	// Keep background Git processes from changing .git while proseMetadataMode walks it.
+	c.Args = append(c.Args, "-c", "gc.auto=0", "-c", "maintenance.auto=false")
 	c.Args = append(c.Args, args...)
 	c.Dir = f.root
 	out, err := c.CombinedOutput()
 	require.NoError(t, err, "%s", out)
+}
+
+func TestProseFixtureDisablesMaintenance(t *testing.T) {
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	f := newProseFixture(t, "maintenance")
+	// Check the effective configuration of the same Git commands that create the fixture.
+	f.git(t, "config", "--get", "gc.auto", "^0$")
+	f.git(t, "config", "--type=bool", "--get", "maintenance.auto", "^false$")
 }
 
 func (f proseFixture) write(t *testing.T, path, content string) {
