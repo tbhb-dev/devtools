@@ -93,7 +93,20 @@ mise run build
 
 After creating a linked worktree, inspect its configuration and run `mise trust`, then run `mise run devtools:worktree-setup`. The setup task refuses an untrusted configuration. Once trusted, it prepares the worktree-local Vale styles with `vale sync` when the root has `.vale.ini`, then the Python environment with `uv sync` when the root has `pyproject.toml`. It reports each skipped sync and its missing manifest. Skill setup checks stop with these commands when the configuration is untrusted or the ignored Vale styles are absent.
 
-The test task includes the Go and Python suites. The hook and leak Bats suites no longer run in the test task or in CI. Run `mise run test-hooks` or `mise run test-leaks` by hand for the shell suites. See the [task and CI routing guide](AGENTS.md#tasks) for the check names `fix-pr` recognizes.
+The `test` task prints and runs the suites affected by the staged diff. When the index matches `HEAD`, it uses the committed branch diff against the merge base with the `base` in `PR_AGENTDESC.md`, otherwise the origin default branch. Origin's copy of a named base takes precedence. An uncertain comparison selects `test-full`.
+
+| Changed path | Selected suites |
+| --- | --- |
+| `README.md` or Markdown under `docs/` | None |
+| Python under `packages/devtools/`, except `conftest.py` | `test-py` |
+| Go files under `internal/buildmeta/` or `cmd/agy-otel/` | `test-go` |
+| All other paths, including gates, runners, the selector, and leak checks | `test-full` |
+
+Use `mise run test-full` for the complete local sweep.
+
+The `check` task and the Go `fix-pr` test reproducer use `test-full`.
+
+The full test task includes the Go and Python suites. The hook and leak Bats suites no longer run in the test task or in CI. Run `mise run test-hooks` or `mise run test-leaks` by hand for the shell suites. See the [task and CI routing guide](AGENTS.md#tasks) for the check names `fix-pr` recognizes.
 
 ### Review and delegated runs
 

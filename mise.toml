@@ -549,6 +549,10 @@ run = "mise run devtools:lint-go-deadcode-tests"
 # setup-go step they leaned on are gone.
 
 [tasks.test]
+description = "Run the tests affected by the diff, or the full suite when uncertain"
+run = "go run ./cmd/test-affected"
+
+[tasks.test-full]
 description = "Run the Go and Python test suites and check generated skills"
 run = [
   "mise run check-generated-skills",
@@ -803,7 +807,7 @@ run = [
   "mise run tidy",
   "mise run verify",
   "mise run lint",
-  "mise run test",
+  "mise run test-full",
   "mise run vuln",
   "mise run vendor-check",
 ]

@@ -283,7 +283,7 @@ Other tests may cover guards whose rows don't identify Bats coverage: `tools/tes
 
 ## Bats suites and shared helper
 
-`test-hooks` calls every suite under `tests/` recursively. `test-leaks` calls the payload suite. `mise run test` and CI call those tasks. Consumer fixture suites test the published payload. For B suites, parser cases move with the code they test. G5 suites keep real Git smoke tests while their parsing and state checks move in process. These timings measure the whole suite once and aren't additive estimates of individual script costs.
+`test-hooks` calls every suite under `tests/` recursively. `test-leaks` calls the payload suite. `mise run test` now selects Go and Python suites from the diff. `mise run test-full` runs both and checks generated skills. The preceding baseline predates that selection and measures every suite. Consumer fixture suites test the published payload. For B suites, parser cases move with the code they test. G5 suites keep real Git smoke tests while their parsing and state checks move in process. These timings measure the whole suite once and aren't additive estimates of individual script costs.
 
 ### Configuration suites
 
