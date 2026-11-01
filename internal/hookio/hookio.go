@@ -27,9 +27,10 @@ const preToolUse = "PreToolUse"
 var ErrNoReason = errors.New("hookio: refusing to deny without a reason")
 
 // ToolInput holds the fields of the tool call under inspection. The set is
-// the union across Write and Edit; a field absent from the incoming payload
+// the union across Write, Edit and Bash; a field absent from the incoming payload
 // decodes to its zero value.
 type ToolInput struct {
+	Command    string `json:"command"`
 	FilePath   string `json:"file_path"`
 	Content    string `json:"content"`
 	OldString  string `json:"old_string"`
@@ -48,13 +49,34 @@ type Payload struct {
 // stays testable without touching the filesystem.
 type ReadFileFunc func(string) ([]byte, error)
 
-// Decode reads one JSON payload.
+// Decode reads one JSON payload and ignores anything after it.
 func Decode(r io.Reader) (Payload, error) {
-	var p Payload
-	if err := json.NewDecoder(r).Decode(&p); err != nil {
-		return Payload{}, fmt.Errorf("hookio: decoding payload: %w", err)
+	p, _, err := decode(r)
+	return p, err
+}
+
+// DecodeStrict reads one JSON payload and rejects text after it that isn't
+// JSON. The frozen shell guards parse the whole input, so text after the first
+// value makes the payload unreadable there and must here too.
+func DecodeStrict(r io.Reader) (Payload, error) {
+	p, decoder, err := decode(r)
+	if err != nil {
+		return Payload{}, err
+	}
+	var trailing json.RawMessage
+	if trailErr := decoder.Decode(&trailing); trailErr != nil && !errors.Is(trailErr, io.EOF) {
+		return Payload{}, fmt.Errorf("hookio: decoding trailing input: %w", trailErr)
 	}
 	return p, nil
+}
+
+func decode(r io.Reader) (Payload, *json.Decoder, error) {
+	var p Payload
+	decoder := json.NewDecoder(r)
+	if err := decoder.Decode(&p); err != nil {
+		return Payload{}, nil, fmt.Errorf("hookio: decoding payload: %w", err)
+	}
+	return p, decoder, nil
 }
 
 // Resolve recovers the file content the tool call would produce.
@@ -120,6 +142,17 @@ func Deny(w io.Writer, reason string) error {
 	})
 	if err != nil {
 		return fmt.Errorf("hookio: writing decision: %w", err)
+	}
+	return nil
+}
+
+// Block writes the shell skill guards' stderr protocol. The caller exits 2.
+func Block(w io.Writer, skill, reason string) error {
+	if strings.TrimSpace(reason) == "" {
+		return ErrNoReason
+	}
+	if _, err := fmt.Fprintf(w, "Blocked by the %s skill guard.\n\n%s\n", skill, reason); err != nil {
+		return fmt.Errorf("hookio: writing block: %w", err)
 	}
 	return nil
 }

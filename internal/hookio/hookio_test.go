@@ -173,3 +173,33 @@ func TestDeny(t *testing.T) {
 		assert.Empty(t, buf.String())
 	})
 }
+
+func TestDecodeCommand(t *testing.T) {
+	t.Parallel()
+	p, err := hookio.Decode(strings.NewReader(`{"tool_name":"Bash","tool_input":{"command":"gh pr view 1"}}`))
+	require.NoError(t, err)
+	assert.Equal(t, "gh pr view 1", p.ToolInput.Command)
+}
+
+func TestDecodeStrictTrailingInput(t *testing.T) {
+	t.Parallel()
+	first := `{"tool_name":"Bash","tool_input":{"command":"gh pr merge 1"}}`
+	for _, trailing := range []string{"x", "{", "}", "garbage text"} {
+		_, err := hookio.DecodeStrict(strings.NewReader(first + trailing))
+		require.Error(t, err, trailing)
+		_, err = hookio.Decode(strings.NewReader(first + trailing))
+		require.NoError(t, err, trailing)
+	}
+	_, err := hookio.DecodeStrict(strings.NewReader(first + "\n"))
+	require.NoError(t, err)
+}
+
+func TestBlock(t *testing.T) {
+	t.Parallel()
+	var out bytes.Buffer
+	require.NoError(t, hookio.Block(&out, "pr", "Use the entry point."))
+	assert.Equal(t, "Blocked by the pr skill guard.\n\nUse the entry point.\n", out.String())
+	out.Reset()
+	require.ErrorIs(t, hookio.Block(&out, "pr", " \n"), hookio.ErrNoReason)
+	assert.Empty(t, out.String())
+}
