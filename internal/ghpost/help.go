@@ -21,6 +21,7 @@ Global flags:
 All operations accept -R, --repo OWNER/REPO.
 Content operations accept --body-file PATH and default to stdin;
 --body-file - also reads stdin. PR ready and close never read stdin.
+An issue edit with --type reads no stdin unless --body-file is given.
 
 Operations and additional flags:
 	issue create    --title TEXT --label NAME --assignee LOGIN --milestone NAME
@@ -28,6 +29,7 @@ Operations and additional flags:
 	issue close <issue>    --reason completed|"not planned" --body-file PATH
 	issue reopen <issue>   --body-file PATH
 	issue edit <issue>     --title TEXT --add-label NAME --remove-label NAME
+	--type Feature|Defect|Chore|Spike
 	--add-assignee LOGIN --remove-assignee LOGIN
 	--milestone NAME --remove-milestone
 	pr create       --title TEXT --base BRANCH --head BRANCH --label NAME

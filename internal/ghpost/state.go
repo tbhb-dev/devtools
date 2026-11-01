@@ -27,7 +27,7 @@ var (
 )
 
 func (r *request) readInput(in io.Reader) ([]byte, error) {
-	if r.operation == prReady || r.isLabelChange() {
+	if r.operation == prReady || r.isLabelChange() || r.issueType != "" && r.bodyFile == "" {
 		return nil, nil
 	}
 	path := r.bodyFile
@@ -95,7 +95,7 @@ func (r *request) changePRState(ctx context.Context, body []byte, login string, 
 	args := []string{"pr", "close", r.operand, repoFlag, r.repo}
 	if r.operation == prReady {
 		args = []string{
-			apiCommand, "graphql", "-f",
+			apiCommand, graphqlCommand, "-f",
 			"query=mutation($id:ID!){markPullRequestReadyForReview(input:{pullRequestId:$id}){pullRequest{url}}}",
 			"-f", "id=" + state.ID,
 		}

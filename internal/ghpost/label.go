@@ -42,8 +42,11 @@ func labelFlags(operation string) (map[string]bool, map[string]bool, bool) {
 	return values, map[string]bool{}, true
 }
 
-// parseFailure keeps a label refusal's own message and gives every other parse failure the usage text.
+// parseFailure preserves argument refusal messages.
 func parseFailure(err error) error {
+	if errors.Is(err, errIssueType) {
+		return errIssueType
+	}
 	if refusal, ok := errors.AsType[labelError](err); ok {
 		return refusal
 	}
