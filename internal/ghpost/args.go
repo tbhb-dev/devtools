@@ -33,6 +33,7 @@ type request struct {
 	issueType   string
 	typeSet     bool
 	secretsOnly bool
+	allowClosed bool
 }
 
 const (
@@ -48,6 +49,7 @@ const (
 	issueVerb      = "issue"
 	issueComment   = "issue comment"
 	issueCreate    = "issue create"
+	issueEdit      = "issue edit"
 	issueClose     = "issue close"
 	issueReopen    = "issue reopen"
 	prCreate       = "pr create"
@@ -84,6 +86,10 @@ func (r *request) take(args []string, values, switches map[string]bool) (int, er
 	}
 	key, value, inline := strings.Cut(args[0], "=")
 	if switches[key] && !inline {
+		if key == "--allow-closed" {
+			r.allowClosed = true
+			return 1, nil
+		}
 		r.flags = append(r.flags, key)
 		return 1, nil
 	}
@@ -180,12 +186,12 @@ func allowed(operation string) (map[string]bool, map[string]bool, bool) {
 	case issueReopen:
 	case issueCreate:
 		values = append(values, strings.Fields("--title --label --assignee --milestone")...)
-	case "issue edit":
+	case issueEdit:
 		values = append(
 			values,
 			strings.Fields("--type --title --add-label --remove-label --add-assignee --remove-assignee --milestone")...,
 		)
-		switches = []string{"--remove-milestone"}
+		switches = []string{"--remove-milestone", "--allow-closed"}
 	case issueComment, "pr comment":
 		switches = []string{"--edit-last", "--create-if-none"}
 	case prCreate:

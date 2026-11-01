@@ -229,6 +229,11 @@ func post(ctx context.Context, r request, body []byte, identities string, out, e
 }
 
 func postContent(ctx context.Context, r request, body []byte, log, out, errOut io.Writer) int {
+	if r.operation == issueEdit && len(body) > 0 {
+		if code := r.checkIssueBodyTarget(ctx, errOut); code != 0 {
+			return code
+		}
+	}
 	args, input, err := r.command(body)
 	if err != nil {
 		fmt.Fprintln(errOut, "gh-post: cannot encode body")
@@ -348,10 +353,8 @@ func (r *request) command(body []byte) ([]string, []byte, error) {
 	}
 	args = append(args, repoFlag, r.repo)
 	args = append(args, r.flags...)
-	// Metadata-only PR edits, and issue edits that change the type, must
-	// preserve the existing description. An explicit body file still allows
-	// callers to clear it deliberately.
-	keepsBody := r.operation == "pr edit" || r.operation == "issue edit" && r.issueType != ""
+	// Metadata-only edits must preserve the existing description.
+	keepsBody := r.operation == "pr edit" || r.operation == issueEdit
 	if keepsBody && r.bodyFile == "" && len(body) == 0 {
 		return args, nil, nil
 	}
@@ -364,6 +367,9 @@ func (r *request) command(body []byte) ([]string, []byte, error) {
 
 func (r *request) targetURL(ctx context.Context, output string) string {
 	prefix := "https://github.com/" + r.repo + "/"
+	if r.operation == issueEdit {
+		return prefix + "issues/" + r.operand
+	}
 	for word := range strings.FieldsSeq(output) {
 		if strings.HasPrefix(word, prefix) {
 			return word

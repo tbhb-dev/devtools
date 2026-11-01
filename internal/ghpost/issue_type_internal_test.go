@@ -70,13 +70,32 @@ func serveFakeGH(root *os.Root, joined string, stdin io.Reader, stdout io.Writer
 			return 1, fmt.Errorf("record mutation: %w", err)
 		}
 		fmt.Fprintln(stdout, "{}")
-	case strings.HasPrefix(joined, "issue edit 12 --repo owner/repo"):
-		if err := fakeIssueEdit(root, joined, stdin); err != nil {
-			return 1, err
+	case joined == "issue view 12 --repo owner/repo --json state,url":
+		if _, err := root.Stat("missing"); err == nil {
+			return 1, nil
 		}
-		fmt.Fprintln(stdout, "https://github.com/owner/repo/issues/12")
+		state := fakeRead(root, "issue-state")
+		if state == "" {
+			state = `{"state":"OPEN","url":"https://github.com/owner/repo/issues/12"}`
+		}
+		fmt.Fprint(stdout, state)
+	case strings.HasPrefix(joined, "issue edit 12 --repo owner/repo"):
+		return fakeIssueEditResponse(root, joined, stdin, stdout)
 	default:
 		return 99, nil
+	}
+	return 0, nil
+}
+
+func fakeIssueEditResponse(root *os.Root, joined string, stdin io.Reader, stdout io.Writer) (int, error) {
+	if err := fakeIssueEdit(root, joined, stdin); err != nil {
+		return 1, err
+	}
+	if os.Getenv("WRITE_STATUS") == "1" {
+		return 1, nil
+	}
+	if os.Getenv("SILENT") != "1" {
+		fmt.Fprintln(stdout, "https://github.com/owner/repo/issues/12")
 	}
 	return 0, nil
 }
