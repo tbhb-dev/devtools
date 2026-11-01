@@ -94,6 +94,7 @@ func NewCommand() (*cobra.Command, *int) {
 		skillTokensCommand(code),
 		postCommand(code),
 		proseCommand(code),
+		retroCommand(code),
 	)
 	return root, code
 }
