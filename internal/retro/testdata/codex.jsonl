@@ -1,0 +1,8 @@
+{"type":"session_meta","timestamp":"2026-01-02T12:00:00Z","payload":{"id":"019abc00-feed","cwd":"/work/proj"}}
+{"type":"response_item","timestamp":"2026-01-02T12:00:01Z","payload":{"type":"reasoning","summary":[{"text":"try the linter"}]}}
+{"type":"response_item","timestamp":"2026-01-02T12:00:02Z","payload":{"type":"custom_tool_call","name":"exec","input":"await tools.exec_command({cmd: \"mise run lint-prose\"})"}}
+{"type":"response_item","timestamp":"2026-01-02T12:00:03Z","payload":{"type":"custom_tool_call_output","output":"Script failed with code 1\nfile.md:1 [error] AI.Hedge match=\"just\""}}
+{"type":"response_item","timestamp":"2026-01-02T12:00:04Z","payload":{"type":"custom_tool_call","name":"exec","input":"await tools.exec_command({cmd: \"mise run lint-prose\"})"}}
+{"type":"response_item","timestamp":"2026-01-02T12:00:05Z","payload":{"type":"custom_tool_call_output","output":"Script failed with code 1\nPermission denied"}}
+{"type":"response_item","timestamp":"2026-01-02T12:00:06Z","payload":{"type":"custom_tool_call","name":"exec","input":"await tools.exec_command({cmd: \"mise run lint-prose\"})"}}
+{"type":"response_item","timestamp":"2026-01-02T12:00:07Z","payload":{"type":"custom_tool_call_output","output":"ok"}}
