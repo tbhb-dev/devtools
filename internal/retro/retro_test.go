@@ -51,7 +51,7 @@ func fixture(t *testing.T) (string, string, string) {
 	source, err := filepath.Abs("../../packages/agents/claude/.apm/skills/analyze-session")
 	require.NoError(t, err)
 	claude, codex := read(t, "testdata/claude.jsonl"), read(t, "testdata/codex.jsonl")
-	for _, key := range []string{"GIT_DIR", "GIT_WORK_TREE", "CLAUDE_CODE_SESSION_ID", "CLAUDECODE", "CODEX_THREAD_ID", "ANALYZE_SESSION_FORMAT"} {
+	for _, key := range []string{"GIT_DIR", "GIT_WORK_TREE", "CLAUDE_CODE_SESSION_ID", "CLAUDECODE", "CODEX_THREAD_ID", "ANALYZE_SESSION_FORMAT", "ANALYZE_PREFLIGHT_LOOPS"} {
 		t.Setenv(key, "")
 		require.NoError(t, os.Unsetenv(key))
 	}
