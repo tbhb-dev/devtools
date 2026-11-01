@@ -46,7 +46,7 @@ jobs:
       relevant: ${{ steps.diff.outputs.relevant }}
     steps:
       - name: Harden the runner
-        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+        uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
         with:
           egress-policy: audit
 
@@ -110,7 +110,7 @@ jobs:
     steps:
       - name: Harden the runner
         if: ${{ needs.changes.result != 'success' || needs.changes.outputs.relevant == 'true' }}
-        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+        uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
         with:
           egress-policy: audit
 
@@ -127,10 +127,10 @@ jobs:
       # its shims reach PATH, so the steps below call apm directly.
       - name: Set up mise
         if: ${{ needs.changes.result != 'success' || needs.changes.outputs.relevant == 'true' }}
-        uses: jdx/mise-action@82a612c5ab8bcda7cc5db6b7e81a8e7584c3dc6e # v5.2.3
+        uses: jdx/mise-action@6be3c7ed4c21d4f76b208d351d95aac273ebb76d # v5.2.4
         with:
           # renovate: datasource=github-releases depName=jdx/mise
-          version: 2026.10.19
+          version: 2026.10.21
           install_args: apm
 
       # The frozen install comes first because the root manifest carries
@@ -171,7 +171,7 @@ jobs:
       actions: read
       security-events: write
     # yamllint disable-line rule:line-length
-    uses: cisco-ai-defense/skill-scanner/.github/workflows/scan-skills.yml@c615acb70994cdf3f4ba54d955fef2e92ac84437 # 2.3.1
+    uses: cisco-ai-defense/skill-scanner/.github/workflows/scan-skills.yml@f7824651ffeb9b89f7682ddd97d6fba8fe9c10b1 # 2.3.2
     with:
       # scan-skills' default scan_mode is scan-all, which always adds
       # --recursive --check-overlap, and its own docs say skill_path
