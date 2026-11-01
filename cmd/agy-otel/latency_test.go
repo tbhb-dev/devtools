@@ -6,7 +6,11 @@
 package main
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -24,6 +28,15 @@ func TestHookLatency(t *testing.T) {
 	for i, event := range events {
 		inputs[i] = fixture(t, event)
 	}
+	for _, size := range []int{10 * 1024, 1024 * 1024} {
+		name := filepath.Join(t.TempDir(), "transcript.jsonl")
+		data := strings.Repeat(" ", size-len(plannerFixture)-1) + "\n" + plannerFixture
+		require.NoError(t, os.WriteFile(name, []byte(data), 0o600))
+		input, err := json.Marshal(map[string]string{"transcriptPath": name})
+		require.NoError(t, err)
+		events = append(events, "PostInvocation")
+		inputs = append(inputs, input)
+	}
 	const calls = 500
 	durations := make([]time.Duration, calls)
 	for i := range calls {
@@ -38,5 +51,5 @@ func TestHookLatency(t *testing.T) {
 	slices.Sort(durations)
 	p99 := durations[494]
 	t.Logf("500 hook subprocesses: p50 = %s, p99 = %s, max = %s", durations[249], p99, durations[499])
-	assert.LessOrEqual(t, p99, 500*time.Millisecond)
+	assert.LessOrEqual(t, p99, 20*time.Millisecond)
 }
