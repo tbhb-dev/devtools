@@ -11,7 +11,7 @@ import (
 )
 
 var errUsage = errors.New(
-	"expected issue create|comment|edit|label|close|reopen, pr create|edit|comment|review|ready|close|label, comment edit, review edit, or release create|edit; use only supported flags and file input",
+	"expected issue create|comment|edit|label|close|reopen, pr create|edit|comment|review|ready|close|label, comment edit, review edit, release create|edit, or run rerun-failed <run-id> --repo owner/repo; use only supported flags and file input",
 )
 
 type request struct {
@@ -60,6 +60,9 @@ const (
 )
 
 func parse(args []string) (request, error) {
+	if len(args) > 0 && args[0] == "run" {
+		return parseRerunFailed(args)
+	}
 	r := request{}
 	if len(args) < operationWords {
 		return r, errUsage
