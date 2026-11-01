@@ -9,8 +9,8 @@ name: release
 # workflow then replays cog's commit through the API so GitHub
 # creates and signs it, and replaces cog's tag with an SSH-signed
 # annotated one. One tag serves both consumer paths (APM installs
-# pin tbhb-dev/devtools#vX.Y.Z and Go installs pin @vX.Y.Z), so no
-# artifact build runs here.
+# pin tbhb-dev/devtools#vX.Y.Z and Go installs pin @vX.Y.Z). Bundles
+# built from the signed tag also support mise's github backend.
 #
 # Two credentials, and neither one signs what the other does. The
 # release app's installation token creates the release commit and
@@ -275,3 +275,26 @@ jobs:
           GIT_COMMITTER_EMAIL="334376894+tbhb-agent@users.noreply.github.com" \
             git tag -s "$TAG" -m "$TAG"
           git push origin "refs/tags/$TAG"
+
+      # Build only after resetting to the API-created commit and signing
+      # its tag. The shared flags use that commit's date, never wall time.
+      - name: Install the pinned Go toolchain
+        run: mise install go
+
+      - name: Build release bundles
+        env:
+          TAG: ${{ steps.commit.outputs.tag }}
+        run: go run ./cmd/release-assets build "$TAG" "$RUNNER_TEMP/assets"
+
+      # The App owns release publication too. Content passes through
+      # gh-post, while asset uploads refuse conflicting existing bytes.
+      - name: Publish and verify release assets
+        env:
+          TAG: ${{ steps.commit.outputs.tag }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          DEVTOOLS_POST_IDENTITIES: tbhb-dev-releases[bot]
+          DEVTOOLS_SCAN_MODE: all
+        run: |
+          go build -o "$RUNNER_TEMP/gh-post" ./cmd/gh-post
+          export PATH="$RUNNER_TEMP:$PATH"
+          go run ./cmd/release-assets publish "$TAG" "$RUNNER_TEMP/assets"
