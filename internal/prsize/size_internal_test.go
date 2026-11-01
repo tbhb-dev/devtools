@@ -91,6 +91,20 @@ func TestRealSCC(t *testing.T) {
 	}
 }
 
+func TestForcedGitColor(t *testing.T) {
+	t.Parallel()
+	dir := repository(t)
+	runGit(t, dir, "config", "color.ui", "always")
+	runGit(t, dir, "config", "color.diff", "always")
+	write(t, dir, "a.py", strings.Repeat("x = 1\n", 401))
+	write(t, dir, "README.md", "# Heading\n\ntext\n")
+	commit(t, dir)
+	r := measure(t, dir, "", "")
+	if r.Code != 401 || r.Prose != 2 || r.Languages["Python"] != 401 || r.Level != "soft" {
+		t.Fatalf("unexpected report: %+v", r)
+	}
+}
+
 func TestMergeBaseDeletionRename(t *testing.T) {
 	t.Parallel()
 	dir := repository(t)

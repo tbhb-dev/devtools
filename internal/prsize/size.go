@@ -142,7 +142,17 @@ func (r *Result) walk(ctx context.Context, dir, base, head, paths, tmp string, d
 			i++
 		}
 		args := append(
-			[]string{"diff", "--no-ext-diff", "--no-textconv", "--find-renames", "--unified=0", base, head, "--"},
+			[]string{
+				"diff",
+				"--no-color",
+				"--no-ext-diff",
+				"--no-textconv",
+				"--find-renames",
+				"--unified=0",
+				base,
+				head,
+				"--",
+			},
 			files...,
 		)
 		patch, err := git(ctx, dir, args...)
