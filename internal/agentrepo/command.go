@@ -92,6 +92,7 @@ func NewCommand() (*cobra.Command, *int) {
 		mergeCommand(code),
 		skillTokensCommand(code),
 		postCommand(code),
+		githubCommand(code),
 	)
 	return root, code
 }
