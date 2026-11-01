@@ -1,0 +1,127 @@
+[
+  {
+    "name": "test_detects_content_posts/01",
+    "command": "gh issue create --title title --body-file body",
+    "detected": true
+  },
+  {
+    "name": "test_detects_content_posts/02",
+    "command": "gh issue comment 1 -b text",
+    "detected": true
+  },
+  {
+    "name": "test_detects_content_posts/03",
+    "command": "gh issue edit 1 --body=text",
+    "detected": true
+  },
+  {
+    "name": "test_detects_content_posts/04",
+    "command": "gh pr edit 1 -btext",
+    "detected": true
+  },
+  {
+    "name": "test_detects_content_posts/05",
+    "command": "gh issue edit 1 -Fbody",
+    "detected": true
+  },
+  {
+    "name": "test_detects_content_posts/06",
+    "command": "gh pr create \"$@\"",
+    "detected": true
+  },
+  {
+    "name": "test_detects_content_posts/07",
+    "command": "dt_gh pr edit 1 --body-file body",
+    "detected": true
+  },
+  {
+    "name": "test_detects_content_posts/08",
+    "command": "dt_gh pr edit 1 --base main",
+    "detected": true
+  },
+  {
+    "name": "test_detects_content_posts/09",
+    "command": "dt_gh pr edit 1 \"$flag\" \"$item\"",
+    "detected": true
+  },
+  {
+    "name": "test_detects_content_posts/10",
+    "command": "gh pr comment 1 -F body",
+    "detected": true
+  },
+  {
+    "name": "test_detects_content_posts/11",
+    "command": "command gh pr review 1 --body-file body --approve",
+    "detected": true
+  },
+  {
+    "name": "test_detects_content_posts/12",
+    "command": "result=$(gh pr review 1 \\\n --body-file body --approve)",
+    "detected": true
+  },
+  {
+    "name": "test_detects_content_posts/13",
+    "command": "gh api repos/o/r/issues/comments/1 --method PATCH --input -",
+    "detected": true
+  },
+  {
+    "name": "test_detects_content_posts/14",
+    "command": "gh api --method PUT repos/o/r/pulls/1/reviews/2 -f body=text",
+    "detected": true
+  },
+  {
+    "name": "test_detects_content_posts/15",
+    "command": "gh api --method=PATCH repos/o/r/issues/comments/1 --input=-",
+    "detected": true
+  },
+  {
+    "name": "test_detects_content_posts/16",
+    "command": "gh api -XPATCH repos/o/r/pulls/comments/1 --input -",
+    "detected": true
+  },
+  {
+    "name": "test_detects_content_posts/17",
+    "command": "env GH_TOKEN=value gh api repos/o/r/pulls/comments/1 -F body=@file",
+    "detected": true
+  },
+  {
+    "name": "test_detects_content_posts/18",
+    "command": "gh release edit v1 --notes-file notes",
+    "detected": true
+  },
+  {
+    "name": "test_permits_reads_metadata_and_wrapper/01",
+    "command": "gh-post pr create --title title --body-file body",
+    "detected": false
+  },
+  {
+    "name": "test_permits_reads_metadata_and_wrapper/02",
+    "command": "dt_gh_post pr create \"$@\"",
+    "detected": false
+  },
+  {
+    "name": "test_permits_reads_metadata_and_wrapper/03",
+    "command": "gh pr view 1 --json body",
+    "detected": false
+  },
+  {
+    "name": "test_permits_reads_metadata_and_wrapper/04",
+    "command": "gh-post pr edit 1 --base main",
+    "detected": false
+  },
+  {
+    "name": "test_permits_reads_metadata_and_wrapper/05",
+    "command": "gh api repos/o/r/issues/comments",
+    "detected": false
+  },
+  {
+    "name": "test_permits_reads_metadata_and_wrapper/06",
+    "command": "# gh pr comment 1 --body-file body",
+    "detected": false
+  },
+  {
+    "name": "test_permits_reads_metadata_and_wrapper/07",
+    "command": "printf \"%s\" \"gh pr review 1 --body-file body\"",
+    "detected": false
+  }
+]

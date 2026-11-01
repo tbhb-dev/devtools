@@ -97,6 +97,7 @@ func NewCommand() (*cobra.Command, *int) {
 		postCommand(code),
 		proseCommand(code),
 		retroCommand(code),
+		contentPostsCommand(code, "."),
 	)
 	root.AddCommand(sizeCommand())
 	return root, code
