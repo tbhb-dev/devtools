@@ -52,29 +52,29 @@ func TestReports(t *testing.T) {
 				var out bytes.Buffer
 				path := script(t, "input", "# heading\n"+input)
 				assert.Equal(t, 1, Run([]string{path}, &out))
-				assert.Equal(t, fmt.Sprintf("%s:2: %s: not allowed\n", path, name), out.String())
+				assert.Equal(t, fmt.Sprintf("%s:2: %s: banned\n", path, name), out.String())
 			}
 		})
 	}
 	cases := []struct{ input, report string }{
-		{"python3 -c 'print(1)'", "python3: not allowed"},
-		{"ruby -e 'puts 1'", "ruby: not allowed"},
-		{"node -e 'console.log(1)'", "node: not allowed"},
-		{"perl -e 'print 1'", "perl: not allowed"},
-		{"unknown-tool", "unknown-tool: not allowed"},
-		{"$cmd", "unresolvable"},
-		{"\"${cmd}\"", "unresolvable"},
-		{"$(printf git)", "unresolvable"},
-		{"`printf git`", "unresolvable"},
-		{"g${suffix}", "unresolvable"},
-		{"printf '%s' \"$(jq .)\"", "jq: not allowed"},
-		{"value=$(curl url)", "curl: not allowed"},
-		{"(sed x)", "sed: not allowed"},
-		{"if true; then awk x; fi", "awk: not allowed"},
-		{"f() { node; }", "node: not allowed"},
-		{"'python3' -c x", "python3: not allowed"},
-		{"\"python3\" -c x", "python3: not allowed"},
-		{"p\\ython3 -c x", "python3: not allowed"},
+		{"python3 -c 'print(1)'", "python3: banned"},
+		{"ruby -e 'puts 1'", "ruby: banned"},
+		{"node -e 'console.log(1)'", "node: banned"},
+		{"perl -e 'print 1'", "perl: banned"},
+		{"unknown-tool", "unknown-tool: not on the allow list"},
+		{"$cmd", "$cmd: unresolvable"},
+		{"\"${cmd}\"", "\"${cmd}\": unresolvable"},
+		{"$(printf git)", "$(printf git): unresolvable"},
+		{"`printf git`", "$(printf git): unresolvable"},
+		{"g${suffix}", "g${suffix}: unresolvable"},
+		{"printf '%s' \"$(jq .)\"", "jq: banned"},
+		{"value=$(curl url)", "curl: banned"},
+		{"(sed x)", "sed: banned"},
+		{"if true; then awk x; fi", "awk: banned"},
+		{"f() { node; }", "node: banned"},
+		{"'python3' -c x", "python3: banned"},
+		{"\"python3\" -c x", "python3: banned"},
+		{"p\\ython3 -c x", "python3: banned"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.input, func(t *testing.T) {
@@ -95,7 +95,7 @@ func TestNamedFilesOnly(t *testing.T) {
 	assert.Equal(t, 0, Run([]string{good}, &out))
 	assert.Empty(t, out.String())
 	assert.Equal(t, 1, Run([]string{bad}, &out))
-	assert.Equal(t, bad+":1: ruby: not allowed\n", out.String())
+	assert.Equal(t, bad+":1: ruby: banned\n", out.String())
 	out.Reset()
 	assert.Equal(t, 0, Run(nil, &out))
 	assert.Empty(t, out.String())
@@ -112,7 +112,7 @@ func TestAllReportsAndFiles(t *testing.T) {
 	assert.Equal(t, 1, Run([]string{first, second}, &out))
 	assert.Equal(
 		t,
-		first+":1: ruby: not allowed\n"+first+":2: node: not allowed\n"+first+":2: jq: not allowed\n"+second+":1: curl: not allowed\n",
+		first+":1: ruby: banned\n"+first+":2: node: banned\n"+first+":2: jq: banned\n"+second+":1: curl: banned\n",
 		out.String(),
 	)
 }
@@ -134,7 +134,7 @@ func TestNonCatHeredocSubstitutions(t *testing.T) {
 	path := script(t, "input", "printf x <<EOF\n$(python3 -c 'print(1)')\nEOF\n")
 	var out bytes.Buffer
 	assert.Equal(t, 1, Run([]string{path}, &out))
-	assert.Equal(t, path+":2: python3: not allowed\n", out.String())
+	assert.Equal(t, path+":2: python3: banned\n", out.String())
 }
 
 func TestReadsAllowlist(t *testing.T) {
@@ -148,7 +148,7 @@ func TestReadsAllowlist(t *testing.T) {
 	t.Chdir(dir)
 	var out bytes.Buffer
 	assert.Equal(t, 1, Run([]string{path}, &out))
-	assert.Equal(t, path+":2: git: not allowed\n", out.String())
+	assert.Equal(t, path+":2: git: not on the allow list\n", out.String())
 }
 
 func TestInputErrors(t *testing.T) {
@@ -157,5 +157,22 @@ func TestInputErrors(t *testing.T) {
 		var out bytes.Buffer
 		assert.Equal(t, 1, Run([]string{path}, &out))
 		assert.Contains(t, out.String(), path)
+	}
+}
+
+func TestLibraryCommandChecks(t *testing.T) {
+	t.Chdir("../..")
+	for _, tc := range []struct{ input, report string }{
+		{"git* status", "git*: unresolvable"},
+		{`"g\it" status`, `g\it: not on the allow list`},
+		{"rsync a b; rsync() { :; }", "rsync: not on the allow list"},
+		{"(rsync() { :; }); rsync a b", "rsync: not on the allow list"},
+	} {
+		t.Run(tc.input, func(t *testing.T) {
+			var out bytes.Buffer
+			path := script(t, "input", tc.input+"\n")
+			assert.Equal(t, 1, Run([]string{path}, &out))
+			assert.Equal(t, path+":1: "+tc.report+"\n", out.String())
+		})
 	}
 }

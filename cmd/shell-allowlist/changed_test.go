@@ -58,7 +58,7 @@ func TestChangedScripts(t *testing.T) {
 	// The checkout deletes the unchanged tracked scripts, and the check must not open them.
 	var out bytes.Buffer
 	assert.Equal(t, 1, Run([]string{"--changed", "origin/main"}, &out))
-	assert.Equal(t, "scripts/clear-commit-agentmsg.sh:1: ruby: not allowed\n", out.String())
+	assert.Equal(t, "scripts/clear-commit-agentmsg.sh:1: ruby: banned\n", out.String())
 	write("scripts/clear-commit-agentmsg.sh", "printf clean\n")
 	out.Reset()
 	assert.Equal(t, 0, Run([]string{"--changed", "origin/main"}, &out))
@@ -66,13 +66,13 @@ func TestChangedScripts(t *testing.T) {
 	write("untracked.sh", "ruby forbidden\n")
 	out.Reset()
 	assert.Equal(t, 1, Run([]string{"--changed", "origin/main"}, &out))
-	assert.Equal(t, "untracked.sh:1: ruby: not allowed\n", out.String())
+	assert.Equal(t, "untracked.sh:1: ruby: banned\n", out.String())
 	// Repository-local skills have no generator source and remain subject to the gate.
 	require.NoError(t, os.Remove("untracked.sh"))
 	write(".claude/skills/local/scripts/run.sh", "ruby forbidden\n")
 	out.Reset()
 	assert.Equal(t, 1, Run([]string{"--changed", "origin/main"}, &out))
-	assert.Equal(t, ".claude/skills/local/scripts/run.sh:1: ruby: not allowed\n", out.String())
+	assert.Equal(t, ".claude/skills/local/scripts/run.sh:1: ruby: banned\n", out.String())
 }
 
 func TestShellAllowlistGateWiring(t *testing.T) {
