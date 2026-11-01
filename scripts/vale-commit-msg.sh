@@ -30,7 +30,11 @@ set -euo pipefail
 # reaching the linter is unchanged.
 export LC_ALL=C
 
-msg_file=$1
+msg_file=${1:-}
+if [ -z "$msg_file" ]; then
+  echo "vale-commit-msg: the commit-message file path is required as the first argument" >&2
+  exit 2
+fi
 
 # Consumer repos whose StylesPath carries the agent output template the
 # ai-tells package ships get one self-contained line per finding instead
