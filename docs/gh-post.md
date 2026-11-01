@@ -119,6 +119,38 @@ After the identity check, the command reads the target's labels, and reads the r
 
 Support covers repositories whose owner-review label doesn't start with `change:`, and the command doesn't look up a repository's configuration to check. Because no devtools gate treats a `change:` label as an authority, every gate stays in place. A consumer that sets a `change:` label as its owner-review label falls outside this support, because an agent could then clear that hold.
 
+### Rerun failed CI jobs
+
+Use this exact command form to request a rerun of failed jobs in one workflow run:
+
+```bash
+gh-post run rerun-failed 123456789 --repo owner/project
+```
+
+Supply a positive decimal run ID without leading zeros, followed by `--repo` exactly as shown. Go's command allowlist rejects aliases, reordered or extra arguments, body flags, job selectors, full reruns, and cancellation. The command leaves stdin unread. Before reading the run or requesting a rerun, the existing machine `post_identities` guard verifies the caller. Returned run ID and repository URL must match the requested target.
+
+Only status `completed` with conclusion `failure`, `cancelled`, or `timed_out` qualifies. A state refusal exits 1 and prints status, conclusion, and attempt.
+
+An eligible request sends one POST to `/repos/{owner}/{repo}/actions/runs/{run_id}/rerun-failed-jobs`. Exit 0 prints the run URL after GitHub accepts it, without waiting for CI.
+
+#### Attempt reservations
+
+Before the POST, the command atomically creates and syncs a receipt under `${XDG_STATE_HOME:-~/.local/state}/devtools/gh-post-reruns/{owner}/{repo}/{run_id}/{run_attempt}`. It stores repository names in lowercase. Processes sharing that directory can't reserve the same attempt twice. A duplicate exits 1 without a POST. Once a later attempt completes with an eligible conclusion, the command can reserve it independently.
+
+Keep these receipts. They remain after success, failure, interruption, or audit failure. Removing one removes its duplicate protection.
+
+Before writing to GitHub, the command appends and syncs an audit record with UTC time, operation `run rerun-failed`, canonical run URL, `run_attempt`, and outcome `reserved`. This records intent, including requests that GitHub never receives. Audit fields omit body text and credentials. A reservation or audit failure prevents the POST and exits 2.
+
+#### Uncertain outcomes and guards
+
+If a write fails, the command reads the run back once, reports status, conclusion, and attempt (or a read failure), and exits 2. It never repeats the POST, polls, or removes the receipt. Diagnostics omit raw GitHub errors and response bodies.
+
+Inspect the run before further action. An accepted request can take time to appear.
+
+Receipts coordinate only callers sharing the state directory. GitHub doesn't support a conditional attempt parameter or a duplicate-request key for this endpoint. Another host or external client can race between read and POST. A crash after reservation can withhold a request GitHub never receives. Keeping the receipt prevents automatic repeats in either case.
+
+The PR skill's shell guard governs raw `gh pr` commands and already permits `gh-post`. The machine posting hook also permits the wrapper by basename. Both keep their existing restrictions. The Go parser admits the exact new run form without shell changes.
+
 ## Results and audit
 
 | Exit | Meaning |

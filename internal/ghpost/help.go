@@ -18,7 +18,7 @@ Global flags:
 	--help         Show all operations and flags without network access.
 	--check-deps   Check git and gh on PATH without executing them.
 
-All operations accept -R, --repo OWNER/REPO.
+Operations accept -R, --repo OWNER/REPO unless an exact form is shown.
 Content operations accept --body-file PATH and default to stdin;
 --body-file - also reads stdin. PR ready and close never read stdin.
 An issue edit with --type reads no stdin unless --body-file is given.
@@ -47,6 +47,14 @@ Operations and additional flags:
 	review edit <pr> <review-id>
 	release create <tag>   --title TEXT --target REF --draft --prerelease --verify-tag
 	release edit <tag>     --title TEXT --draft --prerelease
+	run rerun-failed <run-id> --repo OWNER/REPO
+
+Run rerun-failed accepts exactly that form, with a positive decimal run ID,
+and reads no stdin. Only completed failure, cancelled or timed_out runs
+qualify. It reserves each run attempt in machine state before one failed-jobs
+POST and audits the reservation. A repeated attempt is refused. After an
+uncertain write it reads the run once, exits 2, and never retries the write.
+It never reruns every job, cancels a run, or polls. Keep the state receipts.
 
 New reviews require a 40-hex --commit matching the current PR head and
 first body line Reviewed head: <sha> (the SHA may be wrapped in backticks).
