@@ -4,17 +4,13 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"io"
-	"os"
 	"slices"
 	"strings"
 
-	"github.com/pelletier/go-toml/v2"
+	"github.com/tbhb-dev/devtools/internal/shell"
 )
-
-var errInvalidAllowlist = errors.New(".devtools/shell-allowlist.toml: invalid allow list")
 
 // summary is informational: failures are reported without failing the future burn-down job.
 func summary(out io.Writer) int {
@@ -51,20 +47,10 @@ func summary(out io.Writer) int {
 	return 0
 }
 
-func readAllowlist() (map[string]bool, error) {
-	data, err := os.ReadFile(".devtools/shell-allowlist.toml")
+func readAllowlist() (*shell.Allowlist, error) {
+	allowed, err := shell.Load(".devtools/shell-allowlist.toml")
 	if err != nil {
 		return nil, fmt.Errorf("read allow list: %w", err)
-	}
-	var config struct {
-		Commands []string `toml:"commands"`
-	}
-	if err = toml.Unmarshal(data, &config); err != nil {
-		return nil, errInvalidAllowlist
-	}
-	allowed := make(map[string]bool, len(config.Commands))
-	for _, command := range config.Commands {
-		allowed[command] = true
 	}
 	return allowed, nil
 }
