@@ -30,11 +30,14 @@ type request struct {
 	flags       []string
 	text        []string
 	private     []string
+	issueType   string
+	typeSet     bool
 	secretsOnly bool
 }
 
 const (
 	bodyFileFlag   = "--body-file"
+	typeFlag       = "--type"
 	headFlag       = "--head"
 	repoFlag       = "--repo"
 	prReview       = "pr review"
@@ -87,10 +90,16 @@ func (r *request) take(args []string, values, switches map[string]bool) (int, er
 	if !values[key] {
 		return 0, errUsage
 	}
+	if key == typeFlag {
+		r.typeSet = true
+	}
 	if inline {
 		return 1, r.addValue(key, value)
 	}
 	if len(args) < operationWords {
+		if key == typeFlag {
+			return 0, errIssueType
+		}
 		return 0, errUsage
 	}
 	return operationWords, r.addValue(key, args[1])
@@ -109,6 +118,9 @@ func (r *request) addOperand(value string) error {
 }
 
 func (r *request) addValue(key, value string) error {
+	if key == typeFlag {
+		return r.addIssueType(value)
+	}
 	if value == "" || strings.HasPrefix(value, "-") && (key != bodyFileFlag || value != "-") {
 		return errUsage
 	}
@@ -171,7 +183,7 @@ func allowed(operation string) (map[string]bool, map[string]bool, bool) {
 	case "issue edit":
 		values = append(
 			values,
-			strings.Fields("--title --add-label --remove-label --add-assignee --remove-assignee --milestone")...,
+			strings.Fields("--type --title --add-label --remove-label --add-assignee --remove-assignee --milestone")...,
 		)
 		switches = []string{"--remove-milestone"}
 	case issueComment, "pr comment":

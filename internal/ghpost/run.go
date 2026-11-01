@@ -28,6 +28,7 @@ const (
 	jsonFlag           = "--json"
 	methodFlag         = "--method"
 	viewVerb           = "view"
+	graphqlCommand     = "graphql"
 )
 
 var errEnvironment = errors.New("cannot resolve repository, read input, or execute gh")
@@ -38,6 +39,17 @@ func Run(ctx context.Context, args []string, in io.Reader, out, errOut io.Writer
 		return code
 	}
 	r, err := parse(args)
+	finish, auditErr := r.startTypeAudit(errOut)
+	if auditErr != nil {
+		fmt.Fprintln(errOut, "gh-post: cannot open audit log")
+		return exitEnvironment
+	}
+	code := runRequest(ctx, &r, err, in, out, errOut)
+	finish(&code)
+	return code
+}
+
+func runRequest(ctx context.Context, r *request, err error, in io.Reader, out, errOut io.Writer) int {
 	if err != nil {
 		fmt.Fprintln(errOut, "gh-post:", parseFailure(err))
 		return exitEnvironment
@@ -85,7 +97,7 @@ func Run(ctx context.Context, args []string, in io.Reader, out, errOut io.Writer
 	}
 	r.private = private
 	r.secretsOnly = config["scan_mode"] == secretsOnlyMode
-	return post(ctx, r, body, config["post_identities"], out, errOut)
+	return post(ctx, *r, body, config["post_identities"], out, errOut)
 }
 
 func scanConfig(ctx context.Context, config map[string]string) ([]string, error) {
@@ -175,7 +187,7 @@ func identityAllowed(ctx context.Context, allowlist string) (string, bool, error
 	if err != nil {
 		data, err = gh(
 			ctx,
-			[]string{apiCommand, "graphql", "-f", "query={viewer{login}}", jqFlag, ".data.viewer.login"},
+			[]string{apiCommand, graphqlCommand, "-f", "query={viewer{login}}", jqFlag, ".data.viewer.login"},
 		)
 	}
 	if err != nil {
@@ -194,6 +206,9 @@ func post(ctx context.Context, r request, body []byte, identities string, out, e
 	if !allowed {
 		fmt.Fprintln(errOut, "gh-post: identity refused")
 		return 1
+	}
+	if r.issueType != "" {
+		return r.changeIssueType(ctx, body, out, errOut)
 	}
 	log, err := openAudit()
 	if err != nil {
@@ -333,9 +348,11 @@ func (r *request) command(body []byte) ([]string, []byte, error) {
 	}
 	args = append(args, repoFlag, r.repo)
 	args = append(args, r.flags...)
-	// Metadata-only PR edits must preserve the existing description. An
-	// explicit body file still allows callers to clear it deliberately.
-	if r.operation == "pr edit" && r.bodyFile == "" && len(body) == 0 {
+	// Metadata-only PR edits, and issue edits that change the type, must
+	// preserve the existing description. An explicit body file still allows
+	// callers to clear it deliberately.
+	keepsBody := r.operation == "pr edit" || r.operation == "issue edit" && r.issueType != ""
+	if keepsBody && r.bodyFile == "" && len(body) == 0 {
 		return args, nil, nil
 	}
 	bodyFlag := bodyFileFlag
