@@ -60,7 +60,7 @@ type prState struct {
 func (r *request) readPRState(ctx context.Context) (prState, error) {
 	data, err := gh(ctx, []string{
 		"pr", viewVerb, r.operand, repoFlag, r.repo, jsonFlag, "id,state,isDraft,headRefOid,url",
-	}, nil)
+	})
 	var state prState
 	if err != nil || json.Unmarshal(data, &state) != nil || state.ID == "" || state.IsDraft == nil ||
 		state.Head == "" || !strings.EqualFold(state.URL, "https://github.com/"+r.repo+"/pull/"+r.operand) ||
@@ -100,7 +100,7 @@ func (r *request) changePRState(ctx context.Context, body []byte, login string, 
 			"-f", "id=" + state.ID,
 		}
 	}
-	_, writeErr := gh(ctx, args, nil)
+	_, writeErr := gh(ctx, args)
 	return r.readBackPR(ctx, body, writeErr, log, out, errOut)
 }
 
@@ -128,7 +128,7 @@ func (r *request) postCloseReason(ctx context.Context, body []byte, login string
 		"repos/" + r.repo + "/issues/" + r.operand + "/comments",
 		"--paginate",
 		"--slurp",
-	}, nil)
+	})
 	var pages [][]struct {
 		Body string `json:"body"`
 		User struct {
@@ -146,7 +146,10 @@ func (r *request) postCloseReason(ctx context.Context, body []byte, login string
 			}
 		}
 	}
-	comment := request{operation: "pr comment", repo: r.repo, operand: r.operand}
+	comment := request{
+		operation: "pr comment", repo: r.repo, operand: r.operand,
+		private: r.private, secretsOnly: r.secretsOnly,
+	}
 	return postContent(ctx, comment, body, log, io.Discard, errOut)
 }
 

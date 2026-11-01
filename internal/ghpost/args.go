@@ -29,6 +29,8 @@ type request struct {
 	remove      []string
 	flags       []string
 	text        []string
+	private     []string
+	secretsOnly bool
 }
 
 const (

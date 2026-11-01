@@ -7,6 +7,7 @@ package ghpost
 import (
 	"bytes"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -22,7 +23,7 @@ const (
 func setupLabels(t *testing.T, pull bool, current string) string {
 	t.Helper()
 	dir := setup(t)
-	for _, key := range []string{"TARGET_STATUS", "TARGET_ERROR", "LABELS_STATUS", "EDIT_STATUS"} {
+	for _, key := range []string{"TARGET_STATUS", "TARGET_ERROR", "LABELS_STATUS", "EDIT_STATUS", "EDIT_STDOUT", "EDIT_STDERR"} {
 		t.Setenv(key, "")
 	}
 	t.Setenv("FIXTURE", dir)
@@ -42,7 +43,8 @@ case "$*" in
 	'api repos/owner/repo/labels --paginate --jq .[].name')
 		cat "$FIXTURE/labels"; exit "${LABELS_STATUS:-0}" ;;
 	'issue edit 7 --repo owner/repo'*|'pr edit 7 --repo owner/repo'*)
-		printf '%s\n' "$*" >> "$FIXTURE/writes"; exit "${EDIT_STATUS:-0}" ;;
+		printf '%s\n' "$*" >> "$FIXTURE/writes"
+		printf '%s' "$EDIT_STDOUT"; printf '%s' "$EDIT_STDERR" >&2; exit "${EDIT_STATUS:-0}" ;;
 	*) exit 99 ;;
 esac
 `)
@@ -55,6 +57,86 @@ func runLabels(t *testing.T, args ...string) (int, string, string) {
 	var out, errOut bytes.Buffer
 	code := Run(t.Context(), args, brokenIO{}, &out, &errOut)
 	return code, out.String(), errOut.String()
+}
+
+func TestLabelWriteFailureStdout(t *testing.T) {
+	dir := setupLabels(t, false, "")
+	t.Setenv("EDIT_STATUS", "1")
+	t.Setenv("EDIT_STDERR", "gh: Unprocessable Entity (HTTP 422)\n")
+	t.Setenv("EDIT_STDOUT", `{"message":"Unprocessable Entity","errors":["Label rejected"]}`)
+	audit := filepath.Join(dir, "state", "devtools", "gh-post.log")
+	write(t, audit, "existing record\n")
+	code, out, errOut := runLabels(t, "issue", "label", "7", "-R", "owner/repo", "--add", "change:fix")
+	require.Equal(t, exitEnvironment, code)
+	require.Empty(t, out)
+	require.Equal(t, "existing record\n", fileText(t, audit))
+	require.Equal(t, "gh-post: gh write failed; check GitHub before retrying\ngh: Unprocessable Entity (HTTP 422)\n"+
+		`{"message":"Unprocessable Entity","errors":["Label rejected"]}`+"\n", errOut)
+}
+
+func TestLabelWriteFailureSecrets(t *testing.T) {
+	token := "ghp_" + strings.Repeat("a", 30)
+	tests := []struct {
+		name   string
+		stderr string
+		stdout string
+	}{
+		{"stderr", token + "\n", ""},
+		{"stderr across cap", strings.Repeat(" ", maxWriteErrorBytes-10) + token, ""},
+		{"stdout across cap", "", `{"message":"` + strings.Repeat(" ", maxWriteErrorBytes-20) + token + `"}`},
+		{"message field", "gh: Unprocessable Entity (HTTP 422)\n", `{"message":"` + token + `"}`},
+		{"errors field", "gh: Unprocessable Entity (HTTP 422)\n", `{"errors":["` + token + `"]}`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := setupLabels(t, false, "")
+			t.Setenv("EDIT_STATUS", "1")
+			t.Setenv("EDIT_STDERR", tt.stderr)
+			t.Setenv("EDIT_STDOUT", tt.stdout)
+			audit := filepath.Join(dir, "state", "devtools", "gh-post.log")
+			write(t, audit, "existing record\n")
+			code, out, errOut := runLabels(t, "issue", "label", "7", "-R", "owner/repo", "--add", "change:fix")
+			require.Equal(t, exitEnvironment, code)
+			require.NotContains(t, out+errOut, token)
+			require.NotContains(t, out+errOut, "ghp_")
+			require.Contains(t, errOut, "gh-post: secret line 1\n")
+			require.Equal(t, "existing record\n", fileText(t, audit))
+		})
+	}
+}
+
+func TestLabelWriteFailureEscapedText(t *testing.T) {
+	dir := setupLabels(t, false, "")
+	t.Setenv("EDIT_STATUS", "1")
+	t.Setenv("EDIT_STDERR", `echo "<x>\n"`)
+	t.Setenv("EDIT_STDOUT", `["<x>\n"]`)
+	audit := filepath.Join(dir, "state", "devtools", "gh-post.log")
+	write(t, audit, "existing record\n")
+	code, out, errOut := runLabels(t, "issue", "label", "7", "-R", "owner/repo", "--add", "change:fix")
+	require.Equal(t, exitEnvironment, code)
+	require.Empty(t, out)
+	require.Equal(t, "existing record\n", fileText(t, audit))
+	require.Equal(t, "gh-post: gh write failed; check GitHub before retrying\n"+
+		`echo "<x>\n"`+"\n"+`["<x>\n"]`+"\n", errOut)
+}
+
+func TestLabelWriteFailureBodySpellingsPreserved(t *testing.T) {
+	for _, text := range []string{"<x>/😀", `<x>\/😀`, `\u003c\u0078\u003e\u002f\ud83d\ude00`, `\u003C\u0078\u003E\u002F\uD83D\uDE00`, `<x>/\ud83d\ude00`, `\\u003cx\\u003e\\\\n`, "x", "xy", "xyz"} {
+		for _, stream := range []string{"stderr", "stdout"} {
+			t.Run(stream+"/"+text, func(t *testing.T) {
+				dir := setupLabels(t, false, "")
+				t.Setenv("EDIT_STATUS", "1")
+				t.Setenv("EDIT_"+strings.ToUpper(stream), text)
+				audit := filepath.Join(dir, "state", "devtools", "gh-post.log")
+				write(t, audit, "existing record\n")
+				code, out, errOut := runLabels(t, "issue", "label", "7", "-R", "owner/repo", "--add", "change:fix")
+				require.Equal(t, exitEnvironment, code)
+				require.Empty(t, out)
+				require.Equal(t, "existing record\n", fileText(t, audit))
+				require.Equal(t, "gh-post: gh write failed; check GitHub before retrying\n"+text+"\n", errOut)
+			})
+		}
+	}
 }
 
 func TestLabelAddRemove(t *testing.T) {
