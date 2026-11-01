@@ -162,3 +162,7 @@ run = "mise run devtools:lint-source-files -- markdown-wrap"
 ["devtools:lint-curl"]
 description = "Require curl to fail on HTTP errors in owned shell scripts"
 run = "mise run devtools:lint-source-files -- curl"
+
+["devtools:check-gate-liveness"]
+description = "Prove defined tree-walking lint gates reject nested defects"
+run = 'uv run --script "$DEVTOOLS_DIR/scripts/check_gate_liveness.py"'
