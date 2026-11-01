@@ -5,7 +5,9 @@
 [![action-test-source](https://github.com/vladopajic/go-test-coverage/actions/workflows/action-source-test.yml/badge.svg?branch=main)](https://github.com/vladopajic/go-test-coverage/actions/workflows/action-source-test.yml)
 [![lint](https://github.com/vladopajic/go-test-coverage/actions/workflows/lint.yml/badge.svg?branch=main)](https://github.com/vladopajic/go-test-coverage/actions/workflows/lint.yml)
 [![coverage](https://raw.githubusercontent.com/vladopajic/go-test-coverage/badges/.badges/main/coverage.svg)](/.github/.testcoverage.yml)
+
 [![Release](https://img.shields.io/github/release/vladopajic/go-test-coverage.svg?color=%23007ec6)](https://github.com/vladopajic/go-test-coverage/releases/latest)
+[![GHCR pulls](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fghcr-badge.elias.eu.org%2Fapi%2Fvladopajic%2Fgo-test-coverage%2Fgo-test-coverage&query=downloadCount&label=GHCR%20pulls&style=flat)](https://github.com/vladopajic/go-test-coverage/pkgs/container/go-test-coverage)
 
 ![go-test-coverage cover image](https://github.com/user-attachments/assets/7e8ceb77-efb3-4b4d-ae7e-0cece3b49494)
 
@@ -193,9 +195,6 @@ go tool cover -html=cover.out -o=cover.html
 ```
 
 ## Support the Project
-
-`go-test-coverage` is freely available for all users. If your organization benefits from this tool, especially if you’ve transitioned from a paid coverage service, consider [sponsoring the project](https://github.com/sponsors/vladopajic). 
-Your sponsorship will help sustain development, introduce new features, and maintain high-quality support. Every contribution directly impacts the future growth and stability of this project.
 
 ⭐ Love this project? Star it!
 
