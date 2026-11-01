@@ -599,6 +599,7 @@ run = "bats .devtools/scripts/check-leaks.bats"
 # Bats needs rush for --jobs; [tools] pins it.
 [tasks.test-hooks]
 description = "Run the bats suites for the shell scripts under scripts/ and tools/ in parallel"
+# No consumer impact: this repository-only task leaves deployed tasks unchanged.
 # Exercise the binary from this tree, not the released toolchain pin.
 run = [
   "go build -o bin/agentrepo ./cmd/agentrepo",
