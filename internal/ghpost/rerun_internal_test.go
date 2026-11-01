@@ -43,6 +43,7 @@ func rerunCases() map[string]func(*testing.T) {
 
 func TestRerunFailed(t *testing.T) {
 	t.Parallel()
+	var childLock rerunProcessLock
 	for name := range rerunCases() {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
@@ -54,7 +55,9 @@ func TestRerunFailed(t *testing.T) {
 				cmd.Args = append(cmd.Args, "-test.gocoverdir="+coverageDir)
 			}
 			cmd.Env = append(os.Environ(), "GHPOST_RERUN_CASE="+name)
+			childLock.Lock()
 			output, err := cmd.CombinedOutput()
+			childLock.Unlock()
 			require.NoError(t, err, "%s", output)
 		})
 	}
