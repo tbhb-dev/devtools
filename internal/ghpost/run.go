@@ -217,7 +217,7 @@ func post(ctx context.Context, r request, body []byte, identities string, out, e
 	}
 	defer log.Close()
 	if r.operation == runRerunFailed {
-		return r.rerunFailed(ctx, log, out, errOut)
+		return r.rerunFailed(ctx, log, out, errOut, (*os.File).Sync)
 	}
 	if r.isIssueStateChange() {
 		return r.changeIssueState(ctx, body, log, out, errOut)

@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright Tony Burns
 
-//nolint:paralleltest // The recording gh fixture changes the process environment.
 package ghpost
 
 import (
 	"bytes"
 	"encoding/json"
+	"flag"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -21,6 +21,56 @@ const rerunURL = "https://github.com/owner/repo/actions/runs/123"
 
 func rerunArguments() []string {
 	return []string{"run", "rerun-failed", "123", "--repo", "owner/repo"}
+}
+
+// Each CLI case runs in a subprocess so its environment fixture can't affect
+// other cases or tests running in parallel in the parent process.
+func rerunCases() map[string]func(*testing.T) {
+	return map[string]func(*testing.T){
+		"ExactForm":                   testRerunFailedExactForm,
+		"EligibleAndAudited":          testRerunFailedEligibleAndAudited,
+		"StateRefusals":               testRerunFailedStateRefusals,
+		"ExactRunAndIdentity":         testRerunFailedExactRunAndIdentity,
+		"UncertainAndDuplicate":       testRerunFailedUncertainAndDuplicate,
+		"NewAttempt":                  testRerunFailedNewAttempt,
+		"ReservationAndAuditFailures": testRerunFailedReservationAndAuditFailures,
+		"NoStdinAndHelp":              testRerunFailedNoStdinAndHelp,
+		"PRGuard":                     testRerunFailedPRGuard,
+		"Durability":                  testRerunFailedDurability,
+		"SyncFailures":                testRerunFailedSyncFailures,
+	}
+}
+
+func TestRerunFailed(t *testing.T) {
+	t.Parallel()
+	for name := range rerunCases() {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			binary, err := os.Executable()
+			require.NoError(t, err)
+			cmd := exec.CommandContext(t.Context(), binary, "-test.run=^TestRerunFailedProcess$")
+			// Merge subprocess counters into the parent test's coverage data.
+			if coverageDir := flag.Lookup("test.gocoverdir").Value.String(); coverageDir != "" {
+				cmd.Args = append(cmd.Args, "-test.gocoverdir="+coverageDir)
+			}
+			cmd.Env = append(os.Environ(), "GHPOST_RERUN_CASE="+name)
+			output, err := cmd.CombinedOutput()
+			require.NoError(t, err, "%s", output)
+		})
+	}
+}
+
+// Only the subprocess runs environment-dependent cases. Clear the selector
+// before executing the case so its child commands can't inherit it.
+func TestRerunFailedProcess(t *testing.T) {
+	name := os.Getenv("GHPOST_RERUN_CASE")
+	if name == "" {
+		return
+	}
+	t.Setenv("GHPOST_RERUN_CASE", "")
+	test, ok := rerunCases()[name]
+	require.True(t, ok, "unknown rerun case")
+	test(t)
 }
 
 func setupRerun(t *testing.T) string {
@@ -56,7 +106,8 @@ func writeRun(t *testing.T, dir, file, status, conclusion string, attempt uint64
 	write(t, filepath.Join(dir, file), string(data))
 }
 
-func TestRerunFailedExactForm(t *testing.T) {
+func testRerunFailedExactForm(t *testing.T) {
+	t.Helper()
 	for _, args := range [][]string{
 		{"run"},
 		{"run", "rerun", "123", "--repo", "owner/repo"},
@@ -85,7 +136,8 @@ func TestRerunFailedExactForm(t *testing.T) {
 	}
 }
 
-func TestRerunFailedEligibleAndAudited(t *testing.T) {
+func testRerunFailedEligibleAndAudited(t *testing.T) {
+	t.Helper()
 	for _, conclusion := range []string{"failure", "cancelled", "timed_out"} {
 		t.Run(conclusion, func(t *testing.T) {
 			dir := setupRerun(t)
@@ -115,7 +167,8 @@ func TestRerunFailedEligibleAndAudited(t *testing.T) {
 	}
 }
 
-func TestRerunFailedStateRefusals(t *testing.T) {
+func testRerunFailedStateRefusals(t *testing.T) {
+	t.Helper()
 	for _, pair := range [][2]string{
 		{"completed", "success"},
 		{"completed", "skipped"},
@@ -138,7 +191,8 @@ func TestRerunFailedStateRefusals(t *testing.T) {
 	}
 }
 
-func TestRerunFailedExactRunAndIdentity(t *testing.T) {
+func testRerunFailedExactRunAndIdentity(t *testing.T) {
+	t.Helper()
 	for _, body := range []string{
 		`{}`, `invalid`,
 		`{"id":456,"run_attempt":1,"status":"completed","conclusion":"failure","html_url":"` + rerunURL + `"}`,
@@ -167,7 +221,8 @@ func TestRerunFailedExactRunAndIdentity(t *testing.T) {
 	}
 }
 
-func TestRerunFailedUncertainAndDuplicate(t *testing.T) {
+func testRerunFailedUncertainAndDuplicate(t *testing.T) {
+	t.Helper()
 	for _, after := range []string{"accepted", "unchanged", "unreadable"} {
 		t.Run(after, func(t *testing.T) {
 			dir := setupRerun(t)
@@ -204,7 +259,8 @@ func TestRerunFailedUncertainAndDuplicate(t *testing.T) {
 	}
 }
 
-func TestRerunFailedNewAttempt(t *testing.T) {
+func testRerunFailedNewAttempt(t *testing.T) {
+	t.Helper()
 	dir := setupRerun(t)
 	code, _, diagnostic := run(t, "", rerunArguments()...)
 	require.Zero(t, code, diagnostic)
@@ -217,7 +273,8 @@ func TestRerunFailedNewAttempt(t *testing.T) {
 	require.Equal(t, 2, strings.Count(fileText(t, filepath.Join(dir, "calls")), "POST repos/"))
 }
 
-func TestRerunFailedReservationAndAuditFailures(t *testing.T) {
+func testRerunFailedReservationAndAuditFailures(t *testing.T) {
+	t.Helper()
 	for _, failure := range []string{"reservation", "audit-open", "audit-append"} {
 		t.Run(failure, func(t *testing.T) {
 			dir := setupRerun(t)
@@ -236,7 +293,7 @@ func TestRerunFailedReservationAndAuditFailures(t *testing.T) {
 				require.NoError(t, log.Close())
 				r, err := parse(rerunArguments())
 				require.NoError(t, err)
-				code = r.rerunFailed(t.Context(), log, &bytes.Buffer{}, &diagnostic)
+				code = r.rerunFailed(t.Context(), log, &bytes.Buffer{}, &diagnostic, (*os.File).Sync)
 			} else {
 				code, _, _ = run(t, "", rerunArguments()...)
 			}
@@ -247,12 +304,13 @@ func TestRerunFailedReservationAndAuditFailures(t *testing.T) {
 }
 
 func TestRerunReservationConcurrent(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	r, err := parse(rerunArguments())
 	require.NoError(t, err)
 	results := make(chan error, 8)
 	for range 8 {
-		go func() { results <- r.reserveRerun(dir, 1) }()
+		go func() { results <- r.reserveRerun(dir, 1, (*os.File).Sync) }()
 	}
 	successes := 0
 	for range 8 {
@@ -265,10 +323,11 @@ func TestRerunReservationConcurrent(t *testing.T) {
 	}
 	require.Equal(t, 1, successes)
 	r.repo = "OWNER/REPO"
-	require.ErrorIs(t, r.reserveRerun(dir, 1), errRerunReserved)
+	require.ErrorIs(t, r.reserveRerun(dir, 1, (*os.File).Sync), errRerunReserved)
 }
 
-func TestRerunFailedNoStdinAndHelp(t *testing.T) {
+func testRerunFailedNoStdinAndHelp(t *testing.T) {
+	t.Helper()
 	setupRerun(t)
 	var out, diagnostic bytes.Buffer
 	code := Run(t.Context(), rerunArguments(), brokenIO{}, &out, &diagnostic)
@@ -276,7 +335,8 @@ func TestRerunFailedNoStdinAndHelp(t *testing.T) {
 	require.Contains(t, usage, "run rerun-failed <run-id> --repo OWNER/REPO")
 }
 
-func TestRerunFailedPRGuard(t *testing.T) {
+func testRerunFailedPRGuard(t *testing.T) {
+	t.Helper()
 	setup(t)
 	for _, command := range []string{
 		"gh-post run rerun-failed 123 --repo owner/repo",
@@ -290,13 +350,79 @@ func TestRerunFailedPRGuard(t *testing.T) {
 			"../../packages/agents/source/skills/pr/claude/scripts/guard-gh.sh",
 		)
 		cmd.Stdin = bytes.NewReader(payload)
-		err = cmd.Run()
+		output, err := cmd.CombinedOutput()
 		if strings.HasPrefix(command, "gh-post ") {
-			require.NoError(t, err)
+			require.NoError(t, err, "%s", output)
 		} else {
 			var exit *exec.ExitError
 			require.ErrorAs(t, err, &exit)
 			require.Equal(t, 2, exit.ExitCode())
 		}
+	}
+}
+
+func testRerunFailedDurability(t *testing.T) {
+	t.Helper()
+	dir := setupRerun(t)
+	stateDir := filepath.Join(dir, "state", "devtools")
+	log, err := openAudit()
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, log.Close()) })
+	r, err := parse(rerunArguments())
+	require.NoError(t, err)
+	var events []string
+	syncFile := func(file *os.File) error {
+		info, statErr := file.Stat()
+		require.NoError(t, statErr)
+		name := file.Name()
+		if !info.IsDir() {
+			// The real O_EXCL create and write have already happened.
+			require.Equal(t, "reserved\n", fileText(t, file.Name()))
+			events = append(events, "create")
+			name = "file"
+		}
+		events = append(events, "sync "+name)
+		// No write may precede any of the required syncs.
+		require.NotContains(t, fileText(t, filepath.Join(dir, "calls")), "POST")
+		return file.Sync()
+	}
+	var out, diagnostic bytes.Buffer
+	code := r.rerunFailed(t.Context(), log, &out, &diagnostic, syncFile)
+	require.Zero(t, code, diagnostic.String())
+	require.Equal(t, 1, strings.Count(fileText(t, filepath.Join(dir, "calls")), "POST"))
+	events = append(events, "POST")
+	expected := []string{"create", "sync file"}
+	for path := filepath.Join(stateDir, "gh-post-reruns", "owner", "repo", "123"); ; path = filepath.Dir(path) {
+		expected = append(expected, "sync "+path)
+		if filepath.Dir(path) == path {
+			break
+		}
+	}
+	require.Equal(t, append(expected, "POST"), events)
+}
+
+func testRerunFailedSyncFailures(t *testing.T) {
+	t.Helper()
+	for _, failure := range []string{"1", "123", "repo", "owner", "gh-post-reruns", "devtools", "state"} {
+		t.Run("sync-"+failure, func(t *testing.T) {
+			dir := setupRerun(t)
+			stateDir := filepath.Join(dir, "state", "devtools")
+			log, err := openAudit()
+			require.NoError(t, err)
+			t.Cleanup(func() { require.NoError(t, log.Close()) })
+			r, err := parse(rerunArguments())
+			require.NoError(t, err)
+			syncFile := func(file *os.File) error {
+				if filepath.Base(file.Name()) == failure {
+					return os.ErrPermission
+				}
+				return file.Sync()
+			}
+			var out, diagnostic bytes.Buffer
+			code := r.rerunFailed(t.Context(), log, &out, &diagnostic, syncFile)
+			require.Equal(t, 2, code, diagnostic.String())
+			require.NotContains(t, fileText(t, filepath.Join(dir, "calls")), "POST")
+			require.ErrorIs(t, r.reserveRerun(stateDir, 1, (*os.File).Sync), errRerunReserved)
+		})
 	}
 }

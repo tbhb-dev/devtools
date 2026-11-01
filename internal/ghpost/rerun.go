@@ -65,7 +65,9 @@ func printRunState(out io.Writer, state workflowRun) {
 	fmt.Fprintf(out, "status=%q conclusion=%q attempt=%d", state.Status, state.Conclusion, state.Attempt)
 }
 
-func (r *request) rerunFailed(ctx context.Context, log *os.File, out, errOut io.Writer) int {
+func (r *request) rerunFailed(
+	ctx context.Context, log *os.File, out, errOut io.Writer, syncFile func(*os.File) error,
+) int {
 	state, err := r.readRun(ctx)
 	if err != nil {
 		fmt.Fprintln(errOut, "gh-post: cannot read exact workflow run")
@@ -78,7 +80,7 @@ func (r *request) rerunFailed(ctx context.Context, log *os.File, out, errOut io.
 		fmt.Fprintln(errOut)
 		return 1
 	}
-	if err = r.reserveRerun(filepath.Dir(log.Name()), state.Attempt); err != nil {
+	if err = r.reserveRerun(filepath.Dir(log.Name()), state.Attempt, syncFile); err != nil {
 		if errors.Is(err, errRerunReserved) {
 			fmt.Fprintln(errOut, "gh-post:", err)
 			return 1
@@ -108,7 +110,7 @@ func (r *request) rerunFailed(ctx context.Context, log *os.File, out, errOut io.
 	return 0
 }
 
-func (r *request) reserveRerun(dir string, attempt uint64) error {
+func (r *request) reserveRerun(dir string, attempt uint64, syncFile func(*os.File) error) error {
 	dir = filepath.Join(dir, "gh-post-reruns", strings.ToLower(r.repo), r.operand)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return fmt.Errorf("reserve directory: %w", err)
@@ -130,8 +132,28 @@ func (r *request) reserveRerun(dir string, attempt uint64) error {
 	if _, err = file.WriteString("reserved\n"); err != nil {
 		return fmt.Errorf("write reservation: %w", err)
 	}
-	if err = file.Sync(); err != nil {
+	if err = syncFile(file); err != nil {
 		return fmt.Errorf("sync reservation: %w", err)
+	}
+	// Persist the receipt name and each directory entry created by MkdirAll,
+	// including ancestors created during audit setup, before any POST.
+	for {
+		parent, openErr := os.Open(dir)
+		if openErr != nil {
+			return fmt.Errorf("open reservation directory: %w", openErr)
+		}
+		syncErr := syncFile(parent)
+		closeErr := parent.Close()
+		if syncErr != nil {
+			return fmt.Errorf("sync reservation directory: %w", syncErr)
+		}
+		if closeErr != nil {
+			return fmt.Errorf("close reservation directory: %w", closeErr)
+		}
+		if filepath.Dir(dir) == dir {
+			break
+		}
+		dir = filepath.Dir(dir)
 	}
 	return nil
 }
