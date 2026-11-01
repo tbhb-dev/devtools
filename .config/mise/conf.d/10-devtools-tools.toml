@@ -73,7 +73,7 @@ rumdl = "v0.3.0"
 # crate demanded. Upstream builds no Intel macOS archive, which the lock
 # platforms leave out anyway. Renovate's built-in mise manager derives
 # the github-releases datasource from the backend.
-"github:owenlamont/ryl" = "v0.26.0"
+"github:owenlamont/ryl" = "v0.26.1"
 shellcheck = "0.11.0"
 tombi = "1.9.5"
 vale = "3.24.0"
