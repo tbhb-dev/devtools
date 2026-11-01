@@ -93,6 +93,7 @@ func NewCommand() (*cobra.Command, *int) {
 		mergeCommand(code),
 		skillTokensCommand(code),
 		postCommand(code),
+		proseCommand(code),
 	)
 	return root, code
 }
