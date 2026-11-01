@@ -11,7 +11,7 @@ import (
 	"github.com/tbhb-dev/devtools/internal/contentposts"
 )
 
-func contentPostsCommand(code *int) *cobra.Command {
+func contentPostsCommand(code *int, root string) *cobra.Command {
 	group := &cobra.Command{Use: "content-posts", Short: "Find content writes that bypass gh-post"}
 	group.AddCommand(&cobra.Command{
 		Use:   "scan [file ...]",
@@ -19,7 +19,7 @@ func contentPostsCommand(code *int) *cobra.Command {
 		RunE: func(cmd *cobra.Command, paths []string) error {
 			if len(paths) == 0 {
 				var err error
-				paths, err = contentposts.Scripts(".")
+				paths, err = contentposts.Scripts(root)
 				if err != nil {
 					*code = 2
 					cmd.PrintErrln(fmt.Errorf("discover skill scripts: %w", err))
