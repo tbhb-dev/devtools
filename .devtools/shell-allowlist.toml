@@ -82,6 +82,7 @@ commands = [
   "shell-allowlist",
   "ssh-sign",
   "test-hooks",
+  "testenv",
 
   # Coreutils (printf and test are also builtins above).
   "cat",
