@@ -21,9 +21,10 @@ const (
 )
 
 var (
-	errReadBody    = errors.New("cannot read body")
-	errEmptyReason = errors.New("close reason must not be empty")
-	errReasonSize  = errors.New("close reason exceeds comment size limit")
+	errReadBody       = errors.New("cannot read body")
+	errEmptyReason    = errors.New("close reason must not be empty")
+	errReasonSize     = errors.New("close reason exceeds comment size limit")
+	errEmptyIssueBody = errors.New("issue body must not be empty")
 )
 
 func (r *request) readInput(in io.Reader) ([]byte, error) {
@@ -37,6 +38,10 @@ func (r *request) readInput(in io.Reader) ([]byte, error) {
 	body, err := readBody(path, in)
 	if err != nil {
 		return nil, errReadBody
+	}
+	if r.operation == issueEdit && strings.TrimSpace(string(body)) == "" &&
+		(r.bodyFile != "" || len(body) > 0 || len(r.flags) == 0) {
+		return nil, errEmptyIssueBody
 	}
 	if r.operation == prClose {
 		if strings.TrimSpace(string(body)) == "" {

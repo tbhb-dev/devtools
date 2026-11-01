@@ -29,6 +29,7 @@ Operations and additional flags:
 	issue close <issue>    --reason completed|"not planned" --body-file PATH
 	issue reopen <issue>   --body-file PATH
 	issue edit <issue>     --title TEXT --add-label NAME --remove-label NAME
+	--body-file PATH --allow-closed
 	--type Feature|Defect|Chore|Spike
 	--add-assignee LOGIN --remove-assignee LOGIN
 	--milestone NAME --remove-milestone
@@ -56,6 +57,9 @@ and at read-back. Ready requires an open draft; close requires an open PR
 and a nonempty scanned reason file (at most 65536 characters).
 
 Issue close and reopen require an explicit --body-file (use - for stdin).
+Issue body edits accept a file or stdin and refuse empty or whitespace-only
+bodies and pull requests. Closed issues require --allow-closed.
+Metadata-only issue edits with empty stdin preserve the existing body.
 Exit 0: posted and audited. Exit 1: scan, identity, or state refusal,
 including an issue already in the requested state, or read-back mismatch.
 Exit 2: invalid input, configuration, GitHub command, or audit failure.

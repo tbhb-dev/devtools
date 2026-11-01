@@ -30,6 +30,19 @@ func (r *request) readIssueState(ctx context.Context) (issueState, error) {
 	return state, nil
 }
 
+func (r *request) checkIssueBodyTarget(ctx context.Context, errOut io.Writer) int {
+	state, err := r.readIssueState(ctx)
+	if err != nil {
+		fmt.Fprintln(errOut, "gh-post: cannot read issue state or target is not an issue")
+		return exitEnvironment
+	}
+	if state.State == stateClosed && !r.allowClosed {
+		fmt.Fprintln(errOut, "gh-post: issue is closed; use --allow-closed to replace its body")
+		return 1
+	}
+	return 0
+}
+
 func (r *request) changeIssueState(ctx context.Context, body []byte, log, out, errOut io.Writer) int {
 	state, err := r.readIssueState(ctx)
 	if err != nil {

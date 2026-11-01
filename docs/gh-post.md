@@ -45,7 +45,7 @@ Pass body text through `--body-file PATH`, `--body-file -`, or stdin when the fl
 
 For a PR edit with empty stdin and no `--body-file`, the existing description is unchanged. This lets skills scan metadata edits such as a new base for a dependent PR.
 
-Use an explicit empty body file to clear a description.
+Use an explicit empty body file to clear a PR description. Issue body replacements refuse empty input.
 
 ```bash
 gh-post pr create -R owner/project --head topic --base main \
@@ -67,6 +67,23 @@ Before scanning or contacting GitHub, new reviews and issue comments whose first
 Use `review edit <pr> <review-id>` to replace a submitted pull request review's body. Both IDs must be positive integers. It sends the scanned body as JSON through `PUT /repos/{owner}/{repo}/pulls/{pull_number}/reviews/{review_id}` with the same identity guard and audit record as other posts. It accepts the shared repository and body-file flags. `comment edit --kind review` edits an inline review comment.
 
 Use `-R owner/project` or `--repo owner/project` to select the target. Otherwise the command resolves the checkout's origin remote. Ambient `GH_REPO` and `GH_HOST` don't redirect it. The built-in checks cover local file URLs, home paths with a name segment, GitHub tokens, private-key headers, and secret-manager references. Placeholders such as `/Users/<name>/` and `/home/<name>/` pass. The command matches private literals without regard to case. Findings print only a category and line number, with line numbers local to each text field.
+
+### Replace an issue body
+
+Use `issue edit` with a numeric issue ID and the target repository:
+
+```bash
+gh-post issue edit 42 --repo owner/project --body-file replacement.md
+gh-post issue edit 42 --repo owner/project --body-file - < replacement.md
+gh-post issue edit 42 --repo owner/project < replacement.md
+gh-post issue edit 42 --repo owner/project --allow-closed --body-file replacement.md
+```
+
+Replacement preserves the exact scanned bytes. Empty or whitespace-only replacement input exits 2 before contacting GitHub. Metadata-only issue edits with empty stdin and no body file preserve the existing body. When combining body replacement with `--type`, supply an explicit body file or `--body-file -`, since type edits otherwise leave stdin unread.
+
+Body replacements use the shared input scan and caller identity guard. Before writing, the command reads the target issue's state and URL, refusing pull requests, missing targets, and invalid responses. Closed issues exit 1 unless the caller supplies `--allow-closed`. This switch controls the wrapper without forwarding to GitHub CLI. A concurrent close after the state read can race the replacement.
+
+Success prints the issue URL and appends the standard audit record containing a UTC timestamp. Its operation is `issue edit`, and its target is the issue URL. The body contributes only its SHA-256 hash. After a failed write, the wrapper reports the failure without retrying or recording a success entry. Verification uses fixture targets without replacing real issue bodies. The repository's PR guard matches only `gh pr`, so it doesn't block bare `gh-post issue edit`. This guard check doesn't establish that command execution succeeds.
 
 ### Change issue state
 
