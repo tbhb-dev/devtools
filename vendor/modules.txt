@@ -229,7 +229,7 @@ github.com/stretchr/testify/require
 # github.com/subosito/gotenv v1.6.0
 ## explicit; go 1.18
 github.com/subosito/gotenv
-# github.com/vladopajic/go-test-coverage/v2 v2.20.1
+# github.com/vladopajic/go-test-coverage/v2 v2.21.0
 ## explicit; go 1.27
 github.com/vladopajic/go-test-coverage/v2
 github.com/vladopajic/go-test-coverage/v2/pkg/testcoverage
