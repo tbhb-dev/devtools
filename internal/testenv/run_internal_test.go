@@ -19,8 +19,13 @@ func executable(t *testing.T, path, body string) {
 	t.Helper()
 	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o700))
 	require.NoError(t, os.WriteFile(path, []byte("#!/bin/sh\n"+body+"\n"), 0o600))
-	//nolint:gosec // Fake commands must be executable to test the process boundary.
-	require.NoError(t, os.Chmod(path, 0o700))
+	info, err := os.Stat(path)
+	require.NoError(t, err)
+	const ownerExecute = 0o100
+	require.NoError(t, os.Chmod(path, info.Mode()|ownerExecute))
+	info, err = os.Stat(path)
+	require.NoError(t, err)
+	require.Equal(t, os.FileMode(0o700), info.Mode().Perm())
 }
 
 func TestEnvironment(t *testing.T) {
